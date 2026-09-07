@@ -55,12 +55,17 @@ uses the board contract.
 CardVerse's V1 lesson applies: build the shell plus a few games, register the
 rest as greyed "Coming soon" stubs in the lobby.
 
-| phase | ships | why |
+| phase | ships | status |
 | --- | --- | --- |
-| **1 — shipped 2026-09-07** | Hub shell + 五子棋 + Sudoku + Tetris | one game per family, so all three contracts are proven and load-bearing before anything is built on top of them |
-| **2** | 黑白棋, Chess, 象棋, Solitaire, Mahjong Solitaire, Snake | each slots into a contract phase 1 already proved |
-| **3** | Racing, Tower Defense | the two that are real productions |
-| **4** | play with friends | see below — it is a different job per family |
+| **1** | Hub shell + 五子棋 + Sudoku + Tetris | **shipped 2026-09-07** — one game per family, so all three contracts were proven before anything was built on them |
+| **2** | 黑白棋, Chess, 象棋, Solitaire, Mahjong Solitaire, Snake | **shipped 2026-09-07** — each slotted into a contract phase 1 had already proved |
+| **3** | Racing, Tower Defense | **shipped 2026-09-07** — the two that are real productions |
+| **4** | play with friends | not started — see below; it is a different job per family |
+
+Phases 2 and 3 also added a shared harness per family (`js/core/boardhost.js`
+and `js/core/loophost.js`). Those were the actual saving: by the fourth board
+game, a new one is `create/draw/hit/status/outcome` and nothing else — no
+canvas handling, no undo, no AI scheduling, no end-of-game card.
 
 Phase 1's three games are deliberately the *simplest* member of each family.
 The point of phase 1 is the contracts, not the content.

@@ -28,7 +28,7 @@ window.PV = window.PV || {};
 
   PV.Store = {
     /** Stores that travel in an export / Drive backup. Add new ones here. */
-    BACKUP_STORES: ['profile', 'stats', 'sudoku.saved'],
+    BACKUP_STORES: ['profile', 'stats', 'sudoku.saved', 'solitaire.saved', 'mahjong.saved'],
     FORMAT: 'playvault.backup',
 
     get(key, fallback) {
