@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlayVault — One Hub. Endless Games.</title>
+<meta name="description" content="PlayVault — one hub, endless games. Board, puzzle and arcade games that run entirely in your browser.">
+<meta name="theme-color" content="#0B0F14">
+<link rel="icon" href="assets/logo/favicon.svg">
+<link rel="apple-touch-icon" href="assets/logo/icon.svg">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#/games">
+    <img src="assets/logo/logo-simple.svg" alt="" width="36" height="36" decoding="async">
+    <span class="brand-text">
+      <span class="brand-name">Play<b>Vault</b></span>
+      <span class="brand-slogan" data-i18n="app.tagline"></span>
+    </span>
+  </a>
+  <nav class="nav">
+    <a href="#/games" data-nav="games" data-i18n="nav.lobby"></a>
+    <a href="#/stats" data-nav="stats" data-i18n="nav.stats"></a>
+    <a href="#/settings" data-nav="settings" data-i18n="nav.settings"></a>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<noscript><p style="padding:24px">PlayVault needs JavaScript.</p></noscript>
+
+<!-- core -->
+<script src="js/core/util.js"></script>
+<script src="js/core/rng.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/core/i18n.js"></script>
+<script src="js/core/profile.js"></script>
+<script src="js/core/registry.js"></script>
+
+<!-- the three engine contracts -->
+<script src="js/core/board.js"></script>
+<script src="js/core/puzzle.js"></script>
+<script src="js/core/loop.js"></script>
+
+<!-- games: one folder each, registering themselves -->
+<script src="js/games/gomoku/engine.js"></script>
+<script src="js/games/gomoku/ai.js"></script>
+<script src="js/games/gomoku/view.js"></script>
+<script src="js/games/gomoku/index.js"></script>
+
+<script src="js/games/sudoku/generator.js"></script>
+<script src="js/games/sudoku/engine.js"></script>
+<script src="js/games/sudoku/view.js"></script>
+<script src="js/games/sudoku/index.js"></script>
+
+<script src="js/games/tetris/engine.js"></script>
+<script src="js/games/tetris/view.js"></script>
+<script src="js/games/tetris/index.js"></script>
+
+<script src="js/games/stubs.js"></script>
+
+<!-- shell, last: it reads the registry at boot -->
+<script src="js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="PlayVault">
+  <defs>
+    <radialGradient id="bg-oc-brass" cx=".5" cy=".42" r=".62">
+      <stop offset="0" stop-color="#2C3644" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#0B0F14" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0B0F14"/>
+  <rect width="1200" height="630" fill="url(#bg-oc-brass)"/>
+  <g transform="translate(536 116) scale(1)">
+  <defs>
+    <linearGradient id="seam-oc-brass-mark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC64B" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#FFD87A" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#FFC64B" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow-oc-brass-mark">
+      <stop offset="0" stop-color="#FFC64B" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#FFC64B" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="61" fill="#2C3644"/>
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#44536A" stroke-width="2" opacity=".55"/>
+  <circle cx="64" cy="64" r="56" fill="#0D1218"/>
+  <rect x="57" y="13" width="14" height="102" rx="7" fill="url(#seam-oc-brass-mark)"/>
+  <path d="M59 12 A52 52 0 0 0 59 116 Z" fill="#171D26" stroke="#44536A" stroke-width="1.6"/>
+  <path d="M69 12 A52 52 0 0 1 69 116 Z" fill="#171D26" stroke="#44536A" stroke-width="1.6"/>
+  <circle cx="32" cy="96.17" r="3.2" fill="#6A7B93"/><circle cx="22.63" cy="85" r="3.2" fill="#6A7B93"/><circle cx="17.64" cy="71.29" r="3.2" fill="#6A7B93"/><circle cx="17.64" cy="56.71" r="3.2" fill="#6A7B93"/><circle cx="22.63" cy="43" r="3.2" fill="#6A7B93"/>
+  <circle cx="96" cy="31.83" r="3.2" fill="#6A7B93"/><circle cx="105.37" cy="43" r="3.2" fill="#6A7B93"/><circle cx="110.36" cy="56.71" r="3.2" fill="#6A7B93"/><circle cx="110.36" cy="71.29" r="3.2" fill="#6A7B93"/><circle cx="105.37" cy="85" r="3.2" fill="#6A7B93"/>
+  <circle cx="64" cy="64" r="44" fill="url(#glow-oc-brass-mark)"/>
+  <path d="M47.72 42.88 L88.52 64 L47.72 85.12 Z" fill="#F6B32B" stroke="#F6B32B" stroke-width="9" stroke-linejoin="round"/></g>
+  <text x="600" y="396" text-anchor="middle" font-family="Segoe UI, system-ui, -apple-system, Inter, Helvetica, Arial, sans-serif" font-size="104" font-weight="700" letter-spacing="-2.5"><tspan fill="#EAF0F7">Play</tspan><tspan fill="#F6B32B">Vault</tspan></text>
+  <text x="600" y="452" text-anchor="middle" font-family="Segoe UI, system-ui, -apple-system, Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="500" letter-spacing="3.9" fill="#8494A8">ONE HUB. ENDLESS GAMES.</text>
+</svg>
