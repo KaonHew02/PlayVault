@@ -115,22 +115,27 @@ window.PV = window.PV || {};
     function layout() {
       const box = canvas.parentElement.getBoundingClientRect();
       const W = Math.max(280, Math.min(box.width || 320, 760));
-      const gap = Math.max(5, W * 0.016);
-      const cw = (W - gap * 6) / 7;
+      const pad = Math.max(8, W * 0.018);
+      const gap = Math.max(5, W * 0.014);
+      const cw = (W - pad * 2 - gap * 6) / 7;
       const ch = cw * 1.42;
-      const fanUp = Math.max(14, ch * 0.30);
-      const fanDown = Math.max(6, ch * 0.13);
-      const top = ch + gap * 2.2;
+      const fanUp = Math.max(16, ch * 0.30);
+      // Face-down cards fan wider than they used to: at 13% of a card you
+      // could not see how deep a pile was, and the column read as one slab.
+      const fanDown = Math.max(8, ch * 0.17);
+      const head = pad;
+      const top = pad + ch + gap * 1.9;
 
       let deepest = 0;
       for (const p of game.tableau) {
-        let h = 0;
-        for (let i = 0; i < p.length; i++) h += (i === p.length - 1) ? ch : (p[i].up ? fanUp : fanDown);
+        let h = p.length ? ch : 0;
+        for (let i = 0; i < p.length - 1; i++) h += p[i].up ? fanUp : fanDown;
         deepest = Math.max(deepest, h);
       }
-      const H = Math.max(top + ch + gap, top + deepest + gap);
+      const H = top + Math.max(ch, deepest) + pad;
 
-      geom = { W: W, H: H, cw: cw, ch: ch, gap: gap, top: top, fanUp: fanUp, fanDown: fanDown };
+      geom = { W: W, H: H, cw: cw, ch: ch, gap: gap, pad: pad,
+               head: head, top: top, fanUp: fanUp, fanDown: fanDown };
       const dpr = window.devicePixelRatio || 1;
       canvas.style.width = W + 'px';
       canvas.style.height = H + 'px';
@@ -142,16 +147,16 @@ window.PV = window.PV || {};
     // A function declaration, not a const arrow: layout() runs from the
     // constructor's own bootstrap, above this line, and a const here would
     // still be in its temporal dead zone when it does.
-    function colX(i) { return i * (geom.cw + geom.gap); }
+    function colX(i) { return geom.pad + i * (geom.cw + geom.gap); }
 
     /** Rebuilt on every paint, walked back-to-front on every click. */
     function buildHits() {
       hits = [];
-      const { cw, ch, top, fanUp, fanDown } = geom;
-      hits.push({ x: colX(0), y: 0, w: cw, h: ch, what: { kind: 'stock' } });
-      hits.push({ x: colX(1), y: 0, w: cw, h: ch, what: { kind: 'waste' } });
+      const { cw, ch, head, top, fanUp, fanDown } = geom;
+      hits.push({ x: colX(0), y: head, w: cw, h: ch, what: { kind: 'stock' } });
+      hits.push({ x: colX(1), y: head, w: cw, h: ch, what: { kind: 'waste' } });
       for (let s = 0; s < 4; s++) {
-        hits.push({ x: colX(3 + s), y: 0, w: cw, h: ch, what: { kind: 'foundation', suit: s } });
+        hits.push({ x: colX(3 + s), y: head, w: cw, h: ch, what: { kind: 'foundation', suit: s } });
       }
       for (let i = 0; i < 7; i++) {
         const p = game.tableau[i];
@@ -245,58 +250,103 @@ window.PV = window.PV || {};
 
     /* ---- painting ---- */
 
+    function roundPath(c, x, y, w, h, r) {
+      c.beginPath();
+      if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h);
+    }
+
+    /**
+     * The rank-over-suit block in the top-left corner.
+     *
+     * Real cards repeat this upside-down in the far corner, and it is wrong
+     * here: at this size a rotated 9 reads as a 6 and a rotated 6 as a 9, with
+     * no engraved typeface to tell them apart. One corner and a big pip is
+     * what every digital solitaire settles on, for that reason.
+     */
+    function corner(c, x, y, label, pip, ink) {
+      const { cw, ch } = geom;
+      c.save();
+      c.translate(x, y);
+      c.fillStyle = ink;
+      c.textAlign = 'center';
+      c.textBaseline = 'top';
+      c.font = '700 ' + Math.round(cw * 0.29) + 'px system-ui, sans-serif';
+      c.fillText(label, cw * 0.20, ch * 0.045);
+      c.font = Math.round(cw * 0.22) + 'px system-ui, sans-serif';
+      c.fillText(pip, cw * 0.20, ch * 0.045 + cw * 0.30);
+      c.restore();
+    }
+
     function card(c, x, y, cardId, faceUp, highlight) {
       const { cw, ch } = geom;
-      const r = Math.max(4, cw * 0.10);
-      c.beginPath();
-      if (c.roundRect) c.roundRect(x, y, cw, ch, r); else c.rect(x, y, cw, ch);
+      const r = Math.max(4, cw * 0.09);
+
+      c.save();
+      c.shadowColor = 'rgba(0,0,0,.45)';
+      c.shadowBlur = Math.max(3, cw * 0.10);
+      c.shadowOffsetY = Math.max(1, cw * 0.03);
+      roundPath(c, x, y, cw, ch, r);
+      c.fillStyle = faceUp ? '#FBFCFE' : '#26344A';
+      c.fill();
+      c.restore();
 
       if (!faceUp) {
-        c.fillStyle = '#2C3644';
+        // A lattice rather than a single centred motif: in a fanned pile only
+        // the top sliver of a face-down card is visible, and a motif in the
+        // middle of the card is exactly the part you never see.
+        c.save();
+        roundPath(c, x + cw * 0.07, y + cw * 0.07, cw * 0.86, ch - cw * 0.14, r * 0.7);
+        c.fillStyle = '#31425C';
         c.fill();
-        c.strokeStyle = '#44536A';
-        c.lineWidth = 1.4;
-        c.stroke();
-        c.fillStyle = 'rgba(246,179,43,.22)';
+        c.clip();
+        c.strokeStyle = 'rgba(246,179,43,.30)';
+        c.lineWidth = Math.max(1, cw * 0.022);
+        const step = Math.max(6, cw * 0.20);
         c.beginPath();
-        c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.22, 0, Math.PI * 2);
-        c.fill();
+        for (let d = -ch; d < cw + ch; d += step) {
+          c.moveTo(x + d, y); c.lineTo(x + d + ch, y + ch);
+          c.moveTo(x + d, y + ch); c.lineTo(x + d + ch, y);
+        }
+        c.stroke();
+        c.restore();
+        roundPath(c, x, y, cw, ch, r);
+        c.strokeStyle = '#5A6C88';
+        c.lineWidth = 1.2;
+        c.stroke();
         return;
       }
 
-      c.fillStyle = '#FBFCFE';
-      c.fill();
-      c.strokeStyle = highlight ? '#F6B32B' : '#B9C4D2';
-      c.lineWidth = highlight ? Math.max(2.4, cw * 0.05) : 1.2;
+      roundPath(c, x, y, cw, ch, r);
+      c.strokeStyle = highlight ? '#F6B32B' : 'rgba(16,23,32,.22)';
+      c.lineWidth = highlight ? Math.max(2.4, cw * 0.05) : 1.1;
       c.stroke();
 
-      const red = C().red(cardId);
-      c.fillStyle = red ? '#D8443B' : '#14181F';
-      c.textAlign = 'left';
-      c.textBaseline = 'top';
-      c.font = '700 ' + Math.round(cw * 0.30) + 'px system-ui, sans-serif';
-      c.fillText(C().label(cardId), x + cw * 0.09, y + ch * 0.06);
-      c.font = Math.round(cw * 0.26) + 'px system-ui, sans-serif';
-      c.fillText(C().symbol(cardId), x + cw * 0.09, y + ch * 0.30);
+      const ink = C().red(cardId) ? '#D63B36' : '#141922';
+      const label = C().label(cardId), pip = C().symbol(cardId);
+      corner(c, x, y, label, pip, ink);
+
+      c.fillStyle = ink;
       c.textAlign = 'center';
-      c.font = Math.round(cw * 0.52) + 'px system-ui, sans-serif';
-      c.fillText(C().symbol(cardId), x + cw * 0.62, y + ch * 0.44);
+      c.textBaseline = 'middle';
+      c.font = Math.round(cw * 0.60) + 'px system-ui, sans-serif';
+      c.fillText(pip, x + cw * 0.60, y + ch * 0.62);
     }
 
     function slot(c, x, y, glyph) {
       const { cw, ch } = geom;
-      c.beginPath();
-      if (c.roundRect) c.roundRect(x, y, cw, ch, Math.max(4, cw * 0.10)); else c.rect(x, y, cw, ch);
-      c.strokeStyle = 'rgba(255,255,255,.16)';
+      roundPath(c, x, y, cw, ch, Math.max(4, cw * 0.09));
+      c.fillStyle = 'rgba(0,0,0,.20)';
+      c.fill();
+      c.strokeStyle = 'rgba(255,255,255,.20)';
       c.setLineDash([5, 4]);
-      c.lineWidth = 1.4;
+      c.lineWidth = 1.3;
       c.stroke();
       c.setLineDash([]);
       if (glyph) {
-        c.fillStyle = 'rgba(255,255,255,.20)';
+        c.fillStyle = 'rgba(255,255,255,.24)';
         c.textAlign = 'center';
         c.textBaseline = 'middle';
-        c.font = Math.round(cw * 0.44) + 'px system-ui, sans-serif';
+        c.font = Math.round(cw * 0.42) + 'px system-ui, sans-serif';
         c.fillText(glyph, x + cw / 2, y + ch / 2);
       }
     }
@@ -307,23 +357,35 @@ window.PV = window.PV || {};
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       c.clearRect(0, 0, geom.W, geom.H);
 
-      const { cw, top, fanUp, fanDown } = geom;
+      const { cw, head, top, fanUp, fanDown } = geom;
 
-      if (game.stock.length) card(c, colX(0), 0, 0, false);
-      else slot(c, colX(0), 0, game.waste.length ? '↻' : '');
+      // A felt table. Cards floating on the page background is what made this
+      // read as a diagram rather than as a game.
+      roundPath(c, 0, 0, geom.W, geom.H, Math.max(8, geom.pad));
+      c.fillStyle = PV.cssVar('--felt', '#1E5B43');
+      c.fill();
+      const vig = c.createRadialGradient(geom.W / 2, geom.H * 0.34, geom.W * 0.08,
+                                         geom.W / 2, geom.H * 0.5, geom.W * 0.8);
+      vig.addColorStop(0, 'rgba(255,255,255,.07)');
+      vig.addColorStop(1, 'rgba(0,0,0,.32)');
+      c.fillStyle = vig;
+      c.fill();
+
+      if (game.stock.length) card(c, colX(0), head, 0, false);
+      else slot(c, colX(0), head, game.waste.length ? '↻' : '');
 
       const shown = Math.min(game.waste.length, drawCount === 3 ? 3 : 1);
-      if (!shown) slot(c, colX(1), 0, '');
+      if (!shown) slot(c, colX(1), head, '');
       for (let i = 0; i < shown; i++) {
         const id = game.waste[game.waste.length - shown + i];
         const isTop = i === shown - 1;
-        card(c, colX(1) + i * cw * 0.22, 0, id, true, isTop && sel && sel.kind === 'waste');
+        card(c, colX(1) + i * cw * 0.22, head, id, true, isTop && sel && sel.kind === 'waste');
       }
 
       for (let s = 0; s < 4; s++) {
         const f = game.foundations[s];
-        if (!f.length) slot(c, colX(3 + s), 0, C().SUITS[s]);
-        else card(c, colX(3 + s), 0, f[f.length - 1], true,
+        if (!f.length) slot(c, colX(3 + s), head, C().SUITS[s]);
+        else card(c, colX(3 + s), head, f[f.length - 1], true,
           sel && sel.kind === 'foundation' && sel.suit === s);
       }
 

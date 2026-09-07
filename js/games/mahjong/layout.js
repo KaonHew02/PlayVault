@@ -41,19 +41,19 @@ window.PV = window.PV || {};
     return out;
   }
 
-  /* ---- the 144 tiles ---- */
+  /* ---- the 144 tiles ----
+
+     A face says WHAT it is, not how to draw it. Real tiles do not have "5筒"
+     printed on them — the dot suit is five circles, the bamboo suit is five
+     sticks, and only the character suit carries a numeral (一 to 九, over 萬).
+     So the face carries a kind and a rank, and the view paints it. */
 
   const SUITS = [
-    { key: 'b', mark: '条', colour: '#1E7A45' },
-    { key: 'c', mark: '萬', colour: '#B3261E' },
-    { key: 'd', mark: '筒', colour: '#1D5FA8' }
+    { key: 'b', kind: 'bamboo', colour: '#1E7A45' },
+    { key: 'c', kind: 'chars', colour: '#B3261E' },
+    { key: 'd', kind: 'dots', colour: '#1D5FA8' }
   ];
   const WINDS = ['東', '南', '西', '北'];
-  const DRAGONS = [
-    { id: 'z5', text: '中', colour: '#B3261E' },
-    { id: 'z6', text: '發', colour: '#1E7A45' },
-    { id: 'z7', text: '白', colour: '#1D5FA8' }
-  ];
   const FLOWERS = ['梅', '蘭', '菊', '竹'];
   const SEASONS = ['春', '夏', '秋', '冬'];
 
@@ -62,18 +62,26 @@ window.PV = window.PV || {};
     const f = Object.create(null);
     for (const s of SUITS) {
       for (let r = 1; r <= 9; r++) {
-        f[s.key + r] = { id: s.key + r, rank: String(r), mark: s.mark, colour: s.colour, group: null };
+        f[s.key + r] = {
+          id: s.key + r, kind: s.kind, rank: r, colour: s.colour, group: null
+        };
       }
     }
     WINDS.forEach((w, i) => {
-      f['z' + (i + 1)] = { id: 'z' + (i + 1), rank: '', mark: w, colour: '#14181F', group: null };
+      f['z' + (i + 1)] = {
+        id: 'z' + (i + 1), kind: 'text', text: w, colour: '#14181F', group: null
+      };
     });
-    for (const d of DRAGONS) f[d.id] = { id: d.id, rank: '', mark: d.text, colour: d.colour, group: null };
+    f.z5 = { id: 'z5', kind: 'text', text: '中', colour: '#B3261E', group: null };
+    f.z6 = { id: 'z6', kind: 'text', text: '發', colour: '#1E7A45', group: null };
+    // The white dragon is a blank tile with a frame, not the character 白.
+    f.z7 = { id: 'z7', kind: 'blank', colour: '#1D5FA8', group: null };
+
     FLOWERS.forEach((x, i) => {
-      f['f' + i] = { id: 'f' + i, rank: '', mark: x, colour: '#D9761F', group: 'flower' };
+      f['f' + i] = { id: 'f' + i, kind: 'text', text: x, colour: '#D9761F', group: 'flower' };
     });
     SEASONS.forEach((x, i) => {
-      f['s' + i] = { id: 's' + i, rank: '', mark: x, colour: '#7A3FA0', group: 'season' };
+      f['s' + i] = { id: 's' + i, kind: 'text', text: x, colour: '#7A3FA0', group: 'season' };
     });
     return f;
   }

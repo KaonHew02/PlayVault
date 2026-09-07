@@ -14,6 +14,39 @@ window.PV = window.PV || {};
   const t = (k, p) => window.PV.t(k, p);
   const SAVE = 'mahjong.saved';
   const CJK = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Heiti SC", serif';
+  const RED = '#B3261E';
+
+  /* Where the pips go, in fractions of the tile's inner box. These are the
+     arrangements a real set uses — three dots run on a diagonal, seven is a
+     slanted three over a square four — and they live at module scope because
+     the view paints during construction, before its own tail has run. */
+  const DOT_SPOTS = {
+    1: [[.50, .50]],
+    2: [[.50, .27], [.50, .73]],
+    3: [[.24, .76], [.50, .50], [.76, .24]],
+    4: [[.29, .29], [.71, .29], [.29, .71], [.71, .71]],
+    5: [[.26, .26], [.74, .26], [.50, .50], [.26, .74], [.74, .74]],
+    6: [[.29, .21], [.71, .21], [.29, .50], [.71, .50], [.29, .79], [.71, .79]],
+    7: [[.22, .17], [.50, .25], [.78, .33], [.30, .61], [.70, .61], [.30, .85], [.70, .85]],
+    8: [[.31, .16], [.69, .16], [.31, .39], [.69, .39], [.31, .62], [.69, .62], [.31, .85], [.69, .85]],
+    9: [[.22, .22], [.50, .22], [.78, .22], [.22, .50], [.50, .50], [.78, .50],
+        [.22, .78], [.50, .78], [.78, .78]]
+  };
+  const DOT_R = { 1: .30, 2: .19, 3: .17, 4: .175, 5: .155, 6: .150, 7: .125, 8: .125, 9: .135 };
+
+  const BAMBOO_SPOTS = {
+    1: [[.50, .50]],
+    2: [[.50, .28], [.50, .72]],
+    3: [[.50, .24], [.32, .72], [.68, .72]],
+    4: [[.31, .28], [.69, .28], [.31, .72], [.69, .72]],
+    5: [[.27, .25], [.73, .25], [.50, .50], [.27, .75], [.73, .75]],
+    6: [[.27, .26], [.50, .26], [.73, .26], [.27, .74], [.50, .74], [.73, .74]],
+    7: [[.50, .16], [.27, .50], [.50, .50], [.73, .50], [.27, .82], [.50, .82], [.73, .82]],
+    8: [[.32, .16], [.68, .16], [.32, .39], [.68, .39], [.32, .62], [.68, .62], [.32, .85], [.68, .85]],
+    9: [[.26, .21], [.50, .21], [.74, .21], [.26, .50], [.50, .50], [.74, .50],
+        [.26, .79], [.50, .79], [.74, .79]]
+  };
+  const NUMERALS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
   PV.MahjongView = function (ctx) {
     let game, sel = null, timer = null, ended = false, hint = null, hintTimer = null;
@@ -188,20 +221,95 @@ window.PV = window.PV || {};
       c.stroke();
 
       const face = game.face(tile);
-      if (!face) return;
+      if (face) drawFace(c, face, rc);
+    }
+
+    /* ---- the faces themselves ----
+
+       Dots are drawn as dots and bamboo as sticks, in the arrangements a real
+       set uses, because "5筒" written on a tile is a label for a tile, not a
+       tile. Only the character suit carries a numeral. */
+
+    function drawFace(c, face, rc) {
+      const { tw, th } = geom;
+      const inset = tw * 0.13;
+      const box = { x: rc.x + inset, y: rc.y + inset * 1.1,
+                    w: tw - inset * 2, h: th - inset * 2.2 };
+
+      if (face.kind === 'dots') return drawDots(c, face, box);
+      if (face.kind === 'bamboo') return drawBamboo(c, face, box);
+      if (face.kind === 'chars') return drawChars(c, face, rc);
+      if (face.kind === 'blank') return drawBlank(c, face, box);
+
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillStyle = face.colour;
+      c.font = '700 ' + Math.round(tw * 0.58) + 'px ' + CJK;
+      c.fillText(face.text, rc.x + tw / 2, rc.y + th * 0.54);
+    }
+
+    function drawDots(c, face, box) {
+      const spots = DOT_SPOTS[face.rank];
+      const r = DOT_R[face.rank] * Math.min(box.w, box.h);
+      spots.forEach((p, i) => {
+        const cx = box.x + p[0] * box.w, cy = box.y + p[1] * box.h;
+        // The one and the middle of the five are red on a real set.
+        const hot = (face.rank === 1) || (face.rank === 5 && i === 2);
+        c.fillStyle = hot ? RED : face.colour;
+        c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#F7F1E1';
+        c.beginPath(); c.arc(cx, cy, r * 0.46, 0, Math.PI * 2); c.fill();
+        c.fillStyle = hot ? RED : face.colour;
+        c.beginPath(); c.arc(cx, cy, r * 0.19, 0, Math.PI * 2); c.fill();
+      });
+    }
+
+    function drawBamboo(c, face, box) {
+      const spots = BAMBOO_SPOTS[face.rank];
+      const single = face.rank === 1;
+      const hh = (single ? 0.36 : 0.16) * box.h;
+      const hw = (single ? 0.12 : 0.085) * box.w;
+      spots.forEach((p, i) => {
+        const cx = box.x + p[0] * box.w, cy = box.y + p[1] * box.h;
+        // The middle of the five and the top of the seven are red on a real
+        // set. The one is NOT — a lone red bar reads as a mistake.
+        const hot = (face.rank === 5 && i === 2) || (face.rank === 7 && i === 0);
+        c.fillStyle = hot ? RED : face.colour;
+        c.beginPath();
+        if (c.roundRect) c.roundRect(cx - hw, cy - hh, hw * 2, hh * 2, hw * 0.8);
+        else c.rect(cx - hw, cy - hh, hw * 2, hh * 2);
+        c.fill();
+        // Knots, so a stick reads as bamboo rather than as a bar.
+        c.strokeStyle = '#F7F1E1';
+        c.lineWidth = Math.max(0.7, hw * 0.30);
+        c.beginPath();
+        const knots = single ? [-0.55, 0, 0.55] : [-0.33, 0.33];
+        for (const k of knots) {
+          c.moveTo(cx - hw, cy + hh * k); c.lineTo(cx + hw, cy + hh * k);
+        }
+        c.stroke();
+      });
+    }
+
+    function drawChars(c, face, rc) {
+      const { tw, th } = geom;
       c.textAlign = 'center';
       c.fillStyle = face.colour;
-      if (face.rank) {
-        c.textBaseline = 'alphabetic';
-        c.font = '700 ' + Math.round(tw * 0.44) + 'px system-ui, sans-serif';
-        c.fillText(face.rank, rc.x + tw / 2, rc.y + th * 0.44);
-        c.font = '600 ' + Math.round(tw * 0.40) + 'px ' + CJK;
-        c.fillText(face.mark, rc.x + tw / 2, rc.y + th * 0.86);
-      } else {
-        c.textBaseline = 'middle';
-        c.font = '700 ' + Math.round(tw * 0.60) + 'px ' + CJK;
-        c.fillText(face.mark, rc.x + tw / 2, rc.y + th * 0.54);
-      }
+      c.textBaseline = 'middle';
+      c.font = '700 ' + Math.round(tw * 0.46) + 'px ' + CJK;
+      c.fillText(NUMERALS[face.rank], rc.x + tw / 2, rc.y + th * 0.32);
+      c.font = '700 ' + Math.round(tw * 0.44) + 'px ' + CJK;
+      c.fillText('萬', rc.x + tw / 2, rc.y + th * 0.72);
+    }
+
+    function drawBlank(c, face, box) {
+      c.strokeStyle = face.colour;
+      c.lineWidth = Math.max(1.2, box.w * 0.09);
+      c.beginPath();
+      if (c.roundRect) c.roundRect(box.x + box.w * 0.06, box.y + box.h * 0.08,
+                                   box.w * 0.88, box.h * 0.84, box.w * 0.10);
+      else c.rect(box.x, box.y, box.w, box.h);
+      c.stroke();
     }
 
     function render() {
