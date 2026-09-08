@@ -2,8 +2,8 @@
 
    A card is one integer, 0-51: suit = card / 13, rank = card % 13 + 1 (ace is
    1, king is 13). Suits run ♠ ♥ ♦ ♣, so red is suit 1 or 2 — one comparison,
-   which matters in Klondike where "alternating colours" is checked on every
-   move and inside the solver's inner loop. */
+   which is what a view needs on every card it inks and what a rule that cares
+   about colour needs in its inner loop. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';

@@ -53,7 +53,6 @@ const FILES = [
   'js/games/chess/engine.js', 'js/games/chess/ai.js',
   'js/games/xiangqi/engine.js', 'js/games/xiangqi/ai.js',
   'js/games/sudoku/generator.js', 'js/games/sudoku/engine.js',
-  'js/games/solitaire/engine.js', 'js/games/solitaire/solver.js',
   'js/games/spider/engine.js',
   'js/games/mahjong/layout.js', 'js/games/mahjong/engine.js',
   'js/games/tetris/engine.js',
@@ -453,60 +452,12 @@ section('sudoku — ' + (2 * scale) + ' puzzles per difficulty', () => {
   ok(back.cells.every((v, i) => v === h.cells[i]), 'restore lost the player\'s entries');
 });
 
-/* --------------------------------------------------------------- solitaire */
-
-section('solitaire — solver and rules', () => {
-  const C = PV.Cards;
-  ok(C.rank(0) === 1 && C.suit(0) === 0, 'card 0 should be the ace of spades');
-  ok(C.red(13) && C.red(26) && !C.red(0) && !C.red(39), 'suit colours are wrong');
-
-  // Every deal the generator hands out must be provably winnable.
-  for (let n = 0; n < 2 * scale; n++) {
-    const found = PV.SolitaireSolver.findDeal(new PV.RNG(4000 + n), 1, { tries: 10, nodes: 30000 });
-    ok(found.verified, 'draw-one: no winnable deal found in ten tries');
-    const g = new PV.Solitaire({ seed: found.seed, drawCount: 1 });
-    ok(PV.SolitaireSolver.solve(g, { nodes: 40000 }).won,
-      'the deal the generator verified does not solve again');
-  }
-
-  const g = new PV.Solitaire({ seed: 12345, drawCount: 1 });
-  let cards = g.stock.length + g.waste.length;
-  for (const p of g.tableau) cards += p.length;
-  ok(cards === 52, 'a deal should hold 52 cards, got ' + cards);
-  ok(g.tableau.every((p, i) => p.length === i + 1), 'the tableau is not 1..7');
-  ok(g.tableau.every(p => p[p.length - 1].up && p.slice(0, -1).every(cd => !cd.up)),
-    'only the last card of each pile should be face up');
-
-  ok(g.apply({ type: 'draw' }) === true, 'drawing from the stock was refused');
-  ok(g.waste.length === 1, 'the draw did not reach the waste');
-  ok(g.undo() === true, 'the draw could not be undone');
-  ok(g.waste.length === 0 && g.stock.length === 24, 'undo did not put the card back');
-
-  // Only a king may start an empty column, and colours must alternate.
-  const t = new PV.Solitaire({ seed: 1, drawCount: 1 });
-  t.tableau[0] = [];
-  t.waste = [12];                                  // king of spades
-  ok(t.canToTableau(12, 0), 'a king could not start an empty column');
-  ok(!t.canToTableau(11, 0), 'a queen was allowed to start an empty column');
-  t.tableau[1] = [{ c: 12, up: true }];            // black king
-  ok(!t.canToTableau(11, 1), 'a black queen was allowed onto a black king');
-  ok(t.canToTableau(24, 1), 'a red queen was refused onto a black king');
-
-  // Foundations build up in suit from the ace. A card always addresses its own
-  // suit's foundation, so the test is about order, not about picking a pile.
-  const f = new PV.Solitaire({ seed: 2, drawCount: 1 });
-  ok(f.canToFoundation(0), 'the ace of spades could not start a foundation');
-  ok(!f.canToFoundation(1), 'the two of spades was allowed with no ace down');
-  f.foundations[0] = [0];
-  ok(f.canToFoundation(1), 'the two of spades was refused after its ace');
-  ok(!f.canToFoundation(2), 'the three of spades jumped over the two');
-  ok(!f.canToFoundation(14), 'the two of hearts went up with no ace of hearts');
-});
-
 /* ------------------------------------------------------------------ spider */
 
 section('spider — deal, runs, the deal rule and the sweep', () => {
   const C = PV.Cards;
+  ok(C.rank(0) === 1 && C.suit(0) === 0, 'card 0 should be the ace of spades');
+  ok(C.red(13) && C.red(26) && !C.red(0) && !C.red(39), 'suit colours are wrong');
 
   // 104 cards either way; only the suits in play are dealt, and the copies of
   // each rank make up the difference.
@@ -998,7 +949,7 @@ section('core — rng, store, profile', () => {
   ok(PV.Store.importAll({ format: 'cardverse.backup', data: {} }).ok === false,
     'another app\'s save was accepted');
   ok(PV.Store.importAll(env).ok === true, 'our own export was rejected');
-  for (const key of ['solitaire.saved', 'spider.saved', 'mahjong.saved', 'sudoku.saved']) {
+  for (const key of ['spider.saved', 'mahjong.saved', 'sudoku.saved']) {
     ok(PV.Store.BACKUP_STORES.indexOf(key) >= 0, key + ' is missing from BACKUP_STORES');
   }
 });

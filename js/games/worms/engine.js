@@ -28,7 +28,11 @@ window.PV = window.PV || {};
   const BOOST_SPEED = 3.7;
   const TURN = 0.072;           // radians per tick
   const START_MASS = 20;
-  const BOOST_MIN = 32;         // no dashing below this, or a dash is suicide
+  // Below this a dash is refused. It sits under the starting mass on purpose:
+  // the first thing anyone does is hold the button at spawn, and a dash that
+  // does nothing for the first minute reads as a broken control. A fresh worm
+  // gets about a second of it before it has burned down to the floor.
+  const BOOST_MIN = 16;
   const BOOST_DRAIN = 0.09;
   const TURN_HOLD = 12;         // ticks one key press keeps turning
 

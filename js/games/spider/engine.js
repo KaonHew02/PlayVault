@@ -9,10 +9,10 @@
    rather than a skin — the tableau is the same size either way, but a run only
    travels as a unit while it is all one suit.
 
-   Undo is whole-state snapshots rather than per-move inverses, for the reason
-   Klondike gives: one move can also flip a card and can also send thirteen
-   cards to a foundation, and a "clever" inverse for that is exactly where an
-   undo bug hides.
+   Undo is whole-state snapshots rather than per-move inverses. One move can
+   also flip a card and can also send thirteen cards to a foundation, and a
+   "clever" inverse for that is exactly where an undo bug hides. A snapshot of
+   ten small arrays is a few hundred bytes.
 
    Scoring is the familiar one: 500 to start, a point per move, +100 for every
    completed suit. */

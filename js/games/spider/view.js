@@ -2,8 +2,8 @@
 
    Click a run to pick it up, click a column to put it down; double-click sends
    it wherever it does the most good. Click the stock to deal a row. No
-   dragging, for the reason Klondike gives: on a phone a drag across ten fanned
-   columns is a coin toss, and click-to-place works identically with a mouse.
+   dragging: on a phone a drag across ten fanned columns is a coin toss, and
+   click-to-place works identically with a mouse.
 
    Ten columns is the whole layout problem here. Below a readable card width the
    canvas grows past its box and scrolls sideways instead of shrinking, and a
@@ -63,9 +63,9 @@ window.PV = window.PV || {};
 
     function newGame() {
       PV.Store.del(SAVE);
-      // No winnable check, unlike Klondike: proving a spider deal solvable is a
-      // solver, not a shortcut, and four-suit spider is genuinely lost some of
-      // the time even when played well. The stuck test below is honest instead.
+      // No winnable check: proving a spider deal solvable needs a real solver,
+      // and four-suit spider is genuinely lost some of the time even when it is
+      // played well. The stuck test below is the honest answer instead.
       game = new PV.Spider({ seed: PV.newSeed(), suits: suits });
       begin();
     }

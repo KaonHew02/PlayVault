@@ -24,7 +24,7 @@ window.PV = window.PV || {};
     const opts = ctx.opts || {};
     const bots = opts.crowd === 'quiet' ? 4 : (opts.crowd === 'busy' ? 11 : 7);
     let massEl, lenEl, rankEl, board, canvas = null;
-    let onMove = null;
+    let onMove = null, onDown = null, onUp = null, boostTimer = null;
 
     return PV.loopHost(ctx, {
       hz: 60,
@@ -67,15 +67,37 @@ window.PV = window.PV || {};
           if (dx * dx + dy * dy < 100) return;          // a dead zone, or it jitters
           api.input({ aim: Math.atan2(dy, dx) });
         };
+
+        // Hold the left button to dash, the way the arena games do it. The
+        // engine's dash lapses after a few ticks, so holding has to keep
+        // saying so — the same trick the harness uses for a held key.
+        onDown = e => {
+          if (e.button != null && e.button !== 0) return;
+          onMove(e);                                    // a click aims as well
+          if (boostTimer) return;
+          api.input('boost');
+          boostTimer = setInterval(() => api.input('boost'), 60);
+        };
+        onUp = () => { clearInterval(boostTimer); boostTimer = null; };
+
         canvas.addEventListener('pointermove', onMove);
-        canvas.addEventListener('pointerdown', onMove);
+        canvas.addEventListener('pointerdown', onDown);
+        canvas.addEventListener('pointerleave', onUp);
+        canvas.addEventListener('pointercancel', onUp);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('blur', onUp);
       },
 
       onDestroy() {
-        if (canvas && onMove) {
-          canvas.removeEventListener('pointermove', onMove);
-          canvas.removeEventListener('pointerdown', onMove);
-        }
+        clearInterval(boostTimer);
+        boostTimer = null;
+        if (!canvas) return;
+        canvas.removeEventListener('pointermove', onMove);
+        canvas.removeEventListener('pointerdown', onDown);
+        canvas.removeEventListener('pointerleave', onUp);
+        canvas.removeEventListener('pointercancel', onUp);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('blur', onUp);
       },
 
       onFrame(game) {
@@ -143,6 +165,8 @@ window.PV = window.PV || {};
           c.beginPath(); c.arc(f.x, f.y, r * 2.1, 0, Math.PI * 2); c.fill();
           c.globalAlpha = 1;
           c.beginPath(); c.arc(f.x, f.y, r, 0, Math.PI * 2); c.fill();
+          c.fillStyle = 'rgba(255,255,255,.55)';
+          c.beginPath(); c.arc(f.x - r * 0.3, f.y - r * 0.3, r * 0.30, 0, Math.PI * 2); c.fill();
         }
 
         /* ---- worms ---- */
@@ -162,14 +186,16 @@ window.PV = window.PV || {};
 
         c.textAlign = 'center';
         c.textBaseline = 'bottom';
-        c.font = '600 11px system-ui, sans-serif';
         for (const w of heads) {
           const sx = geom.w / 2 + (w.x - cam.x) * scale;
           const sy = geom.h / 2 + (w.y - cam.y) * scale;
-          c.fillStyle = 'rgba(0,0,0,.55)';
-          c.fillText(w === p ? t('worms.you') : w.name, sx + 1, sy - w.radius * scale - 5);
-          c.fillStyle = w === p ? '#FFFFFF' : 'rgba(234,240,247,.75)';
-          c.fillText(w === p ? t('worms.you') : w.name, sx, sy - w.radius * scale - 6);
+          const top = sy - w.radius * scale - 7;
+          c.font = '600 11px system-ui, sans-serif';
+          label(c, w === p ? t('worms.you') : w.name, sx, top,
+            w === p ? '#FFFFFF' : 'rgba(234,240,247,.78)');
+          // The number under the name is what you are actually racing.
+          c.font = '600 10px system-ui, sans-serif';
+          label(c, String(Math.floor(w.mass)), sx, top + 11, w.colour);
         }
 
         if (p.alive && p.boosting) {
@@ -202,11 +228,30 @@ window.PV = window.PV || {};
     });
   };
 
+  /** Small text with a dark copy behind it, over a board of any colour. */
+  function label(c, text, x, y, colour) {
+    c.fillStyle = 'rgba(0,0,0,.6)';
+    c.fillText(text, x + 1, y + 1);
+    c.fillStyle = colour;
+    c.fillText(text, x, y);
+  }
+
   /** One worm: a dark outline stroked under the body, then a head with eyes. */
   function paintWorm(c, w, scale) {
     const pts = [{ x: w.x, y: w.y }].concat(w.nodes);
     c.lineCap = 'round';
     c.lineJoin = 'round';
+
+    // A dash burns off the tail, so the tail is where it shows.
+    if (w.boosting && pts.length > 2) {
+      const tail = pts.slice(Math.max(0, pts.length - 12));
+      c.strokeStyle = 'rgba(246,179,43,.32)';
+      c.lineWidth = w.radius * 3;
+      c.beginPath();
+      c.moveTo(tail[0].x, tail[0].y);
+      for (let i = 1; i < tail.length; i++) c.lineTo(tail[i].x, tail[i].y);
+      c.stroke();
+    }
     for (const pass of [['rgba(0,0,0,.45)', w.radius * 2 + 4], [w.colour, w.radius * 2]]) {
       c.strokeStyle = pass[0];
       c.lineWidth = pass[1];

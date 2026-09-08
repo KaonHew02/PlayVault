@@ -377,7 +377,7 @@ main {
 .loop-pad { display: none; gap: 8px; margin-top: 14px; grid-template-columns: repeat(3, 1fr); }
 .panel-mini .wide, .btn.wide { width: 100%; }
 
-/* Solitaire and mahjong canvases size themselves, so they only need centring */
+/* The card and tile canvases size themselves, so they only need centring */
 .cards-box, .tiles-box { display: flex; justify-content: center; overflow-x: auto; }
 .cards-canvas, .tiles-canvas { touch-action: manipulation; }
 

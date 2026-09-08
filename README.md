@@ -14,12 +14,12 @@ node tools/build-logo.mjs    # regenerate every logo asset
 
 ## What is built
 
-**All thirteen games on the roster are playable.** Nothing is a stub.
+**All twelve games on the roster are playable.** Nothing is a stub.
 
 | family | games |
 | --- | --- |
 | board | 五子棋 · 黑白棋 · Chess · 中国象棋 |
-| puzzle | Sudoku · Klondike Solitaire · Spider Solitaire · Mahjong Solitaire |
+| puzzle | Sudoku · Spider Solitaire · Mahjong Solitaire |
 | arcade | Tetris · Snake · Worm Arena · Kart Racing · Tower Defense |
 
 Each family sits on its own engine contract, and each contract has a shared
@@ -113,8 +113,8 @@ game interiors and `#EAF0F7` / `#8494A8` for text. Alternate: **neon vault**,
   call.** A `let` or `const` further down the closure is still in its temporal
   dead zone, the view silently fails to mount, and you get a half-drawn screen
   with one ReferenceError. It has bitten twice — `cell` in the Tetris view and
-  `colX` in the Solitaire view. Prefer `function` declarations for helpers,
-  because those hoist.
+  `colX` in a card view. Prefer `function` declarations for helpers, because
+  those hoist.
 - **Unicode chess pieces: stroke first, then fill.** Fill-then-stroke looks
   right in the code and comes out wrong on screen — a 3px outline swallows the
   glyph's thin interior and every piece renders in the outline colour, so white
