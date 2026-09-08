@@ -36,6 +36,34 @@ window.PV = window.PV || {};
 
   PV.clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
+  /**
+   * How big a game may draw itself, in CSS pixels.
+   *
+   * One place, so raising the ceiling raises it for every game at once and
+   * none is left behind on last year's number. Three classes, because they are
+   * the three shapes of screen this is played on:
+   *
+   *   phone   the whole width, minus the page gutter
+   *   laptop  most of the width, capped so a game is not a wall of pixels
+   *   desktop a wider cap, but still short of filling a 27" monitor — a board
+   *           much past a foot across stops being readable at arm's length
+   *
+   * `h` is what is left under the topbar, the play heading and the game bar,
+   * with more taken off on a phone where the thumb pad sits below the canvas.
+   * A game that is taller than this makes the player scroll to see its own
+   * board, which is worse than a smaller board.
+   */
+  PV.stage = function () {
+    const w = window.innerWidth || 1024;
+    const h = window.innerHeight || 768;
+    const phone = w < 760;
+    return {
+      phone: phone,
+      w: phone ? Math.max(280, w - 24) : Math.min(w - 56, w < 1500 ? 1180 : 1360),
+      h: Math.max(280, h - (phone ? 250 : 210))
+    };
+  };
+
   /** m:ss, growing to h:mm:ss past the hour. */
   PV.fmtTime = function (ms) {
     const t = Math.max(0, Math.floor(ms / 1000));

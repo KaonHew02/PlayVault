@@ -19,7 +19,7 @@ window.PV = window.PV || {};
     return PV.boardHost(ctx, {
       humanSeat: 0,
       aspect: ROWS / COLS,
-      maxWidth: 460,
+      maxWidth: 640,
       aiDelay: 200,
 
       create: () => new PV.Xiangqi({ rng: new PV.RNG(PV.newSeed()) }),

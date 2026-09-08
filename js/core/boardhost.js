@@ -29,7 +29,7 @@ window.PV = window.PV || {};
    *   createAI(level, seat)             -> ai with choose(engine), or null
    *   humanSeat                         default 0
    *   aspect                            canvas height / width, default 1
-   *   maxWidth                          default 560
+   *   maxWidth                          default 760
    *   aiDelay                           default 260
    *   undoStep(vsAI)                    plies to take back, default 2 / 1
    *   draw(c, engine, geom, api)        paint; geom = {w, h, unit}
@@ -44,7 +44,7 @@ window.PV = window.PV || {};
     const level = opts.level || 'normal';
     const humanSeat = spec.humanSeat == null ? 0 : spec.humanSeat;
     const aspect = spec.aspect || 1;
-    const maxWidth = spec.maxWidth || 560;
+    const maxWidth = spec.maxWidth || 760;
 
     let engine = null, ai = null, aiTimer = null;
     let thinking = false, ended = false, startedAt = Date.now();
@@ -198,8 +198,8 @@ window.PV = window.PV || {};
 
     function draw() {
       const box = boardBox.getBoundingClientRect();
-      const avail = Math.max(200, Math.min(box.width || 320, maxWidth));
-      const maxH = Math.max(260, window.innerHeight - 220);
+      const avail = Math.max(200, Math.min(box.width || 320, maxWidth, PV.stage().w));
+      const maxH = PV.stage().h;
       const w = Math.min(avail, maxH / aspect);
       const h = w * aspect;
       const dpr = window.devicePixelRatio || 1;

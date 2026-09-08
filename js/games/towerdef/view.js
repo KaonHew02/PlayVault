@@ -27,7 +27,7 @@ window.PV = window.PV || {};
       onReset() { armed = 'gun'; chosen = null; hover = null; },
 
       fit(availW, availH) {
-        const w = Math.max(260, Math.min(availW, 720));
+        const w = Math.max(260, Math.min(availW, 1000));
         return { w: w, h: Math.min(w * 10 / 16, availH) };
       },
 

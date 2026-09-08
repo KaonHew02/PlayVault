@@ -672,53 +672,72 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
   ok(g.dir.x === 1, 'the snake accepted a straight reversal');
 });
 
-/* ------------------------------------------------------------------ racing */
+/* -------------------------------------------------------------- worm arena */
 
-section('worm arena — appetite, the wall, and a repeatable run', () => {
+section('worm arena — appetite, the soft wall, and a repeatable run', () => {
   const g = new PV.Worms({ seed: 500, bots: 5 });
   ok(g.worms.length === 6, 'the arena should hold the player and five bots');
   ok(g.food.length === 220, 'the food supply did not fill, got ' + g.food.length);
-  ok(g.worms.every(w => w.nodes.length >= 1), 'a worm was spawned with no body');
+  ok(g.player.segments === PV.Worms.START_SEGMENTS && g.player.score === 0,
+    'a worm should start at ten segments and no score');
+  ok(PV.Worms.FOODS.every((f, i, all) => !i || (f.score > all[i - 1].score && f.growth > all[i - 1].growth)),
+    'the food table is not ordered by what it is worth');
 
-  // A pellet in front of the head is swallowed, and it is worth what it says.
+  // A pellet pays in two currencies, and they are not the same number: a pizza
+  // is a hundred points and twenty segments.
   const e = new PV.Worms({ seed: 502, bots: 0 });
   e.food.length = 0;
   e.foodCount = 0;                                  // and stop it refilling
   e.player.angle = 0; e.player.aim = 0;
-  e.food.push({ x: e.player.x + 6, y: e.player.y, v: 5, c: '#fff' });
-  const before = e.player.mass;
+  e.food.push({ x: e.player.x + 6, y: e.player.y, kind: 'pizza',
+                score: 100, growth: 20, r: 9, c: '#fff' });
+  const seg = e.player.segments;
   e.advance();
   ok(e.food.length === 0, 'the pellet was not swallowed');
-  ok(e.player.mass === before + 5, 'the pellet did not count, got ' + (e.player.mass - before));
+  ok(e.player.score === 100, 'the pizza paid ' + e.player.score + ' points');
+  ok(e.player.segments === seg + 20, 'the pizza grew ' + (e.player.segments - seg) + ' segments');
 
-  // The wall is fatal. Aim at it and wait.
+  // The wall turns a worm round rather than killing it. Aim at it and wait.
   const wall = new PV.Worms({ seed: 501, bots: 0 });
-  wall.player.x = wall.W - 60; wall.player.y = 300;
+  wall.player.x = wall.W - 40; wall.player.y = 300;
   wall.player.angle = 0; wall.player.aim = 0;
-  let n = 0;
-  while (!wall.over && n++ < 600) wall.advance();
-  ok(wall.over && wall.overReason === 'wall', 'a worm walked through the wall');
+  let sawEdge = false;
+  for (let i = 0; i < 600; i++) { wall.advance(); sawEdge = sawEdge || wall.player.atEdge; }
+  ok(!wall.over, 'the wall killed a worm');
+  ok(sawEdge, 'a worm sat on the boundary without the edge ever registering');
+  ok(wall.player.x <= wall.W && wall.player.x >= 0, 'a worm left the arena');
 
-  // A dead worm is food. That is the whole economy of the game.
-  const s = new PV.Worms({ seed: 504, bots: 1 });
-  s.food.length = 0; s.foodCount = 0;
-  const bot = s.worms[1];
-  bot.mass = 100;
-  s.kill(bot, 'test');
-  ok(!bot.alive && s.food.length > 0, 'a dead worm left nothing behind');
+  // A head into a body kills the head, credits the body, and leaves a meal.
+  const k = new PV.Worms({ seed: 507, bots: 1 });
+  const victim = k.worms[1];
+  k.player.x = 1000; k.player.y = 800;
+  k.player.nodes = [{ x: 1000, y: 800 }, { x: 1005, y: 800 }, { x: 1010, y: 800 }];
+  victim.x = 1005; victim.y = 800;
+  victim.segments = 200;                            // a large worm: worth 1000
+  k.food.length = 0;
+  const before = k.player.score;
+  k.advance();
+  ok(!victim.alive, 'a head that ran into a body survived');
+  ok(k.player.alive, 'the worm whose body was hit died as well');
+  ok(k.player.kills === 1, 'the kill was not credited');
+  ok(k.player.score >= before + 1000, 'beating a large worm paid ' + (k.player.score - before));
+  ok(k.food.length > 0, 'a dead worm left nothing behind');
 
-  // A dash costs mass, and a small worm cannot afford one at all.
+  // The dash tank: twenty a second to hold, ten a second to come back.
   const b = new PV.Worms({ seed: 505, bots: 0 });
   b.food.length = 0; b.foodCount = 0;
-  b.player.mass = PV.Worms.BOOST_MIN - 5;
+  b.player.x = b.W / 2; b.player.y = b.H / 2;
+  for (let i = 0; i < 240; i++) { b.input('boost'); b.advance(); }
+  ok(b.player.energy < PV.Worms.ENERGY_MAX * 0.35,
+    'four seconds of dashing barely touched the tank, got ' + b.player.energy);
+  const low = b.player.energy;
+  for (let i = 0; i < 120; i++) b.advance();
+  ok(b.player.energy > low + 10, 'the tank did not refill');
+  b.player.energy = 0;
   b.input('boost'); b.advance();
-  ok(!b.player.boosting, 'a worm under the floor was allowed to dash');
-  b.player.mass = 200;
-  b.input('boost'); b.advance();
-  ok(b.player.boosting && b.player.mass < 200, 'a dash cost nothing');
+  ok(!b.player.boosting, 'a worm dashed on an empty tank');
 
-  // Bots keep off the walls. The player is dead by then, so the tick is
-  // re-armed each time round to keep watching the ones still swimming.
+  // Bots keep off the walls and out of the food queue.
   const arena = new PV.Worms({ seed: 503, bots: 6 });
   for (let i = 0; i < 900 * scale; i++) { arena.over = false; arena.advance(); }
   const inside = w => w.x >= 0 && w.x <= arena.W && w.y >= 0 && w.y <= arena.H;
@@ -733,12 +752,11 @@ section('worm arena — appetite, the wall, and a repeatable run', () => {
       if (i % 40 === 0) r.input(i % 80 === 0 ? 'left' : 'right');
       if (!r.advance()) break;
     }
-    return JSON.stringify({ x: r.player.x, y: r.player.y, m: r.player.mass,
-                            f: r.food.length, t: r.tick });
+    return JSON.stringify({ x: r.player.x, y: r.player.y, s: r.player.score,
+                            g: r.player.segments, f: r.food.length, t: r.tick });
   };
   ok(run() === run(), 'the same seed and inputs gave two different runs');
 });
-
 /* ------------------------------------------------------------------ racing */
 
 section('racing — ' + (2 * scale) + ' races per circuit', () => {

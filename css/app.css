@@ -104,7 +104,7 @@ p { margin: 0 0 .8em; }
 .nav a.on { color: var(--accent); background: var(--accent-soft); }
 
 main {
-  max-width: 1060px; margin: 0 auto;
+  max-width: 1360px; margin: 0 auto;
   padding: 20px max(14px, env(safe-area-inset-left)) 56px max(14px, env(safe-area-inset-right));
 }
 
@@ -240,14 +240,14 @@ main {
 
 .sudoku-grid {
   display: grid; grid-template-columns: repeat(9, 1fr);
-  width: min(100%, 460px); aspect-ratio: 1;
+  width: min(100%, 620px); aspect-ratio: 1;
   border: 2px solid var(--line-2); border-radius: 10px; overflow: hidden;
   background: var(--panel);
   user-select: none;
 }
 .sq {
   display: grid; place-items: center; position: relative; cursor: pointer;
-  font-size: clamp(15px, 4.4vw, 24px); font-weight: 600; color: var(--accent);
+  font-size: clamp(15px, 4.4vw, 32px); font-weight: 600; color: var(--accent);
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
 }
 .sq:nth-child(9n) { border-right: 0; }
@@ -268,11 +268,11 @@ main {
 
 .sudoku-pad {
   display: grid; grid-template-columns: repeat(9, 1fr);
-  gap: 6px; width: min(100%, 460px); margin: 14px auto 10px;
+  gap: 6px; width: min(100%, 620px); margin: 14px auto 10px;
 }
 .num {
   appearance: none; cursor: pointer; font: inherit; font-weight: 700;
-  font-size: clamp(15px, 4vw, 19px); padding: 10px 0;
+  font-size: clamp(15px, 4vw, 22px); padding: 12px 0;
   border: 1px solid var(--line-2); border-radius: 9px;
   background: var(--panel); color: var(--accent);
 }
@@ -285,14 +285,14 @@ main {
 .tetris-stage { display: flex; gap: 14px; justify-content: center; align-items: flex-start; }
 .well-box { display: flex; }
 .well-canvas { border-radius: 10px; border: 1px solid var(--line-2); box-shadow: var(--shadow); }
-.tetris-side { display: flex; flex-direction: column; gap: 10px; min-width: 112px; }
+.tetris-side { display: flex; flex-direction: column; gap: 10px; min-width: 134px; }
 .panel-mini {
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 12px; padding: 9px; text-align: center;
 }
 .panel-mini .k { display: block; font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); margin-bottom: 5px; }
-.mini-canvas { display: block; width: 96px; height: 72px; margin: 0 auto; }
-.mini-canvas.tall { height: 216px; }
+.mini-canvas { display: block; width: 120px; height: 90px; margin: 0 auto; }
+.mini-canvas.tall { height: 270px; }
 .panel-mini.stats { text-align: left; }
 .panel-mini.stats b { display: block; font-size: 17px; margin-bottom: 7px; }
 .panel-mini.stats b:last-child { margin-bottom: 0; }
@@ -379,7 +379,10 @@ main {
 
 /* The card and tile canvases size themselves, so they only need centring */
 .cards-box, .tiles-box { display: flex; justify-content: center; overflow-x: auto; }
-.cards-canvas, .tiles-canvas { touch-action: manipulation; }
+.tiles-canvas { touch-action: manipulation; }
+/* The spider tableau is dragged, so the canvas must own the gesture: with
+   `manipulation` a sideways drag scrolls the box instead of moving a run. */
+.cards-canvas { touch-action: none; }
 
 /* Kart item slot */
 .kart-slot {
@@ -390,7 +393,15 @@ main {
 }
 .kart-slot.full { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
 
-/* Worm arena leaderboard */
+/* Worm arena dash tank and leaderboard */
+.energy-bar {
+  height: 8px; border-radius: 4px; overflow: hidden;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.energy-bar i { display: block; height: 100%; width: 100%; background: var(--accent); }
+.energy-bar i.low { background: var(--bad); }
+
+
 .worm-board { list-style: none; margin: 0; padding: 0; text-align: left; }
 .worm-board li {
   display: flex; align-items: center; gap: 6px;

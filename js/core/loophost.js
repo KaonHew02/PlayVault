@@ -176,9 +176,15 @@ window.PV = window.PV || {};
 
     function sizeCanvas() {
       const box = canvas.parentElement.parentElement.getBoundingClientRect();
-      const sideW = side.childNodes.length ? side.getBoundingClientRect().width : 0;
-      const availW = Math.max(140, (box.width || 320) - sideW - (sideW ? 14 : 0));
-      const availH = Math.max(240, window.innerHeight - 250);
+      const stage = PV.stage();
+      // Below the stacking breakpoint the side panel sits UNDER the canvas, so
+      // its width is not the canvas's to give up. Subtracting it anyway is what
+      // pinned every real-time game to its floor size on a phone.
+      const sideW = (!stage.phone && side.childNodes.length)
+        ? side.getBoundingClientRect().width : 0;
+      const availW = Math.max(140,
+        Math.min(box.width || 320, stage.w) - sideW - (sideW ? 14 : 0));
+      const availH = stage.h;
       const size = spec.fit ? spec.fit(availW, availH)
         : { w: Math.min(availW, availH), h: Math.min(availW, availH) };
       geom = { w: size.w, h: size.h, unit: Math.min(size.w, size.h) };

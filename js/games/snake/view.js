@@ -96,7 +96,7 @@ window.PV = window.PV || {};
       }),
 
       fit(availW, availH) {
-        const s = Math.max(200, Math.min(availW, availH, 520));
+        const s = Math.max(200, Math.min(availW, availH, 720));
         return { w: s, h: s };
       },
 

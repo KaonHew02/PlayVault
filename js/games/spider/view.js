@@ -1,9 +1,11 @@
 /* 蜘蛛纸牌 / Spider Solitaire — view.
 
-   Click a run to pick it up, click a column to put it down; double-click sends
-   it wherever it does the most good. Click the stock to deal a row. No
-   dragging: on a phone a drag across ten fanned columns is a coin toss, and
-   click-to-place works identically with a mouse.
+   Drag a run to another column, or tap it and tap where it goes — the same
+   pointer handler serves both, and which one you get is decided by whether the
+   pointer moved before it came up. Dragging is what a card game should feel
+   like; the tap fallback is what still works when ten fanned columns are
+   squeezed onto a phone. Double-click sends a run wherever it does the most
+   good, and the stock deals a row.
 
    Ten columns is the whole layout problem here. Below a readable card width the
    canvas grows past its box and scrolls sideways instead of shrinking, and a
@@ -21,7 +23,7 @@ window.PV = window.PV || {};
   PV.SpiderView = function (ctx) {
     const suits = ctx.opts && ctx.opts.suits === '2' ? 2
       : (ctx.opts && ctx.opts.suits === '4' ? 4 : 1);
-    let game, sel = null, hint = null, hintTimer = null;
+    let game, sel = null, hint = null, hintTimer = null, drag = null;
     let timer = null, ended = false;
     let geom = { cw: 48, ch: 68, gap: 5, pad: 6, head: 6, top: 80, fanUp: 19, fanDown: 9 };
     let hits = [];
@@ -41,6 +43,10 @@ window.PV = window.PV || {};
     ctx.host.appendChild(wrap);
 
     canvas.addEventListener('pointerdown', onPoint);
+    canvas.addEventListener('pointermove', onDragMove);
+    canvas.addEventListener('pointerup', onDrop);
+    canvas.addEventListener('pointercancel', onDrop);
+    window.addEventListener('pointerup', onDrop);
     canvas.addEventListener('dblclick', onDouble);
     window.addEventListener('resize', layout);
     document.addEventListener('pv:lang', relabel);
@@ -74,6 +80,7 @@ window.PV = window.PV || {};
       ended = false;
       sel = null;
       hint = null;
+      drag = null;
       game.start();
       clearInterval(timer);
       timer = setInterval(() => { if (!ended) renderMeta(); }, 1000);
@@ -94,6 +101,7 @@ window.PV = window.PV || {};
       if (ended || !game.apply(move)) return false;
       sel = null;
       hint = null;
+      drag = null;
       save();
       render();
       return true;
@@ -145,13 +153,15 @@ window.PV = window.PV || {};
 
     function layout() {
       const box = canvas.parentElement.getBoundingClientRect();
-      const avail = Math.max(280, Math.min(box.width || 320, 980));
+      const avail = Math.max(280, Math.min(box.width || 320, PV.stage().w, 1240));
       const pad = Math.max(6, avail * 0.012);
       const gap = Math.max(3, avail * 0.008);
 
-      // Ten columns across a phone would leave a 26px card. Below a readable
-      // width the board keeps its size and the box scrolls sideways instead.
-      const MIN_CARD = 44;
+      // Ten columns is the whole board, and you cannot plan a spider hand you
+      // can only see seven columns of — so on a phone the cards shrink to fit
+      // rather than the board scrolling sideways. Below this the cards stop
+      // being readable at all, and then the box does scroll.
+      const MIN_CARD = 30;
       let cw = (avail - pad * 2 - gap * (COLS - 1)) / COLS;
       let W = avail;
       if (cw < MIN_CARD) { cw = MIN_CARD; W = pad * 2 + cw * COLS + gap * (COLS - 1); }
@@ -160,10 +170,12 @@ window.PV = window.PV || {};
       const top = pad + ch + gap * 2.4;
 
       let fanUp = ch * 0.28, fanDown = ch * 0.14;
-      // A spider column can hold twenty cards. Rather than let the canvas grow
-      // to a page and a half, the fan tightens until the deepest column fits.
+      // A spider column can hold twenty cards, and wider cards make a deeper
+      // column. Rather than let the canvas grow past the window — leaving the
+      // player scrolling to see their own tableau — the fan tightens until the
+      // deepest column fits the screen, never past six and a half cards.
       const spread = deepest(fanUp, fanDown) - ch;
-      const room = ch * 6.4;
+      const room = Math.max(ch * 2.2, Math.min(ch * 6.4, PV.stage().h - top - pad));
       if (spread > 0 && ch + spread > room) {
         const k = PV.clamp((room - ch) / spread, 0.40, 1);
         fanUp *= k;
@@ -235,31 +247,108 @@ window.PV = window.PV || {};
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     }
 
+    /** Which column a point is over, gutters included. -1 for none. */
+    function colAt(x) {
+      for (let i = 0; i < COLS; i++) {
+        const cx = colX(i);
+        if (x >= cx - geom.gap / 2 && x <= cx + geom.cw + geom.gap / 2) return i;
+      }
+      return -1;
+    }
+
+    /** The top edge of one card in a column, walking the fan. */
+    function cardY(pile, index) {
+      const p = game.tableau[pile];
+      let y = geom.top;
+      for (let j = 0; j < index; j++) y += p[j].up ? geom.fanUp : geom.fanDown;
+      return y;
+    }
+
+    /** The column a live drag would land on, or -1 if it would be refused. */
+    function dropTarget() {
+      if (!drag) return -1;
+      const to = colAt(drag.x);
+      if (to < 0 || to === drag.pile) return -1;
+      return game.canDrop(game.tableau[drag.pile][drag.index].c, to) ? to : -1;
+    }
+
+    function movable(target) {
+      if (!target || target.kind !== 'card') return false;
+      const p = game.tableau[target.pile];
+      return p[target.index].up && p.length - target.index <= game.runLength(target.pile);
+    }
+
     function onPoint(e) {
       if (ended) return;
-      const target = pick(pointOf(e));
-      if (!target) { sel = null; render(); return; }
+      const pt = pointOf(e);
+      const target = pick(pt);
+      if (!target) { sel = null; drag = null; render(); return; }
 
       if (target.kind === 'stock') { dealRow(); return; }
 
-      if (!sel) {
-        if (target.kind === 'card') {
-          const p = game.tableau[target.pile];
-          if (p[target.index].up && p.length - target.index <= game.runLength(target.pile)) {
-            sel = target;
-          }
+      // Picking up a run arms a drag. Whether it turns out to be a drag or a
+      // tap is decided on the way up, so one gesture covers both.
+      if (movable(target)) {
+        drag = {
+          pile: target.pile, index: target.index,
+          count: game.tableau[target.pile].length - target.index,
+          ox: pt.x - colX(target.pile), oy: pt.y - cardY(target.pile, target.index),
+          x: pt.x, y: pt.y, moved: false
+        };
+        // Capture keeps the run following a pointer that leaves the canvas.
+        // It throws on a pointer id the browser does not own — a synthetic
+        // event, or one already released — and that must not break the drag.
+        if (canvas.setPointerCapture && e.pointerId != null) {
+          try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not ours */ }
         }
         render();
         return;
       }
 
+      // Anywhere else: this is the second half of a tap-then-tap move.
       const to = target.kind === 'pile' ? target.pile
         : (target.kind === 'card' ? target.pile : -1);
-      if (to >= 0 && to !== sel.pile) {
+      if (sel && to >= 0 && to !== sel.pile) {
         const count = game.tableau[sel.pile].length - sel.index;
         if (play({ type: 'tt', from: sel.pile, to: to, count: count })) return;
       }
       sel = null;
+      render();
+    }
+
+    function onDragMove(e) {
+      if (!drag) return;
+      const pt = pointOf(e);
+      // A few pixels of slop, or every tap becomes a one-pixel drag that drops
+      // the run straight back where it came from.
+      if (!drag.moved && Math.abs(pt.x - drag.x) + Math.abs(pt.y - drag.y) < 5) return;
+      drag.moved = true;
+      sel = null;
+      drag.x = pt.x;
+      drag.y = pt.y;
+      render();
+    }
+
+    function onDrop(e) {
+      if (!drag) return;
+      const held = drag;
+      drag = null;
+      if (held.moved) {
+        const to = colAt(pointOf(e).x);
+        if (to >= 0 && to !== held.pile
+          && play({ type: 'tt', from: held.pile, to: to, count: held.count })) return;
+        render();                                  // refused: it snaps back
+        return;
+      }
+
+      // It never moved, so it was a tap: place what is already selected here,
+      // or pick this run up.
+      if (sel && sel.pile !== held.pile) {
+        const count = game.tableau[sel.pile].length - sel.index;
+        if (play({ type: 'tt', from: sel.pile, to: held.pile, count: count })) return;
+      }
+      const same = sel && sel.pile === held.pile && sel.index === held.index;
+      sel = same ? null : { kind: 'card', pile: held.pile, index: held.index };
       render();
     }
 
@@ -403,17 +492,33 @@ window.PV = window.PV || {};
         else card(c, x, head, done * 13 + 12, true);      // the king that closed it
       }
 
+      // A run in the air is drawn last and cut out of its column, so it does
+      // not appear in two places at once.
+      const lifted = drag && drag.moved ? drag : null;
+      const drop = dropTarget();
+
       for (let i = 0; i < COLS; i++) {
         const p = game.tableau[i];
-        const lit = hint && hint.to === i;
-        if (!p.length) { slot(c, colX(i), top, '', lit ? 'hint' : null); continue; }
+        const cut = lifted && lifted.pile === i ? lifted.index : p.length;
+        const lit = (hint && hint.to === i) || drop === i;
+        if (!cut) { slot(c, colX(i), top, '', lit ? 'hint' : null); continue; }
         let y = top;
-        for (let j = 0; j < p.length; j++) {
+        for (let j = 0; j < cut; j++) {
           const picked = sel && sel.pile === i && j >= sel.index;
           const hinted = (hint && hint.from === i && j >= p.length - hint.count)
-            || (lit && j === p.length - 1);
+            || (lit && j === cut - 1);
           card(c, colX(i), y, p[j].c, p[j].up, picked || hinted, hinted && !picked ? 'hint' : null);
-          y += (j === p.length - 1) ? 0 : (p[j].up ? fanUp : fanDown);
+          y += (j === cut - 1) ? 0 : (p[j].up ? fanUp : fanDown);
+        }
+      }
+
+      if (lifted) {
+        const p = game.tableau[lifted.pile];
+        const x = lifted.x - lifted.ox;
+        let y = lifted.y - lifted.oy;
+        for (let j = lifted.index; j < p.length; j++) {
+          card(c, x, y, p[j].c, true, true);
+          y += fanUp;
         }
       }
 
@@ -483,6 +588,10 @@ window.PV = window.PV || {};
         game.stop();
         save();
         canvas.removeEventListener('pointerdown', onPoint);
+        canvas.removeEventListener('pointermove', onDragMove);
+        canvas.removeEventListener('pointerup', onDrop);
+        canvas.removeEventListener('pointercancel', onDrop);
+        window.removeEventListener('pointerup', onDrop);
         canvas.removeEventListener('dblclick', onDouble);
         window.removeEventListener('resize', layout);
         document.removeEventListener('pv:lang', relabel);

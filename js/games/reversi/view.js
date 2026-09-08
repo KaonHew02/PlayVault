@@ -13,7 +13,7 @@ window.PV = window.PV || {};
   PV.ReversiView = function (ctx) {
     return PV.boardHost(ctx, {
       humanSeat: 0,
-      maxWidth: 520,
+      maxWidth: 700,
 
       create: () => new PV.Reversi({ rng: new PV.RNG(PV.newSeed()) }),
       createAI: (level, seat) =>

@@ -37,8 +37,8 @@ window.PV = window.PV || {};
     const scoreEl = PV.el('b', {}, '0');
     const linesEl = PV.el('b', {}, '0');
     const levelEl = PV.el('b', {}, '1');
-    const holdCv = PV.el('canvas', { class: 'mini-canvas', width: 96, height: 72 });
-    const nextCv = PV.el('canvas', { class: 'mini-canvas tall', width: 96, height: 216 });
+    const holdCv = PV.el('canvas', { class: 'mini-canvas', width: 120, height: 90 });
+    const nextCv = PV.el('canvas', { class: 'mini-canvas tall', width: 120, height: 270 });
 
     const btnPause = PV.el('button', { class: 'btn ghost', onclick: togglePause });
     const btnNew = PV.el('button', { class: 'btn ghost', onclick: () => reset() }, t('common.restart'));
@@ -168,9 +168,9 @@ window.PV = window.PV || {};
       const rowW = wrap.getBoundingClientRect().width || 320;
       const sideW = side.getBoundingClientRect().width || 112;
       const availW = Math.max(120, rowW - sideW - 14);
-      const maxH = Math.max(300, window.innerHeight - 250);
+      const maxH = PV.stage().h;
       cell = Math.floor(Math.min(availW / PV.Tetris.COLS, maxH / visRows));
-      cell = PV.clamp(cell, 10, 34);
+      cell = PV.clamp(cell, 10, 46);
       const dpr = window.devicePixelRatio || 1;
       const w = cell * PV.Tetris.COLS, h = cell * visRows;
       canvas.style.width = w + 'px';
@@ -305,7 +305,7 @@ window.PV = window.PV || {};
     function drawMini(cv, types) {
       const c = cv.getContext('2d');
       c.clearRect(0, 0, cv.width, cv.height);
-      const slot = 72, unit = 14;
+      const slot = 90, unit = 18;
       types.forEach((type, n) => {
         const cells = PV.Tetris.SHAPES[type][0];
         let minX = 9, maxX = -9, minY = 9, maxY = -9;

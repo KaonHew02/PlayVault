@@ -20,7 +20,7 @@ window.PV = window.PV || {};
 
     return PV.boardHost(ctx, {
       humanSeat: 0,
-      maxWidth: 540,
+      maxWidth: 760,
       aiDelay: 200,
 
       create: () => new PV.Chess({ rng: new PV.RNG(PV.newSeed()) }),

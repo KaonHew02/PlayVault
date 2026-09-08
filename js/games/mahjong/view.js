@@ -134,9 +134,9 @@ window.PV = window.PV || {};
 
     function layout() {
       const box = canvas.parentElement.getBoundingClientRect();
-      const W = Math.max(280, Math.min(box.width || 320, 860));
+      const W = Math.max(280, Math.min(box.width || 320, PV.stage().w, 1120));
       // The turtle spans 16 tiles across and 8 down, plus room for the stack offset.
-      const tw = Math.floor(Math.min(W / 16.6, (window.innerHeight - 230) / 9.4 / 1.32));
+      const tw = Math.floor(Math.min(W / 16.6, PV.stage().h / 9.4 / 1.32));
       const size = Math.max(18, tw);
       const th = Math.round(size * 1.32);
       const dx = Math.max(2, Math.round(size * 0.13));
