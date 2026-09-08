@@ -66,6 +66,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **3** | Racing, Tower Defense | **shipped 2026-09-07** — the two that are real productions |
 | **4** | play with friends | not started — see below; it is a different job per family |
 | **5** | Spider Solitaire, Worm Arena, kart items for Racing | **shipped 2026-09-08** — two new games and one reworked, none of which touched the shell. Klondike Solitaire was removed the same day |
+| **6** | Worm Arena and Kart Racing rebuilt to written specs | **shipped 2026-09-08** — the user supplied a spec for each; both name their own MVP, and everything past it (coins-as-currency, wardrobes, Grand Prix, battle modes) is deliberately still unbuilt |
 
 Phases 2 and 3 also added a shared harness per family (`js/core/boardhost.js`
 and `js/core/loophost.js`). Those were the actual saving: by the fourth board

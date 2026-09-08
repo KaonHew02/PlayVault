@@ -70,10 +70,113 @@ window.PV = window.PV || {};
       const a = tangents[(i - 4 + n) % n], b = tangents[(i + 4) % n];
       curve.push(1 - (a.x * b.x + a.y * b.y));
     }
-    return {
+    const track = {
       key: def.key, width: def.width, points: points, n: n,
       tangents: tangents, normals: normals, curve: curve, length: length
     };
+
+    /* Everything on the road is derived from the centreline, not hand-placed.
+       Two reasons: a new circuit is still just a list of control points, and
+       every kart sees the same furniture on every run — none of it comes from
+       the RNG, so a race still replays from its seed. */
+    track.checkpoints = checkpointsFor(track);
+    track.shortcut = chordFor(track);
+    track.pads = padsFor(track);
+    track.coins = coinsFor(track);
+    track.oil = oilFor(track);
+    return track;
+  }
+
+  /** Four gates round the lap. Progress is nodes; these are what a reset uses. */
+  function checkpointsFor(tk) {
+    const out = [];
+    for (let i = 0; i < 4; i++) out.push(Math.round(i * tk.n / 4) % tk.n);
+    return out;
+  }
+
+  /** How bent the road is over a window, used to find corners and straights. */
+  function bendAt(tk, i, span) {
+    let sum = 0;
+    for (let k = -span; k <= span; k++) sum += tk.curve[(i + k + tk.n) % tk.n];
+    return sum;
+  }
+
+  /**
+   * The shortcut: a straight chord thrown across the sharpest corner.
+   *
+   * Derived rather than drawn so every circuit gets one, and straight because
+   * a chord is by definition shorter than the arc it replaces. It is narrow
+   * and it is dirt — quicker only if you hit the entry and hold the line, which
+   * is the risk half of a risk-and-reward.
+   */
+  function chordFor(tk) {
+    let bestI = 0, bestBend = -1;
+    for (let i = 0; i < tk.n; i++) {
+      const b = bendAt(tk, i, 10);
+      if (b > bestBend) { bestBend = b; bestI = i; }
+    }
+    const reach = Math.min(18, Math.floor(tk.n / 6));
+    const from = (bestI - reach + tk.n) % tk.n;
+    const to = (bestI + reach) % tk.n;
+    const a = tk.points[from], b = tk.points[to];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(4, Math.round(len / 2.2));
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      pts.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+    return { from: from, to: to, points: pts, half: tk.width * 0.30, length: len };
+  }
+
+  /** Boost pads on the flattest stretch of each quarter of the lap. */
+  function padsFor(tk) {
+    const out = [];
+    for (let q = 0; q < 4; q++) {
+      const lo = Math.round(q * tk.n / 4), hi = Math.round((q + 1) * tk.n / 4);
+      let flat = lo, best = Infinity;
+      for (let i = lo + 6; i < hi - 6; i++) {
+        const b = bendAt(tk, i, 6);
+        if (b < best) { best = b; flat = i; }
+      }
+      for (const lane of [-1.5, 1.5]) {
+        const p = tk.points[flat % tk.n], nrm = tk.normals[flat % tk.n];
+        out.push({ node: flat % tk.n, x: p.x + nrm.x * lane, y: p.y + nrm.y * lane });
+      }
+    }
+    return out;
+  }
+
+  /** Coins in short arcs, so collecting them is a line to drive, not a detour. */
+  function coinsFor(tk) {
+    const out = [];
+    const runs = 5, per = 5;
+    for (let r = 0; r < runs; r++) {
+      const start = Math.round((r + 0.35) * tk.n / runs);
+      const lane = (r % 2 ? 1 : -1) * 1.4;
+      for (let k = 0; k < per; k++) {
+        const i = (start + k * 3) % tk.n;
+        const p = tk.points[i], nrm = tk.normals[i];
+        out.push({ x: p.x + nrm.x * lane, y: p.y + nrm.y * lane, r: 0.62 });
+      }
+    }
+    return out;
+  }
+
+  /** Oil on the outside of the three sharpest corners, where the fast line is. */
+  function oilFor(tk) {
+    const corners = [];
+    for (let i = 0; i < tk.n; i++) corners.push({ i: i, b: bendAt(tk, i, 8) });
+    corners.sort((a, b) => b.b - a.b);
+    const out = [];
+    for (const c of corners) {
+      if (out.some(o => Math.abs(PV.RaceTracks.delta(tk, o.node, c.i)) < tk.n / 6)) continue;
+      const p = tk.points[c.i], nrm = tk.normals[c.i];
+      const side = tk.curve[c.i] ? 1 : 1;
+      out.push({ node: c.i, x: p.x + nrm.x * side * 1.7, y: p.y + nrm.y * side * 1.7, r: 1.5 });
+      if (out.length === 3) break;
+    }
+    return out;
   }
 
   PV.RaceTracks = {
@@ -94,6 +197,33 @@ window.PV = window.PV || {};
         if (d < bestD) { bestD = d; best = i; }
       }
       return { node: best, dist: Math.sqrt(bestD) };
+    },
+
+    /**
+     * Where a kart is on the circuit, main road or shortcut.
+     *
+     * The chord reports its own node by mapping how far along it the kart is
+     * onto the arc it replaces, so progress stays one number and the kart on
+     * the shortcut simply gains nodes faster than the one going round.
+     */
+    locate(track, x, y, from, span) {
+      const main = PV.RaceTracks.nearest(track, x, y, from, span);
+      const s = track.shortcut;
+      if (s) {
+        let bd = Infinity, bi = 0;
+        for (let i = 0; i < s.points.length; i++) {
+          const p = s.points[i];
+          const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+          if (d < bd) { bd = d; bi = i; }
+        }
+        bd = Math.sqrt(bd);
+        if (bd < main.dist && bd <= s.half + 1.5) {
+          const arc = ((s.to - s.from + track.n) % track.n);
+          const node = (s.from + Math.round(arc * (bi / (s.points.length - 1)))) % track.n;
+          return { node: node, dist: bd, half: s.half, shortcut: true };
+        }
+      }
+      return { node: main.node, dist: main.dist, half: track.width / 2, shortcut: false };
     },
 
     /** Shortest signed step from node a to node b around the loop. */

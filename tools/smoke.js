@@ -796,85 +796,172 @@ section('racing — ' + (2 * scale) + ' races per circuit', () => {
     'going backwards should never add a lap');
 });
 
-/* ------------------------------------------------------- kart items */
+/* -------------------------------------------------------- kart racing */
 
-section('kart racing — boxes, items and the drift', () => {
+section('kart racing — the lights, the drift, the road and the items', () => {
+  const lights = g => { while (g.phase === 'countdown') g.advance(); return g; };
+
+  // Eight on the grid, and nobody moves until the lights go out.
+  const g = new PV.Racing({ seed: 42, track: 'ring', laps: 3 });
+  ok(g.cars.length === 8, 'a race should line up eight karts, got ' + g.cars.length);
+  ok(g.phase === 'countdown', 'the race started without a countdown');
+  const grid = { x: g.player.x, y: g.player.y };
+  for (let i = 0; i < 60; i++) g.advance();
+  ok(g.player.x === grid.x && g.player.y === grid.y, 'a kart moved during the countdown');
+  ok(g.light === 2, 'the lights are not counting down, got ' + g.light);
+  lights(g);
+  ok(g.phase === 'race' && g.tick >= PV.Racing.COUNTDOWN, 'the lights never went out');
+  ok(g.order().length === 8 && g.place(g.player) >= 1, 'the standings are broken');
+
+  // The throttle at the right moment is worth a boost; too early is a stall.
+  const perfect = new PV.Racing({ seed: 43, track: 'ring', laps: 3 });
+  while (perfect.tick < PV.Racing.COUNTDOWN - 10) perfect.advance();
+  perfect.input('accel');
+  perfect.advance();
+  lights(perfect);
+  ok(perfect.startKind === 'perfect' && perfect.player.boost > 0,
+    'a perfect start paid nothing, got ' + perfect.startKind);
+
+  const early = new PV.Racing({ seed: 44, track: 'ring', laps: 3 });
+  early.input('accel');
+  early.advance();
+  lights(early);
+  ok(early.startKind === 'jump' && early.player.stall > 0, 'jumping the start cost nothing');
+
   // A box is taken by driving over it, and it goes away for a while.
-  const g = new PV.Racing({ seed: 42, track: 'ring', laps: 3, rivals: 0 });
-  ok(g.boxes.length === 18, 'there should be eighteen item boxes, got ' + g.boxes.length);
-  const box = g.boxes[0];
-  g.player.x = box.x; g.player.y = box.y;
-  g.advance();
-  ok(g.player.item, 'driving over a box handed out nothing');
-  ok(box.at > g.tick, 'the box stayed live after it was taken');
+  const b = lights(new PV.Racing({ seed: 45, track: 'ring', laps: 3, rivals: 0 }));
+  ok(b.boxes.length === 18, 'there should be eighteen item boxes, got ' + b.boxes.length);
+  const box = b.boxes[0];
+  b.player.x = box.x; b.player.y = box.y;
+  b.advance();
+  ok(b.player.item, 'driving over a box handed out nothing');
+  ok(box.at > b.tick, 'the box stayed live after it was taken');
 
   // The roulette is weighted by position, which is the only thing keeping a
   // race close: the leader draws bananas, the tail draws mushrooms.
-  const r = new PV.Racing({ seed: 8, track: 'ring', laps: 3, rivals: 3 });
+  const r = new PV.Racing({ seed: 8, track: 'ring', laps: 3 });
   const tally = place => {
     const out = Object.create(null);
-    for (let i = 0; i < 500; i++) { const it = r.rollItem(place, 4); out[it] = (out[it] || 0) + 1; }
+    for (let i = 0; i < 600; i++) { const it = r.rollItem(place, 8); out[it] = (out[it] || 0) + 1; }
     return out;
   };
-  const leader = tally(1), tail = tally(4);
+  const leader = tally(1), tail = tally(8);
   ok(!leader.lightning, 'the leader was handed a lightning bolt');
   ok((tail.mushroom || 0) > (leader.mushroom || 0), 'the tail did not draw more mushrooms');
   ok((leader.banana || 0) > (tail.banana || 0), 'the leader did not draw more bananas');
+  ok((leader.shield || 0) > 0 && (tail.shield || 0) > 0, 'the shield never came up');
+
+  // A shield eats one hit and is then gone.
+  const sh = lights(new PV.Racing({ seed: 46, track: 'ring', laps: 3, rivals: 1 }));
+  const victim = sh.cars[1];
+  victim.shield = true;
+  ok(sh.spinCar(victim, 'test') === false, 'a shield did not stop the hit');
+  ok(!victim.shield && victim.spin === 0, 'the shield was not spent, or did not save the kart');
+  ok(sh.spinCar(victim, 'test') === true, 'a spent shield still blocked');
 
   // A banana spins whoever drives into it, and is gone afterwards.
-  const b = new PV.Racing({ seed: 9, track: 'ring', laps: 3, rivals: 1 });
-  const rival = b.cars[1];
-  b.hazards.push({ x: rival.x, y: rival.y, owner: 0, at: 0 });
-  b.advance();
+  const bz = lights(new PV.Racing({ seed: 9, track: 'ring', laps: 3, rivals: 1 }));
+  const rival = bz.cars[1];
+  bz.hazards.push({ x: rival.x, y: rival.y, owner: 0, at: 0 });
+  bz.advance();
   ok(rival.spin > 0, 'a banana did nothing');
-  ok(b.hazards.length === 0, 'the banana stayed on the road');
+  ok(bz.hazards.length === 0, 'the banana stayed on the road');
 
   // A shell hits the kart in front of it.
-  const s = new PV.Racing({ seed: 10, track: 'ring', laps: 3, rivals: 1 });
-  s.player.item = 'shell';
-  ok(s.useItem(s.player) === true, 'the shell would not fire');
-  ok(s.shells.length === 1 && !s.player.item, 'firing did not spend the item');
-  const target = s.cars[1];
-  s.shells[0].x = target.x - 0.2;
-  s.shells[0].y = target.y;
-  s.shells[0].life = 100;                          // past the owner's grace window
-  s.advance();
+  const sl = lights(new PV.Racing({ seed: 10, track: 'ring', laps: 3, rivals: 1 }));
+  sl.player.item = 'shell';
+  ok(sl.useItem(sl.player) === true, 'the shell would not fire');
+  const target = sl.cars[1];
+  sl.shells[0].x = target.x - 0.2;
+  sl.shells[0].y = target.y;
+  sl.shells[0].life = 100;                          // past the owner grace window
+  sl.advance();
   ok(target.spin > 0, 'the shell went straight through a kart');
 
   // Lightning only reaches the karts in front.
-  const l = new PV.Racing({ seed: 14, track: 'ring', laps: 3, rivals: 2 });
-  l.player.total = 10;
-  l.cars[1].total = 40;                            // ahead
-  l.cars[2].total = -10;                           // behind
-  l.player.item = 'lightning';
-  l.useItem(l.player);
-  ok(l.cars[1].spin > 0, 'the bolt missed the kart in front');
-  ok(l.cars[2].spin === 0, 'the bolt hit a kart that was behind');
-  ok(l.player.spin === 0, 'the bolt hit the kart that fired it');
+  const lt = lights(new PV.Racing({ seed: 14, track: 'ring', laps: 3, rivals: 2 }));
+  lt.player.total = 10;
+  lt.cars[1].total = 40;                            // ahead
+  lt.cars[2].total = -10;                           // behind
+  lt.player.item = 'lightning';
+  lt.useItem(lt.player);
+  ok(lt.cars[1].spin > 0, 'the bolt missed the kart in front');
+  ok(lt.cars[2].spin === 0, 'the bolt hit a kart that was behind');
+  ok(lt.player.spin === 0, 'the bolt hit the kart that fired it');
+
+  // Boost pads, coins and oil, all read off the furniture the track derived.
+  const pd = lights(new PV.Racing({ seed: 47, track: 'ring', laps: 3, rivals: 0 }));
+  const pad = pd.track.pads[0];
+  pd.player.x = pad.x; pd.player.y = pad.y;
+  pd.player.boost = 0;
+  pd.advance();
+  ok(pd.player.boost > 30, 'a boost pad did nothing, got ' + pd.player.boost);
+
+  const cn = lights(new PV.Racing({ seed: 48, track: 'ring', laps: 3, rivals: 0 }));
+  const money = cn.track.coins[0];
+  cn.player.x = money.x; cn.player.y = money.y;
+  cn.advance();
+  ok(cn.player.coins >= 1, 'a coin was not collected');
+  ok(cn.coinBack[0] > cn.tick, 'the coin came straight back');
+
+  const oz = lights(new PV.Racing({ seed: 49, track: 'ring', laps: 3, rivals: 0 }));
+  const slick = oz.track.oil[0];
+  oz.player.x = slick.x; oz.player.y = slick.y;
+  oz.advance();
+  ok(oz.player.slip > 0, 'oil did nothing');
+
+  // The shortcut is dirt, and it is genuinely shorter than the corner it cuts.
+  const sc = lights(new PV.Racing({ seed: 50, track: 'ring', laps: 3, rivals: 0 }));
+  const chord = sc.track.shortcut;
+  const mid = chord.points[Math.floor(chord.points.length / 2)];
+  sc.player.x = mid.x; sc.player.y = mid.y;
+  sc.player.node = chord.from;
+  const surface = sc.surfaceOf(sc.player);
+  ok(sc.player.onShortcut, 'the middle of the chord did not read as the shortcut');
+  ok(surface.max === PV.Racing.DIRT.max, 'the chord is not dirt');
+  ok(chord.length < Math.abs(PV.RaceTracks.delta(sc.track, chord.from, chord.to)) * 2.2,
+    'the shortcut is no shorter than the corner it cuts');
+
+  // Reset puts a stranded kart back on the centreline, stopped.
+  const rs = lights(new PV.Racing({ seed: 51, track: 'ring', laps: 3, rivals: 0 }));
+  rs.player.x += 30; rs.player.y += 30;
+  rs.player.speed = 0.4;
+  rs.input('reset');
+  rs.advance();
+  const home = rs.track.points[rs.player.node];
+  ok(Math.hypot(rs.player.x - home.x, rs.player.y - home.y) < 3,
+    'reset did not put the kart back on the road');
+  ok(rs.player.speed <= 0.05, 'reset kept the speed');
 
   // A mushroom is worth having. Measured over 25 ticks, which is the whole of
-  // the ring's opening straight: run it longer and the boosted kart is simply
-  // in the grass, going slower than the one that never had a mushroom.
+  // the opening straight: run it longer and the boosted kart is simply in the
+  // grass, going slower than the one that never had a mushroom.
   const drive = mushroom => {
-    const d = new PV.Racing({ seed: 12, track: 'ring', laps: 3, rivals: 0 });
+    const d = lights(new PV.Racing({ seed: 12, track: 'ring', laps: 3, rivals: 0 }));
     if (mushroom) { d.player.item = 'mushroom'; d.useItem(d.player); }
     for (let i = 0; i < 25; i++) { d.input('accel'); d.advance(); }
     return d.player.speed;
   };
   ok(drive(true) > drive(false) * 1.2, 'a mushroom was worth nothing');
 
-  // Hold a drift long enough and let go: that is the boost.
-  const dz = new PV.Racing({ seed: 13, track: 'ring', laps: 3, rivals: 0 });
+  // The drift charges in three steps, and pays on release.
+  ok(PV.Racing.DRIFT_LEVELS.length === 3, 'a drift should charge in three steps');
+  const dz = lights(new PV.Racing({ seed: 13, track: 'ring', laps: 3, rivals: 0 }));
   dz.player.speed = 0.3;
-  for (let i = 0; i < 45; i++) {
-    dz.input('accel'); dz.input('drift'); dz.input('left');
-    dz.advance();
-  }
-  ok(dz.player.charge >= PV.Racing.DRIFT_CHARGE,
-    'the drift did not charge, got ' + dz.player.charge);
-  for (let i = 0; i < 12; i++) { dz.input('accel'); dz.advance(); }
-  ok(dz.player.boost > 0, 'letting go of a full drift paid no boost');
-  ok(dz.player.charge === 0, 'the charge was not spent');
+  const hold = n => {
+    for (let i = 0; i < n; i++) {
+      dz.input('accel'); dz.input('drift'); dz.input('left');
+      dz.advance();
+    }
+  };
+  hold(45);
+  ok(dz.player.driftLevel === 1, 'a short drift is not a mini turbo, got ' + dz.player.driftLevel);
+  hold(60);
+  ok(dz.player.driftLevel === 2, 'a longer drift is not a super, got ' + dz.player.driftLevel);
+  hold(80);
+  ok(dz.player.driftLevel === 3, 'the ultra never charged, got ' + dz.player.driftLevel);
+  for (let i = 0; i < 14; i++) { dz.input('accel'); dz.advance(); }
+  ok(dz.player.boost > 0 && dz.player.charge === 0, 'letting go of an ultra drift paid nothing');
 
   // Kart classes trade acceleration against top speed. Neither is simply better.
   ok(PV.Racing.KARTS.light.accel > PV.Racing.KARTS.heavy.accel
