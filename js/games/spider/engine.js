@@ -213,6 +213,9 @@ window.PV = window.PV || {};
 
     isSolved() { return this.foundations.length === 8; }
 
+    /** Eight runs home is the game, so eight runs is the bar. */
+    get progress() { return this.foundations.length / 8; }
+
     /* --------------------------------------------------------- snapshot */
 
     snapshot() {

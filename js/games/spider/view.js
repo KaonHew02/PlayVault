@@ -51,12 +51,20 @@ window.PV = window.PV || {};
     window.addEventListener('resize', layout);
     document.addEventListener('pv:lang', relabel);
 
+    // Dealing yourself a new board mid-race restarts your clock on the same
+    // deal, which is a second attempt at everyone else's first.
+    if (ctx.race) btnNew.hidden = true;
+
     resumeOrNew();
+    // Racing a friend: the scoreboard reads how far along this board is.
+    ctx.progress = () => ({ pct: game ? game.progress : 0 });
 
     /* ------------------------------------------------------------------ */
 
     function resumeOrNew() {
-      const saved = PV.Store.get(SAVE, null);
+      // A race is a fresh deal from the host's seed: resuming a half-finished
+      // board would be a different puzzle from everyone else's.
+      const saved = ctx.race ? null : PV.Store.get(SAVE, null);
       if (saved && saved.suits === suits && !saved.done) {
         game = new PV.Spider({ seed: saved.seed, suits: suits });
         game.load(saved.state);
@@ -72,7 +80,7 @@ window.PV = window.PV || {};
       // No winnable check: proving a spider deal solvable needs a real solver,
       // and four-suit spider is genuinely lost some of the time even when it is
       // played well. The stuck test below is the honest answer instead.
-      game = new PV.Spider({ seed: PV.newSeed(), suits: suits });
+      game = new PV.Spider({ seed: ctx.seed(), suits: suits });
       begin();
     }
 
@@ -88,6 +96,7 @@ window.PV = window.PV || {};
     }
 
     function save() {
+      if (ctx.race) return;                 // a race never touches the solo save
       if (game.solved) { PV.Store.del(SAVE); return; }
       PV.Store.set(SAVE, {
         seed: game.seed, suits: suits, state: game.snapshot(),

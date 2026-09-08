@@ -24,6 +24,9 @@ window.PV = window.PV || {};
       icon: '', accent: null, options: [], soon: !!soon, start: null
     }, def);
     g.soon = !!soon;
+    // An option flagged solo only exists when playing alone (vs computer,
+    // pass-and-play). A room hides it: the opponent is a person elsewhere.
+    g.options = (g.options || []).map(o => Object.assign({ solo: false }, o));
     if (!g.soon && typeof g.start !== 'function') {
       throw new Error('PlayVault: ' + g.code + ' registered without start()');
     }

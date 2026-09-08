@@ -65,6 +65,17 @@ window.PV = window.PV || {};
     if (spec.pad && spec.pad.length) wrap.appendChild(pad);
     ctx.host.appendChild(wrap);
 
+    /* Racing a friend on this seed: the scoreboard reads the run from here
+       rather than the game reporting into it, so a game needs to know nothing
+       about the race. spec.pct is optional — a run with no natural finish line
+       (Snake, Worm Arena) is ranked on score alone. */
+    ctx.progress = () => ({
+      score: game ? game.score : 0,
+      pct: (game && spec.pct) ? spec.pct(game) : 0
+    });
+    // Restarting mid-race would be a second attempt at the same seed.
+    if (ctx.race) btnNew.hidden = true;
+
     const api = {
       side: side, below: below, status: status, canvas: canvas,
       get game() { return game; },

@@ -15,7 +15,7 @@ window.PV = window.PV || {};
     return PV.boardHost(ctx, {
       humanSeat: 0,
 
-      create: () => new PV.Gomoku({ rng: new PV.RNG(PV.newSeed()) }),
+      create: () => new PV.Gomoku({ rng: new PV.RNG(ctx.seed()) }),
       createAI: (level, seat) =>
         new PV.GomokuAI({ seat: seat, level: level, rng: new PV.RNG(PV.newSeed()) }),
 

@@ -22,7 +22,7 @@ window.PV = window.PV || {};
       hz: 60,
       keymap: { ' ': 'next', Enter: 'next', '1': 'pick1', '2': 'pick2', '3': 'pick3' },
 
-      create: () => new PV.TowerDef({ seed: PV.newSeed(), map: opts.map || 'meadow' }),
+      create: () => new PV.TowerDef({ seed: ctx.seed(), map: opts.map || 'meadow' }),
 
       onReset() { armed = 'gun'; chosen = null; hover = null; },
 

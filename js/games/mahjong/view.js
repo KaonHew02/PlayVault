@@ -71,20 +71,28 @@ window.PV = window.PV || {};
     window.addEventListener('resize', layout);
     document.addEventListener('pv:lang', relabel);
 
+    // Dealing yourself a new board mid-race restarts your clock on the same
+    // deal, which is a second attempt at everyone else's first.
+    if (ctx.race) btnNew.hidden = true;
+
     resumeOrNew();
+    // Racing a friend: the scoreboard reads how far along this board is.
+    ctx.progress = () => ({ pct: game ? game.progress : 0 });
 
     /* ------------------------------------------------------------------ */
 
     function resumeOrNew() {
-      const saved = PV.Store.get(SAVE, null);
+      // A race is a fresh deal from the host's seed: resuming a half-finished
+      // board would be a different puzzle from everyone else's.
+      const saved = ctx.race ? null : PV.Store.get(SAVE, null);
       const g = saved && !saved.done ? PV.Mahjong.restore(saved) : null;
-      game = g || new PV.Mahjong({ seed: PV.newSeed() });
+      game = g || new PV.Mahjong({ seed: ctx.seed() });
       begin();
     }
 
     function newGame() {
       PV.Store.del(SAVE);
-      game = new PV.Mahjong({ seed: PV.newSeed() });
+      game = new PV.Mahjong({ seed: ctx.seed() });
       begin();
     }
 
@@ -97,6 +105,7 @@ window.PV = window.PV || {};
     }
 
     function save() {
+      if (ctx.race) return;                 // a race never touches the solo save
       if (game.solved) { PV.Store.del(SAVE); return; }
       PV.Store.set(SAVE, Object.assign(game.snapshot(), { done: false }));
     }

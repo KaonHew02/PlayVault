@@ -44,7 +44,7 @@ window.PV = window.PV || {};
             { label: '▶', action: 'right' }],
       padCols: 3,
 
-      create: () => new PV.Worms({ seed: PV.newSeed(), bots: bots }),
+      create: () => new PV.Worms({ seed: ctx.seed(), bots: bots }),
 
       onReset() { bits = []; stick = null; },
 

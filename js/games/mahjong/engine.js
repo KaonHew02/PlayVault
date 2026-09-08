@@ -151,6 +151,12 @@ window.PV = window.PV || {};
 
     isSolved() { return this.remaining().length === 0; }
 
+    /** Tiles lifted off the board, out of all of them. */
+    get progress() {
+      const total = this.tiles.length || 1;
+      return (total - this.remaining().length) / total;
+    }
+
     snapshot() {
       return {
         seed: this.seed,

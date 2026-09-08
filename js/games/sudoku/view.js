@@ -65,21 +65,29 @@ window.PV = window.PV || {};
     document.addEventListener('keydown', onKey);
     document.addEventListener('pv:lang', relabel);
 
+    // Dealing yourself a new board mid-race restarts your clock on the same
+    // deal, which is a second attempt at everyone else's first.
+    if (ctx.race) btnNew.hidden = true;
+
     resumeOrNew();
+    // Racing a friend: the scoreboard reads how far along this board is.
+    ctx.progress = () => ({ pct: game ? game.progress : 0 });
 
     /* ------------------------------------------------------------------ */
 
     function resumeOrNew() {
-      const saved = PV.Store.get(SAVE, null);
+      // A race is a fresh deal from the host's seed: resuming a half-finished
+      // board would be a different puzzle from everyone else's.
+      const saved = ctx.race ? null : PV.Store.get(SAVE, null);
       const g = (saved && saved.difficulty === difficulty && !saved.solved)
         ? PV.Sudoku.restore(saved) : null;
-      game = g || new PV.Sudoku({ seed: PV.newSeed(), difficulty: difficulty });
+      game = g || new PV.Sudoku({ seed: ctx.seed(), difficulty: difficulty });
       begin();
     }
 
     function newGame(discard) {
       if (discard) PV.Store.del(SAVE);
-      game = new PV.Sudoku({ seed: PV.newSeed(), difficulty: difficulty });
+      game = new PV.Sudoku({ seed: ctx.seed(), difficulty: difficulty });
       begin();
     }
 
@@ -94,6 +102,7 @@ window.PV = window.PV || {};
     }
 
     function save() {
+      if (ctx.race) return;                 // a race never touches the solo save
       if (game.solved) PV.Store.del(SAVE);
       else PV.Store.set(SAVE, game.snapshot());
     }

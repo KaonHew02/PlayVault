@@ -77,6 +77,13 @@ window.PV = window.PV || {};
 
     get running() { return this._running; }
 
+    /**
+     * How far through, 0 to 1. Only a race scoreboard reads it, so the base
+     * class answers honestly rather than usefully; a puzzle that wants a
+     * moving bar overrides it.
+     */
+    get progress() { return this.solved ? 1 : 0; }
+
     /** Shareable puzzle identity: same code, same puzzle, on any device. */
     get shareCode() { return PV.seedToCode(this.seed); }
   };

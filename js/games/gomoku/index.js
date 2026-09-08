@@ -23,7 +23,7 @@
 
     options: [
       {
-        key: 'mode', labelKey: 'gomoku.mode', def: 'ai',
+        key: 'mode', labelKey: 'gomoku.mode', def: 'ai', solo: true,
         choices: [
           { value: 'ai', labelKey: 'gomoku.vsAI' },
           { value: 'hotseat', labelKey: 'gomoku.hotseat' }

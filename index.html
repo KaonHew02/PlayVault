@@ -31,6 +31,11 @@
 
 <noscript><p style="padding:24px">PlayVault needs JavaScript.</p></noscript>
 
+<!-- PeerJS, for playing with friends and nothing else. Loaded async: if it never
+     arrives, PV.Net.available() is false, the friends screen says so, and every
+     other part of PlayVault carries on working offline. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" async defer></script>
+
 <!-- core -->
 <script src="js/core/util.js"></script>
 <script src="js/core/rng.js"></script>
@@ -38,6 +43,15 @@
 <script src="js/core/i18n.js"></script>
 <script src="js/core/profile.js"></script>
 <script src="js/core/registry.js"></script>
+
+<!-- playing with friends: the pipe, the room, the two ways to share a game,
+     the room's pixels, and the screen that opens one -->
+<script src="js/core/net.js"></script>
+<script src="js/core/room.js"></script>
+<script src="js/core/boardnet.js"></script>
+<script src="js/core/race.js"></script>
+<script src="js/core/roomui.js"></script>
+<script src="js/core/friends.js"></script>
 
 <!-- the three engine contracts, and the harness each family shares -->
 <script src="js/core/board.js"></script>

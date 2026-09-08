@@ -14,7 +14,8 @@ node tools/build-logo.mjs    # regenerate every logo asset
 
 ## What is built
 
-**All twelve games on the roster are playable.** Nothing is a stub.
+**All twelve games on the roster are playable, alone or with friends.**
+Nothing is a stub.
 
 | family | games |
 | --- | --- |
@@ -35,6 +36,9 @@ js/core/
   cards.js                  a 52-card deck as integers
   board.js puzzle.js loop.js    the three engine contracts
   boardhost.js loophost.js      the harness each family shares
+  net.js room.js            the pipe (WebRTC + room codes) and the room over it
+  boardnet.js race.js       the two ways a game is shared
+  roomui.js friends.js      the room's pixels, and the screen that opens one
 js/games/<code>/            one folder per game, self-contained
 js/app.js                   lobby, play, stats, settings, hash routing
 tools/                      build-logo.mjs, serve.js, smoke.js
@@ -64,9 +68,57 @@ repeat, the thumb pad and the end-of-game card. A board game supplies
 `create/draw/hit/status/outcome`; a real-time game supplies
 `create/draw/keymap/pad/outcome`.
 
+## Playing with friends
+
+`#/friends`. One player opens a room and reads out six digits; everyone else
+types them in. WebRTC peer to peer, PeerJS's public broker for introductions
+only, **no server holds the game** — the same model CardVerse ships, ported
+rather than re-derived.
+
+There are two ways to share a game, and the FAMILY decides which, so no screen
+ever names a game:
+
+| family | how it is shared | the file |
+| --- | --- | --- |
+| board | host authority, two seats, turn by turn | `js/core/boardnet.js` |
+| puzzle · arcade | same seed, everyone at once, ranked at the end | `js/core/race.js` |
+
+**A move is an ASK, never applied locally.** The host validates it through
+`apply()` and posts the accepted move back to everyone, itself included — so
+both players take the same path into their board and there is no second code
+path that only one of them runs. A guest holds a real engine (these four games
+are full information and deterministic, so replaying accepted moves gives the
+same board) which is why it gets `legalMoves()`, highlighting and the terminal
+test for free.
+
+Every accepted move carries the index it was played at, and that one number is
+the whole resync protocol: below our history we already have it, equal to it we
+apply it, above it we ask for the move list and rebuild.
+
+A race sends **a progress line about once a second and a finishing line**, and
+nothing else. Sixty frames a second of somebody's Tetris well over a public
+broker does not hold up; a seed does. Only the host ranks, so the same table
+appears on every screen.
+
+Two rules in `js/core/room.js` that are easy to get wrong:
+
+- **`post()` goes to everyone, `ask()` goes to the host alone.** Facts are
+  posted, requests are asked. A guest that applies its own ask has walked
+  around the host, which is the whole ballgame.
+- **A seat is taken from the connection, never from the message.** That single
+  rule is all of "you cannot move for me".
+
+Two more that cost a browser session each to find:
+
+- **PeerJS is `async defer`, so the friends screen can render before it lands.**
+  `PV.Net.ready()` waits for it; saying "online play is not available" on a cold
+  load and never repainting is simply wrong.
+- **`location.hash = <the hash it already has>` fires nothing.** A rematch
+  begins the game already on screen, so `room.on('begin')` re-routes by hand.
+
 ### Testing
 
-`node tools/smoke.js` runs ~184,000 checks in about five seconds. It drives
+`node tools/smoke.js` runs ~185,000 checks in about five seconds. It drives
 `apply()` and the ticker, never the internals — driving `handle()` directly
 walks past the legality gate and tests a path no player ever takes, which is
 how a green headless run and a broken browser happen at the same time.
@@ -82,6 +134,13 @@ rule bugs rather than crashes:
 Mahjong proves its own guarantee: the generator records the order it peeled
 pairs off the board, and the test replays that order to prove every board can
 actually be cleared.
+
+**Online play is tested by pairing two rooms in memory** and hanging a real
+`PV.boardNet` off each end, so the routing, the seat stamping and the host's
+accept rules are under test rather than under review — only the WebRTC beneath
+the link is replaced. That is why the wire protocol lives in `boardnet.js`
+rather than inside the canvas-owning harness. It still does not replace two
+real browsers, which is what caught the two bugs above.
 
 ## Logo
 

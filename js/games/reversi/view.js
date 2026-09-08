@@ -15,7 +15,7 @@ window.PV = window.PV || {};
       humanSeat: 0,
       maxWidth: 700,
 
-      create: () => new PV.Reversi({ rng: new PV.RNG(PV.newSeed()) }),
+      create: () => new PV.Reversi({ rng: new PV.RNG(ctx.seed()) }),
       createAI: (level, seat) =>
         new PV.ReversiAI({ seat: seat, level: level, rng: new PV.RNG(PV.newSeed()) }),
 

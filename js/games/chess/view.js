@@ -23,7 +23,7 @@ window.PV = window.PV || {};
       maxWidth: 760,
       aiDelay: 200,
 
-      create: () => new PV.Chess({ rng: new PV.RNG(PV.newSeed()) }),
+      create: () => new PV.Chess({ rng: new PV.RNG(ctx.seed()) }),
       createAI: (level, seat) =>
         new PV.ChessAI({ seat: seat, level: level, rng: new PV.RNG(PV.newSeed()) }),
 

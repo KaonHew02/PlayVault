@@ -22,7 +22,7 @@ window.PV = window.PV || {};
       maxWidth: 640,
       aiDelay: 200,
 
-      create: () => new PV.Xiangqi({ rng: new PV.RNG(PV.newSeed()) }),
+      create: () => new PV.Xiangqi({ rng: new PV.RNG(ctx.seed()) }),
       createAI: (level, seat) =>
         new PV.XiangqiAI({ seat: seat, level: level, rng: new PV.RNG(PV.newSeed()) }),
 

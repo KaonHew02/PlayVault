@@ -432,6 +432,108 @@ main {
   .panel-mini.stats { flex: 1 1 auto; min-width: 92px; }
 }
 
+/* ------------------------------------------------------- playing together
+
+   One player chip, used in three places: the room lobby, the strip above an
+   online board, and the race scoreboard. It has to survive six names on a
+   360px phone, so it wraps rather than scrolls and the name is the part that
+   gives way. */
+
+.friends-cta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px; padding: 13px 15px; margin-bottom: 16px;
+}
+.friends-cta h3 { margin: 0 0 2px; }
+.friends-cta p { margin: 0; }
+
+.notice {
+  background: var(--accent-soft); border: 1px solid var(--line-2);
+  border-radius: 10px; padding: 9px 12px; font-size: 13.5px;
+}
+
+/* the game picker in the friends screen */
+.pick-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px; margin: 12px 0;
+}
+.pick {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 11px; padding: 10px 7px; cursor: pointer;
+  color: var(--ink); font: inherit; text-align: center;
+}
+.pick:hover { border-color: var(--accent); }
+.pick.on { border-color: var(--accent); background: var(--accent-soft); }
+.pick .icon { display: block; width: 32px; height: 32px; color: var(--accent); }
+.pick .icon svg { width: 100%; height: 100%; }
+.pick .nm { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+.pick .fam { font-size: 10.5px; letter-spacing: .8px; text-transform: uppercase; color: var(--dim); }
+
+.pick-setup { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
+.pick-setup .sheet-body { margin-bottom: 10px; }
+
+/* the code, both ends of it */
+.code-box {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  background: var(--panel-2); border: 1px solid var(--line-2);
+  border-radius: 12px; padding: 11px 14px; margin-bottom: 12px;
+}
+.code-box .k { display: block; font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); }
+.code-box .code { font-size: 27px; letter-spacing: .09em; color: var(--accent); }
+
+.code-input {
+  flex: 1 1 130px; min-width: 0; max-width: 190px;
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line-2); border-radius: 10px;
+  padding: 9px 12px; font-size: 19px; letter-spacing: .16em; text-align: center;
+}
+.code-input:focus { outline: none; border-color: var(--accent); }
+
+/* who is in the room */
+.room-strip { display: flex; flex-wrap: wrap; gap: 7px; }
+.pchip {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 11px 4px 5px; font-size: 13px;
+}
+.pchip.me { border-color: var(--accent); }
+.pchip.gone { opacity: .5; }
+.pchip.turn { background: var(--accent-soft); border-color: var(--accent); }
+.pchip .lv {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 21px; height: 21px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 11px; font-weight: 700; flex: none;
+}
+.pchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 11ch; }
+.pchip .tag { font-size: 10.5px; letter-spacing: .6px; text-transform: uppercase; color: var(--dim); }
+.pchip .tag.bad { color: var(--bad); }
+.pchip .val { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); }
+.pchip .medal { font-size: 14px; }
+.pchip.done .val { color: var(--good); }
+
+.room-panel .room-strip { margin-top: 12px; margin-bottom: 12px; }
+
+/* the banner above a game being played with other people */
+.room-bar {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 12px;
+}
+.room-bar-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.room-line { flex: 1 1 auto; }
+.room-line.you { color: var(--accent); font-weight: 600; }
+.small-btn { padding: 4px 10px; font-size: 12.5px; }
+
+@media (max-width: 759px) {
+  .code-box .code { font-size: 23px; }
+  .pchip .nm { max-width: 8ch; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

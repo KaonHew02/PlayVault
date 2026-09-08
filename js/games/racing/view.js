@@ -52,7 +52,7 @@ window.PV = window.PV || {};
       padCols: 3,
 
       create: () => new PV.Racing({
-        seed: PV.newSeed(),
+        seed: ctx.seed(),
         track: opts.track || 'ring',
         laps: Number(opts.laps || 3),
         kart: opts.kart || 'medium',

@@ -64,7 +64,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **1** | Hub shell + 五子棋 + Sudoku + Tetris | **shipped 2026-09-07** — one game per family, so all three contracts were proven before anything was built on them |
 | **2** | 黑白棋, Chess, 象棋, Solitaire, Mahjong Solitaire, Snake | **shipped 2026-09-07** — each slotted into a contract phase 1 had already proved |
 | **3** | Racing, Tower Defense | **shipped 2026-09-07** — the two that are real productions |
-| **4** | play with friends | not started — see below; it is a different job per family |
+| **4** | play with friends | **shipped 2026-09-08** — two jobs, not five: host authority for the board family, one shared seed for the other two |
 | **5** | Spider Solitaire, Worm Arena, kart items for Racing | **shipped 2026-09-08** — two new games and one reworked, none of which touched the shell. Klondike Solitaire was removed the same day |
 | **6** | Worm Arena and Kart Racing rebuilt to written specs | **shipped 2026-09-08** — the user supplied a spec for each; both name their own MVP, and everything past it (coins-as-currency, wardrobes, Grand Prix, battle modes) is deliberately still unbuilt |
 
@@ -92,13 +92,61 @@ The point of phase 1 is the contracts, not the content.
   twice with the same scripted inputs and asserts an identical run, which is the
   property the versus mode will be built on.
 
+## What phase 4 actually shipped
+
+**Two mechanisms, chosen by family, not twelve integrations.** The board family
+is host authority and the other two race a shared seed, and that split fell
+straight out of the three contracts — which is the return on having built them.
+
+- `js/core/net.js` + `room.js` — the pipe and the room over it. Room codes,
+  seats, roster, and exactly two ways to speak: `post()` to everyone, `ask()`
+  to the host alone.
+- `js/core/boardnet.js` — turn-based play. Deliberately split out of
+  `boardhost.js`: the harness owns a canvas and cannot run headless, and the
+  accept rules are the part that has to be right, so they live where the smoke
+  test can pair two rooms in memory and play whole games through them.
+- `js/core/race.js` — puzzle and arcade. Same seed, a progress line about once
+  a second, a finishing line, and one ranking done by the host.
+
+**No game was rewritten.** The three touches a game needed were mechanical:
+
+- `ctx.seed()` instead of `PV.newSeed()` — in a room it returns the host's
+  seed, which is the whole of "everybody gets the same deal".
+- `ctx.progress()` — what the scoreboard reads. `loophost.js` provides it for
+  the four games it hosts; Tetris and the three puzzles set their own.
+- `if (ctx.race)` — do not resume the solo save, do not write to it, and do not
+  offer a new board mid-race.
+
+The end-of-game path needed nothing at all: the shell wraps `ctx.record` and
+`ctx.gameOver`, so a game reports its outcome exactly as it always did and the
+race holds its end card back until the table is in.
+
+### The parts worth not rediscovering
+
+- **A move is an ask, never applied locally**, and it carries the index it was
+  played at. That one number is the entire resync protocol.
+- **A seat comes from the connection, never from the message.**
+- **A guest holds a real engine.** Sound only because these four games are full
+  information and deterministic — replaying accepted moves gives the same
+  board. It buys `legalMoves()`, highlighting and the terminal test for free.
+- **Undo is off online.** Taking a move back on one board is exactly the
+  disagreement the resync exists to prevent.
+- **A seat is never reused after a drop.** A rejoin under an old seat would
+  inherit that seat's half-played game.
+- **PeerJS is `async defer`**, so the screen can render before it arrives; wait
+  for it rather than declaring online play unavailable.
+- **Setting `location.hash` to the hash it already has fires nothing** — a
+  rematch has to re-route by hand.
+
 ## Shared with CardVerse
 
 - `js/core/net.js` — room codes over WebRTC, PeerJS's public broker for
-  introductions only, host authority, no server. Port it; do not re-derive it.
-  The rule that matters: **`snapshotFor(viewer)` is the only broadcastable
-  thing**, and per-viewer fields (`isYou`, seat identity) must be *written*
-  there, never inherited from the host.
+  introductions only, host authority, no server. **Ported 2026-09-08**, not
+  re-derived. The rule that matters: **`snapshotFor(viewer)` is the only
+  broadcastable thing**, and per-viewer fields (`isYou`, seat identity) must be
+  *written* there, never inherited from the host. PlayVault's board games do
+  not broadcast snapshots at all — they broadcast accepted moves, which is
+  cheaper and only possible because nothing on these boards is hidden.
 - `js/core/i18n.js` — English + 简体中文, one flat dict per language, `t()`
   looked up lazily. Half this roster has Chinese names already.
 - `drive.js` — copy CardVerse's, not FinSim's or MoneyFlow's. Check

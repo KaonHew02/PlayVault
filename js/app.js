@@ -32,6 +32,7 @@ window.PV = window.PV || {};
     const parts = raw.split('/').filter(Boolean);
     if (!parts.length) return { name: 'games' };
     if (parts[0] === 'play' && parts[1]) return { name: 'play', code: parts[1] };
+    if (parts[0] === 'friends') return { name: 'friends' };
     if (parts[0] === 'stats' || parts[0] === 'settings') return { name: parts[0] };
     return { name: 'games' };
   }
@@ -39,9 +40,15 @@ window.PV = window.PV || {};
   function route() {
     if (live) { live.destroy(); live = null; }
     const r = parseRoute();
+    /* Walking away from an online game is leaving it. A room that outlived the
+       screen would keep answering for a player who is no longer at the board. */
+    if (r.name !== 'play' && r.name !== 'friends' && PV.Room.current) {
+      PV.Room.current.leave('left');
+    }
     PV.clear(app);
     PV.$$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === r.name));
     if (r.name === 'play') screenPlay(r.code);
+    else if (r.name === 'friends') PV.Friends.screen(app);
     else if (r.name === 'stats') screenStats();
     else if (r.name === 'settings') screenSettings();
     else screenLobby();
@@ -76,6 +83,14 @@ window.PV = window.PV || {};
       )
     );
     wrap.appendChild(strip);
+
+    /* play with friends */
+    wrap.appendChild(el('section', { class: 'friends-cta' },
+      el('div', {},
+        el('h3', {}, t('friends.title')),
+        el('p', { class: 'muted small' }, t('friends.blurb'))),
+      el('button', { class: 'btn primary', onclick: () => go('#/friends') }, t('friends.open'))
+    ));
 
     /* family filter */
     const fams = ['all'].concat(PV.Registry.FAMILIES);
@@ -137,20 +152,27 @@ window.PV = window.PV || {};
     return out;
   }
 
-  function openSheet(g) {
-    const chosen = defaultsFor(g);
+  /**
+   * The option rows for one game, writing into `chosen` as they are pressed.
+   * Shared with the friends screen so a room is set up the same way a solo game
+   * is — and so a new option appears in both places at once.
+   *
+   * `solo` options (vs computer / pass-and-play) are skipped in a room: the
+   * opponent is a person on another device, which is the whole point.
+   */
+  function optionsBody(g, chosen, onChange, inRoom) {
     const body = el('div', { class: 'sheet-body' });
-
     function paint() {
       PV.clear(body);
       (g.options || []).forEach(o => {
+        if (inRoom && o.solo) return;
         if (o.showIf && !o.showIf(chosen)) return;
         const row = el('div', { class: 'opt-row' }, el('span', { class: 'k' }, t(o.labelKey)));
         const seg = el('div', { class: 'seg' });
         o.choices.forEach(c => {
           seg.appendChild(el('button', {
             class: 'seg-btn' + (chosen[o.key] === c.value ? ' on' : ''),
-            onclick: () => { chosen[o.key] = c.value; paint(); }
+            onclick: () => { chosen[o.key] = c.value; paint(); if (onChange) onChange(chosen); }
           }, t(c.labelKey)));
         });
         row.appendChild(seg);
@@ -158,6 +180,12 @@ window.PV = window.PV || {};
       });
     }
     paint();
+    return body;
+  }
+
+  function openSheet(g) {
+    const chosen = defaultsFor(g);
+    const body = optionsBody(g, chosen, null, false);
 
     const modal = el('div', { class: 'modal', onclick: e => { if (e.target === modal) modal.remove(); } },
       el('div', { class: 'sheet' },
@@ -181,47 +209,90 @@ window.PV = window.PV || {};
     const g = PV.Registry.get(code);
     if (!g || g.soon) { go('#/games'); return; }
 
-    const opts = pendingOpts || defaultsFor(g);
+    /* An online room brings its own game, its own options and its own seed —
+       all three come from the host, so nobody is playing a different deal. */
+    const room = (PV.Room.current && PV.Room.current.phase === 'playing'
+      && PV.Room.current.gameCode === code) ? PV.Room.current : null;
+
+    const opts = room ? room.opts : (pendingOpts || defaultsFor(g));
     pendingOpts = null;
 
     const host = el('div', { class: 'game-host' });
     const wrap = el('div', { class: 'screen play' },
       el('div', { class: 'play-head' },
-        el('button', { class: 'btn ghost back', onclick: () => go('#/games') }, '‹ ' + t('nav.back')),
+        el('button', {
+          class: 'btn ghost back',
+          onclick: () => go(room ? '#/friends' : '#/games')
+        }, '‹ ' + t('nav.back')),
         el('h2', {}, g.name)),
       host);
     app.appendChild(wrap);
+
+    // Declared before ctx: its methods close over this binding and a `let`
+    // further down would still be in its dead zone when the game starts.
+    let race = null;
 
     const ctx = {
       code: code,
       opts: opts,
       host: host,
-      record: outcome => PV.Profile.record(code, outcome),
+      room: room,
+      /* The one place a game asks for randomness. In a room it is the host's
+         seed, which is what makes "the same deal for everybody" true without a
+         single game knowing anything about the room. */
+      seed: () => (room ? room.seed >>> 0 : PV.newSeed()),
+      record: outcome => {
+        const rec = PV.Profile.record(code, outcome);
+        if (race) race.report(outcome);
+        return rec;
+      },
       exit: () => go('#/games'),
-      gameOver: panel => showGameOver(wrap, panel)
+      /* In a race the game's own end card is held until the table is in, so
+         gameOver goes through the race and panel() is the raw one. */
+      gameOver: panel => (race ? race.showLocal(panel) : showGameOver(wrap, panel)),
+      panel: panel => showGameOver(wrap, panel)
     };
 
-    live = g.start(host, ctx) || { destroy() {} };
+    /* Board games are host-authority and handle their room inside the board
+       harness. Everything else races the same seed. The family decides, so no
+       screen ever names a game. */
+    if (room && g.family !== 'board') {
+      race = PV.Race(ctx, room, { metric: g.family === 'puzzle' ? 'time' : 'score' });
+      ctx.race = race;
+    }
+
+    const started = g.start(host, ctx) || { destroy() {} };
+    live = {
+      destroy() {
+        if (race) race.destroy();
+        started.destroy();
+      }
+    };
   }
 
   /** One end-of-game panel for every game, so the shape never surprises. */
   function showGameOver(wrap, panel) {
     const old = wrap.querySelector('.over-layer');
     if (old) old.remove();
+    const actions = el('div', { class: 'over-actions' });
+    // `again: false` — not merely absent — is a game that cannot be replayed
+    // from here: an abandoned room, or a race waiting on the other players.
+    if (panel.again !== false) {
+      actions.appendChild(el('button', {
+        class: 'btn primary',
+        onclick: () => { layer.remove(); if (panel.again) panel.again(); }
+      }, panel.againLabel || t('result.again')));
+    }
+    actions.appendChild(el('button', {
+      class: 'btn ghost', onclick: () => go('#/games')
+    }, panel.exitLabel || t('result.toLobby')));
+
     const layer = el('div', { class: 'over-layer' },
       el('div', { class: 'over-card tone-' + (panel.tone || 'flat') },
         el('h3', {}, panel.title || ''),
         el('div', { class: 'over-lines' },
           (panel.lines || []).filter(Boolean).map(line => el('div', {}, line))),
-        el('div', { class: 'over-actions' },
-          el('button', {
-            class: 'btn primary',
-            onclick: () => { layer.remove(); if (panel.again) panel.again(); }
-          }, t('result.again')),
-          el('button', { class: 'btn ghost', onclick: () => go('#/games') }, t('result.toLobby'))
-        )
-      )
-    );
+        actions));
     wrap.appendChild(layer);
   }
 
@@ -374,9 +445,11 @@ window.PV = window.PV || {};
     route();
   }
 
+  // Published before boot(), because the first screen drawn may already be the
+  // friends screen and it reads PV.App on the way in.
+  PV.App = { route: route, go: go, optionsBody: optionsBody, defaultsFor: defaultsFor };
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
-
-  PV.App = { route: route, go: go };
 
 })(window.PV);

@@ -11,7 +11,21 @@
    Undo replays the move history into a FRESH engine rather than unwinding the
    old one. It is exact by construction, it costs nothing at board-game move
    counts, and it keeps the "engines only ever move forward" rule that the
-   online game will depend on. */
+   online game depends on.
+
+   ONLINE (ctx.room): host authority, and the guest is not a spectator — it
+   runs its own engine and applies the host's accepted moves into it. That is
+   only sound because these four games are full information and deterministic:
+   there is nothing in a chess position a guest is not allowed to see, and
+   replaying the same moves into a fresh engine gives the same board every
+   time. So a guest gets legalMoves(), move highlighting and the end-of-game
+   test for free, and there is no second rendering path to keep in step.
+
+   The rule that makes it authority rather than trust: a move goes out as an
+   ASK, never applied locally. The host validates it against its own engine
+   through apply() and posts the accepted move back to everyone, itself
+   included. Both players therefore take exactly the same path, and a guest
+   that disagrees about the position asks for the move list and rebuilds. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';
@@ -40,24 +54,39 @@ window.PV = window.PV || {};
    */
   PV.boardHost = function (ctx, spec) {
     const opts = ctx.opts || {};
-    const vsAI = opts.mode !== 'hotseat';
+    const room = (ctx.room && ctx.room.phase === 'playing') ? ctx.room : null;
+    const online = !!room;
+    const vsAI = !online && opts.mode !== 'hotseat';
     const level = opts.level || 'normal';
-    const humanSeat = spec.humanSeat == null ? 0 : spec.humanSeat;
+    // Online, the chair is the seat the room gave us: the host opens, the guest
+    // answers. Everywhere else the game says which side the player has.
+    const humanSeat = online ? (room.seat === 0 ? 0 : 1)
+      : (spec.humanSeat == null ? 0 : spec.humanSeat);
     const aspect = spec.aspect || 1;
     const maxWidth = spec.maxWidth || 760;
 
-    let engine = null, ai = null, aiTimer = null;
+    let engine = null, ai = null, aiTimer = null, net = null;
     let thinking = false, ended = false, startedAt = Date.now();
 
     const wrap = PV.el('div', { class: 'g-board' });
     const status = PV.el('div', { class: 'game-status' });
     const btnUndo = PV.el('button', { class: 'btn ghost', onclick: undo }, t('common.undo'));
-    const btnNew = PV.el('button', { class: 'btn ghost', onclick: () => reset() }, t('common.restart'));
+    const btnNew = PV.el('button', {
+      class: 'btn ghost',
+      onclick: () => (online ? net.rematch() : reset())
+    }, t('common.restart'));
     const boardBox = PV.el('div', { class: 'board-box' });
     const canvas = PV.el('canvas', { class: 'board-canvas' });
     const extra = PV.el('div', { class: 'board-extra' });
+    // Undo cannot mean anything with two engines running: taking a move back on
+    // one board is exactly the disagreement the resync exists to prevent.
+    btnUndo.hidden = online;
+    btnNew.hidden = online && !room.isHost;
+    if (online) btnNew.textContent = t('room.rematch');
 
+    const roomBar = online ? PV.RoomUI.gameBar(room) : null;
     boardBox.appendChild(canvas);
+    if (roomBar) wrap.appendChild(roomBar.node);
     wrap.appendChild(PV.el('div', { class: 'game-bar' }, status,
       PV.el('div', { class: 'bar-actions' }, btnUndo, btnNew)));
     wrap.appendChild(boardBox);
@@ -71,6 +100,7 @@ window.PV = window.PV || {};
 
     const api = {
       vsAI: vsAI,
+      online: online,
       level: level,
       humanSeat: humanSeat,
       extra: extra,
@@ -81,6 +111,7 @@ window.PV = window.PV || {};
     };
 
     reset();
+    if (online) wireRoom();
 
     /* ------------------------------------------------------------------ */
 
@@ -108,7 +139,7 @@ window.PV = window.PV || {};
     }
 
     function undo() {
-      if (thinking || !engine.history.length) return;
+      if (online || thinking || !engine.history.length) return;
       const back = spec.undoStep ? spec.undoStep(vsAI) : (vsAI ? 2 : 1);
       const n = Math.min(back, engine.history.length);
       // Never leave the board on the AI's turn after an undo.
@@ -129,6 +160,10 @@ window.PV = window.PV || {};
     /** The only path a move takes, whoever made it. */
     function play(move) {
       if (!move || engine.over) return false;
+      // Online a move is a REQUEST. Applying it here as well would mean playing
+      // on a board the host has not agreed to, and the two would drift apart
+      // the first time a move was refused.
+      if (online) return net.request(move);
       if (!engine.apply(move)) return false;
       render();
       if (!engine.over && vsAI && engine.turn !== humanSeat) scheduleAI();
@@ -137,7 +172,7 @@ window.PV = window.PV || {};
 
     function onPoint(e) {
       if (engine.over || thinking) return;
-      if (vsAI && engine.turn !== humanSeat) return;
+      if ((vsAI || online) && engine.turn !== humanSeat) return;
       const rect = canvas.getBoundingClientRect();
       const geom = geometry(rect.width, rect.height);
       const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -159,6 +194,43 @@ window.PV = window.PV || {};
       }, spec.aiDelay || 260);
     }
 
+    /* ------------------------------------------------------------ online */
+
+    /* The wire protocol itself is in boardnet.js, where it can be driven
+       headless. This end supplies the four things it needs from a screen. */
+    function wireRoom() {
+      net = PV.boardNet(room, {
+        engine: () => engine,
+        rebuild(history) { rebuild(history); ended = false; },
+        changed: render,
+        restart() { reset(); },
+        gone: kind => gone(kind === 'host' ? t('room.hostLeft') : t('room.opponentLeft'))
+      });
+      room.on('roster', renderStatus);
+    }
+
+    /** Nobody left to play. No result is recorded — an abandoned game is not a win. */
+    function gone(title) {
+      if (ended) return;
+      ended = true;
+      clearTimeout(aiTimer);
+      ctx.gameOver({ title: title, tone: 'flat', lines: [t('room.noResult')], again: false });
+    }
+
+    function paintRoom() {
+      if (!roomBar) return;
+      const values = {};
+      for (const m of room.members) {
+        values[m.seat] = (!engine.over && m.alive && engine.turn === m.seat)
+          ? { text: t('room.toMove'), tone: 'turn' } : {};
+      }
+      roomBar.players.update(values);
+      roomBar.say(engine.over ? t('room.finished')
+        : (engine.turn === humanSeat ? t('room.yourTurn')
+          : t('room.theirTurn', { name: room.nameFor(1 - humanSeat) })),
+        engine.turn === humanSeat && !engine.over ? 'you' : '');
+    }
+
     function render() {
       draw();
       renderStatus();
@@ -169,8 +241,11 @@ window.PV = window.PV || {};
 
     function renderStatus() {
       PV.clear(status);
-      const nodes = spec.status(engine, { thinking: thinking, vsAI: vsAI, humanSeat: humanSeat }) || [];
+      const nodes = spec.status(engine, {
+        thinking: thinking, vsAI: vsAI, online: online, humanSeat: humanSeat
+      }) || [];
       for (const n of nodes) if (n) status.appendChild(n);
+      paintRoom();
     }
 
     function finish() {
@@ -214,7 +289,7 @@ window.PV = window.PV || {};
 
     function relabel() {
       btnUndo.textContent = t('common.undo');
-      btnNew.textContent = t('common.restart');
+      btnNew.textContent = online ? t('room.rematch') : t('common.restart');
       render();
     }
 
@@ -224,6 +299,7 @@ window.PV = window.PV || {};
         window.removeEventListener('resize', onResize);
         document.removeEventListener('pv:lang', relabel);
         canvas.removeEventListener('pointerdown', onPoint);
+        if (net) net.destroy();
         if (spec.onDestroy) spec.onDestroy();
         wrap.remove();
       }

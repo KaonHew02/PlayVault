@@ -59,12 +59,18 @@ const FILES = [
   'js/games/snake/engine.js',
   'js/games/worms/engine.js',
   'js/games/racing/track.js', 'js/games/racing/engine.js',
-  'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js'
+  'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js',
+  // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
+  // extends; nothing here opens a socket — the tests pair rooms in memory.
+  'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
 ];
 for (const f of FILES) {
   vm.runInThisContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), { filename: f });
 }
 const PV = global.PV;
+// i18n.js is a browser file and is not loaded here; room.js reaches for t()
+// only to name a player it has not been told about, so the key will do.
+if (!PV.t) PV.t = k => k;
 
 /* ------------------------------------------------------------------ runner */
 
@@ -1056,6 +1062,317 @@ section('core — rng, store, profile', () => {
   ok(PV.Store.importAll(env).ok === true, 'our own export was rejected');
   for (const key of ['spider.saved', 'mahjong.saved', 'sudoku.saved']) {
     ok(PV.Store.BACKUP_STORES.indexOf(key) >= 0, key + ' is missing from BACKUP_STORES');
+  }
+});
+
+/* ------------------------------------------------- playing with friends */
+
+/* Two rooms wired to each other in memory. Everything above the link is the
+   real code — the routing, the seat stamping, the host's accept rules — and
+   only the WebRTC underneath it is replaced. Delivery is synchronous, so a
+   move and its consequences have all landed by the time request() returns. */
+function pairRooms(n, gameCode, opts) {
+  const guests = [];
+  const host = new PV.Room({
+    link: {
+      isHost: true,
+      send: msg => guests.forEach(g => g.receive(0, msg)),
+      sendTo: (seat, msg) => { if (guests[seat - 1]) guests[seat - 1].receive(0, msg); },
+      broadcast: msg => guests.forEach(g => g.receive(0, msg)),
+      close() {}
+    },
+    code: '123456', seat: 0, gameCode: gameCode, opts: opts || {}, maxPlayers: n,
+    members: [PV.Room.member(0, 'Host', 3, true)]
+  });
+  for (let seat = 1; seat < n; seat++) {
+    const mine = seat;
+    const room = new PV.Room({
+      link: {
+        isHost: false,
+        send: msg => host.receive(mine, msg),
+        sendTo: (_s, msg) => host.receive(mine, msg),
+        broadcast: msg => host.receive(mine, msg),
+        close() {}
+      },
+      code: '123456', seat: mine
+    });
+    host.members.push(PV.Room.member(mine, 'Guest ' + mine, 1, false));
+    guests.push(room);
+  }
+  host.pushRoster();
+  return { host: host, guests: guests };
+}
+
+section('room — routing, roster and who is allowed to decide', () => {
+  const { host, guests } = pairRooms(3, 'gomoku', { mode: 'hotseat' });
+  const g1 = guests[0], g2 = guests[1];
+
+  ok(g1.gameCode === 'gomoku' && g1.opts.mode === 'hotseat',
+    'the roster did not carry the game and its options to a guest');
+  ok(g1.members.length === 3, 'a guest was not told about everybody');
+
+  /* post() reaches everyone, stamped with the seat the CONNECTION had — not
+     with anything the message claimed. */
+  const heard = [];
+  [host, g1, g2].forEach((r, i) => r.on('msg', (from, p) => heard.push(i + ':' + from + ':' + p.v)));
+  g2.post({ v: 'x', seat: 0 });
+  ok(heard.length === 3, 'a post did not reach all three rooms');
+  ok(heard.every(h => h.split(':')[1] === '2'), 'a post was not stamped with the sender\'s seat');
+
+  /* ask() reaches the host and nobody else. */
+  const asked = [];
+  [host, g1, g2].forEach((r, i) => r.on('ask', (from, p) => asked.push(i + ':' + from + ':' + p.v)));
+  g1.ask({ v: 'q' });
+  ok(asked.length === 1 && asked[0] === '0:1:q', 'ask() did not go to the host alone');
+
+  /* A guest cannot start the game, end it, or rewrite the roster. */
+  ok(g1.begin(7) === false, 'a guest was allowed to begin the round');
+  ok(g1.end([]) === false, 'a guest was allowed to end the round');
+  ok(host.phase === 'lobby', 'a guest changed the host\'s phase');
+  g1.receive(0, { t: 'roster', members: [] });
+  ok(g1.members.length === 0, 'a guest ignored the host\'s roster');
+  host.pushRoster();
+  ok(g1.members.length === 3, 'the roster did not come back');
+
+  /* begin() puts everyone on one seed. That is the whole of a race. */
+  host.begin(4242);
+  ok(g1.seed === 4242 && g2.seed === 4242 && host.seed === 4242,
+    'the seed did not reach every seat');
+  ok(g1.phase === 'playing' && g2.phase === 'playing', 'a guest is not playing');
+
+  /* A dropped guest stops being live but stays on the roster, because a
+     scoreboard with a missing row reads as a bug. */
+  host.memberAt(2).alive = false;
+  host.pushRoster();
+  ok(host.live().length === 2 && host.members.length === 3,
+    'a dropped player was removed rather than marked');
+});
+
+/* One end of an online board: a real engine, a real PV.boardNet over it. */
+function boardEnd(room, make) {
+  const end = { engine: make(), renders: 0, gone: '' };
+  end.net = PV.boardNet(room, {
+    engine: () => end.engine,
+    rebuild(history) {
+      const fresh = make();
+      for (const m of history) {
+        const move = Object.assign({}, m);
+        delete move.seat;
+        fresh.apply(move);
+      }
+      end.engine = fresh;
+      end.rebuilt = (end.rebuilt || 0) + 1;
+    },
+    changed() { end.renders++; },
+    restart() { end.engine = make(); },
+    gone(kind) { end.gone = kind; }
+  });
+  return end;
+}
+
+function sameBoard(a, b) {
+  if (a.turn !== b.turn || a.over !== b.over) return false;
+  if (a.history.length !== b.history.length) return false;
+  for (let i = 0; i < a.cells.length; i++) if (a.cells[i] !== b.cells[i]) return false;
+  return true;
+}
+
+section('boardnet — ' + (12 * scale) + ' games played down a wire', () => {
+  const make = () => new PV.Gomoku({ rng: new PV.RNG(1) });
+
+  for (let n = 0; n < 12 * scale; n++) {
+    const { host, guests } = pairRooms(2, 'gomoku', {});
+    host.begin(1000 + n);
+    const ends = [boardEnd(host, make), boardEnd(guests[0], make)];
+    const ais = [
+      new PV.GomokuAI({ seat: 0, level: 'normal', rng: new PV.RNG(n + 1) }),
+      new PV.GomokuAI({ seat: 1, level: 'normal', rng: new PV.RNG(n + 500) })
+    ];
+
+    let plies = 0;
+    while (!ends[0].engine.over && plies < 80) {
+      const turn = ends[0].engine.turn;
+      const mover = ends[turn];
+      const before = mover.engine.history.length;
+
+      /* The seat that is NOT to move asks first. The host must refuse it, and
+         nothing on either board may change. */
+      const idle = ends[1 - turn];
+      idle.net.request(ais[1 - turn].choose(idle.engine));
+      ok(ends[0].engine.history.length === before,
+        'a move by the seat that was not to play was accepted');
+
+      const move = ais[turn].choose(mover.engine);
+      mover.net.request(move);
+      plies++;
+      ok(ends[0].engine.history.length === plies, 'an accepted move did not land on the host');
+      ok(sameBoard(ends[0].engine, ends[1].engine),
+        'the two boards disagreed after ply ' + plies);
+    }
+    ok(ends[0].engine.over === ends[1].engine.over, 'only one side saw the game end');
+    if (ends[0].engine.over) {
+      ok(JSON.stringify(ends[0].engine.result) === JSON.stringify(ends[1].engine.result),
+        'the two sides recorded different results');
+    }
+  }
+});
+
+section('boardnet — refusals, resync, resign and an empty room', () => {
+  const make = () => new PV.Gomoku({ rng: new PV.RNG(1) });
+
+  /* An illegal move moves nobody's board. */
+  {
+    const { host, guests } = pairRooms(2, 'gomoku', {});
+    host.begin(9);
+    const H = boardEnd(host, make), G = boardEnd(guests[0], make);
+    H.net.request({ type: 'place', x: 7, y: 7 });
+    ok(H.engine.history.length === 1, 'a legal opening move was refused');
+    G.net.request({ type: 'place', x: 7, y: 7 });        // occupied
+    ok(H.engine.history.length === 1 && G.engine.history.length === 1,
+      'a move onto an occupied point was accepted');
+    G.net.request({ type: 'place', x: 99, y: 99 });      // off the board
+    ok(H.engine.history.length === 1, 'a move off the board was accepted');
+  }
+
+  /* A guest that has fallen behind gets the move list and rebuilds to it.
+     This is the path a dropped message takes, and it has to end with the two
+     boards identical rather than merely close. */
+  {
+    const { host, guests } = pairRooms(2, 'gomoku', {});
+    host.begin(11);
+    const H = boardEnd(host, make), G = boardEnd(guests[0], make);
+    H.net.request({ type: 'place', x: 7, y: 7 });
+    G.net.request({ type: 'place', x: 7, y: 8 });
+    H.net.request({ type: 'place', x: 8, y: 8 });
+    ok(H.engine.history.length === 3, 'three moves did not land');
+
+    /* Rewind the guest to one ply, as if the last two messages never arrived.
+       It still believes it is to play, which is exactly the dangerous state —
+       nothing local tells a board that it is behind. */
+    G.engine = make();
+    G.engine.apply({ type: 'place', x: 7, y: 7 });
+    ok(!sameBoard(H.engine, G.engine), 'the test did not manage to desync the guest');
+
+    G.net.request({ type: 'place', x: 1, y: 1 });         // stale index -> resync
+    ok(G.rebuilt === 1, 'a stale move did not trigger a rebuild');
+    ok(sameBoard(H.engine, G.engine), 'the rebuild did not reproduce the host\'s board');
+    ok(H.engine.history.length === 3, 'the stale move was played anyway');
+
+    /* And the guest can carry straight on from the rebuilt board. */
+    G.net.request({ type: 'place', x: 5, y: 5 });
+    ok(H.engine.history.length === 4 && sameBoard(H.engine, G.engine),
+      'the guest could not move after a resync');
+
+    /* The other direction: a move arrives from further ahead than the guest
+       has reached. It must fetch the list rather than apply it out of order. */
+    G.engine = make();
+    G.engine.apply({ type: 'place', x: 7, y: 7 });
+    H.net.request({ type: 'place', x: 9, y: 9 });
+    ok(G.rebuilt === 2, 'a move from the future did not trigger a rebuild');
+    ok(sameBoard(H.engine, G.engine), 'the guest did not catch up to the host');
+  }
+
+  /* Resigning is the guest's to do and the host's to rule on. */
+  {
+    const { host, guests } = pairRooms(2, 'gomoku', {});
+    host.begin(13);
+    const H = boardEnd(host, make), G = boardEnd(guests[0], make);
+    H.net.request({ type: 'place', x: 7, y: 7 });
+    G.net.resign();
+    ok(H.engine.over && G.engine.over, 'a resignation did not end the game on both sides');
+    ok(H.engine.result.winner === 0 && G.engine.result.winner === 0,
+      'a resignation handed the game to the wrong seat');
+  }
+
+  /* A rematch is one message and both boards are new. */
+  {
+    const { host, guests } = pairRooms(2, 'gomoku', {});
+    host.begin(15);
+    const H = boardEnd(host, make), G = boardEnd(guests[0], make);
+    H.net.request({ type: 'place', x: 7, y: 7 });
+    H.net.rematch();
+    ok(H.engine.history.length === 0 && G.engine.history.length === 0,
+      'a rematch left moves on a board');
+  }
+
+  /* Nobody left to play against. */
+  {
+    const { host, guests } = pairRooms(2, 'gomoku', {});
+    host.begin(17);
+    const H = boardEnd(host, make), G = boardEnd(guests[0], make);
+    host.memberAt(1).alive = false;
+    host.pushRoster();
+    ok(H.gone === 'opponent', 'the host was not told the room had emptied');
+    guests[0].shut('lost');
+    ok(G.gone === 'host', 'the guest was not told the host had gone');
+  }
+});
+
+section('boardnet — snapshotFor writes the viewer\'s own fields', () => {
+  const e = new PV.Gomoku({ rng: new PV.RNG(1) });
+  e.apply({ type: 'place', x: 7, y: 7 });
+  const a = e.snapshotFor(0), b = e.snapshotFor(1);
+  ok(a.rng === undefined && b.rng === undefined,
+    'a broadcastable snapshot carried the RNG state');
+  ok(a.seats[0].isYou === true && a.seats[1].isYou === false, 'seat 0 was told the wrong chair');
+  ok(b.seats[1].isYou === true && b.seats[0].isYou === false, 'seat 1 inherited seat 0\'s chair');
+  ok(a.yourTurn === false && b.yourTurn === true, 'yourTurn was copied rather than written');
+});
+
+section('race — ranking a table', () => {
+  const rank = PV.Race.rank;
+
+  /* A puzzle: whoever solved it, soonest first. */
+  const puzzle = rank([
+    { seat: 0, done: true, result: 'solved', timeMs: 90000, pct: 1 },
+    { seat: 1, done: true, result: 'over', timeMs: 20000, pct: 0.4 },
+    { seat: 2, done: true, result: 'solved', timeMs: 61000, pct: 1 },
+    { seat: 3, done: false, pct: 0.8 }
+  ], 'time');
+  ok(puzzle[0].seat === 2 && puzzle[1].seat === 0,
+    'a puzzle race was not ranked by solve time');
+  ok(puzzle[2].seat === 3 && puzzle[3].seat === 1,
+    'an unfinished board ranked below a given-up one');
+  ok(puzzle[0].rank === 1 && puzzle[3].rank === 4, 'ranks were not numbered from one');
+
+  /* An arcade run: highest score, and a tie goes to whoever was quicker. */
+  const arcade = rank([
+    { seat: 0, done: true, result: 'over', score: 4200, timeMs: 300000 },
+    { seat: 1, done: true, result: 'over', score: 9100, timeMs: 400000 },
+    { seat: 2, done: false, score: 12000, pct: 0.2 }
+  ], 'score');
+  ok(arcade[0].seat === 1, 'an arcade race was not ranked by score');
+  ok(arcade[2].seat === 2, 'a player still going outranked one who had finished');
+
+  /* Equal results share a rank and the next one skips it. */
+  const tied = rank([
+    { seat: 0, done: true, result: 'over', score: 500, timeMs: 1000 },
+    { seat: 1, done: true, result: 'over', score: 500, timeMs: 1000 },
+    { seat: 2, done: true, result: 'over', score: 100, timeMs: 1000 }
+  ], 'score');
+  ok(tied[0].rank === 1 && tied[1].rank === 1 && tied[2].rank === 3,
+    'a tie did not share a rank, or the next rank did not skip');
+
+  /* Alone is not a race, so there is no prize for turning up. */
+  ok(PV.Race.bonusFor(1, 1) === 0, 'a one-player race paid a bonus');
+  ok(PV.Race.bonusFor(1, 3) > PV.Race.bonusFor(2, 3), 'second place paid at least as well as first');
+});
+
+section('race — every puzzle reports its progress', () => {
+  const cases = [
+    ['sudoku', () => new PV.Sudoku({ seed: 5, difficulty: 'easy' }),
+      g => { for (let i = 0; i < 81; i++) if (!g.isGiven(i)) g.apply({ type: 'set', i: i, v: g.solution[i] }); }],
+    ['spider', () => new PV.Spider({ seed: 5, suits: 1 }), null],
+    ['mahjong', () => new PV.Mahjong({ seed: 5 }), g => g.solution.forEach(pair =>
+      g.apply({ type: 'match', a: pair[0], b: pair[1] }))]
+  ];
+  for (const [name, make, solve] of cases) {
+    const g = make();
+    ok(g.progress >= 0 && g.progress < 1, name + ' started at ' + g.progress + ', not below 1');
+    if (!solve) continue;
+    solve(g);
+    ok(g.solved, name + ' did not solve under its own solution');
+    ok(g.progress === 1, name + ' finished at ' + g.progress + ' rather than 1');
   }
 });
 

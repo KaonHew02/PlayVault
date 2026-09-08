@@ -79,6 +79,12 @@ window.PV = window.PV || {};
     wrap.appendChild(pad);
     ctx.host.appendChild(wrap);
 
+    /* Racing a friend on this seed: the scoreboard reads the run from here.
+       Tetris has no finish line, so the ranking is on score alone. Restarting
+       mid-race would be a second attempt at the same well. */
+    ctx.progress = () => ({ score: game ? game.score : 0 });
+    if (ctx.race) btnNew.hidden = true;
+
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
     document.addEventListener('pv:lang', relabel);
@@ -94,7 +100,7 @@ window.PV = window.PV || {};
       if (ticker) ticker.stop();
       ended = false; paused = false;
       flashRows = []; flashTick = -1;
-      game = new PV.Tetris({ seed: PV.newSeed() });
+      game = new PV.Tetris({ seed: ctx.seed() });
       sizeCanvas();
       ticker = new PV.Ticker({
         hz: 60,

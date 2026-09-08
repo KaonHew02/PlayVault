@@ -90,7 +90,7 @@ window.PV = window.PV || {};
       padCols: 4,
 
       create: () => new PV.Snake({
-        seed: PV.newSeed(),
+        seed: ctx.seed(),
         speed: opts.speed || 'normal',
         walls: opts.walls !== 'wrap'
       }),

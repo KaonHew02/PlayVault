@@ -125,6 +125,17 @@ window.PV = window.PV || {};
       return true;
     }
 
+    /** Blanks filled in, right or wrong — a race bar, not a correctness check. */
+    get progress() {
+      let blanks = 0, filled = 0;
+      for (let i = 0; i < 81; i++) {
+        if (this.given[i]) continue;
+        blanks++;
+        if (this.cells[i] !== 0) filled++;
+      }
+      return blanks ? filled / blanks : 1;
+    }
+
     /* ---- resume across reloads ---- */
 
     snapshot() {
