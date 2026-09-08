@@ -1,14 +1,14 @@
-/* 赛车 / Racing — registration. */
+/* 卡丁车 / Kart Racing — registration. */
 (function (PV) {
   'use strict';
 
   PV.Registry.add({
     code: 'racing',
     family: 'arcade',
-    name: 'Racing',
-    nameZh: '赛车',
-    blurb: 'Top-down circuits against three rivals. Stay on the asphalt — the grass is slow.',
-    blurbZh: '俯视视角绕圈竞速，与三名对手同场。别开出赛道，草地上跑不快。',
+    name: 'Kart Racing',
+    nameZh: '卡丁车',
+    blurb: 'Three rivals, item boxes and a drift worth learning. The grass is slow and the shells are not.',
+    blurbZh: '三名对手、满地道具箱，还有值得练的漂移。草地很慢，龟壳很快。',
     accent: '#F87171',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
       + '<path d="M10 32c0-8 5-16 14-16s14 8 14 16" fill="none" stroke="currentColor" '
@@ -32,6 +32,14 @@
           { value: '2', labelKey: 'racing.laps2' },
           { value: '3', labelKey: 'racing.laps3' },
           { value: '5', labelKey: 'racing.laps5' }
+        ]
+      },
+      {
+        key: 'kart', labelKey: 'racing.kart', def: 'medium',
+        choices: [
+          { value: 'light', labelKey: 'racing.light' },
+          { value: 'medium', labelKey: 'racing.medium' },
+          { value: 'heavy', labelKey: 'racing.heavy' }
         ]
       }
     ],

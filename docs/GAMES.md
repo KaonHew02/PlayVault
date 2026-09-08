@@ -1,9 +1,11 @@
 # The roster
 
-Given 2026-09-07. Eleven games, plus play-with-friends.
+Given 2026-09-07. Eleven games, plus play-with-friends. Two more were added on
+2026-09-08 — Spider Solitaire and Worm Arena — and both slotted into a contract
+that already existed, which is the point of the three families.
 
-Solitaire · Mahjong Solitaire · Sudoku · Tetris · Snake · Racing ·
-Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋
+Solitaire · Spider Solitaire · Mahjong Solitaire · Sudoku · Tetris · Snake ·
+Worm Arena · Kart Racing · Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋
 
 ## Three families, three contracts
 
@@ -26,7 +28,7 @@ piece movement and the terminal test differ.
 - **This family is where "play with friends" is easy**, and it is the same
   host-authority WebRTC model CardVerse already ships.
 
-### 2. Solo puzzle — Sudoku, Solitaire, Mahjong Solitaire
+### 2. Solo puzzle — Sudoku, Solitaire, Spider Solitaire, Mahjong Solitaire
 
 One player, a deal from a seed, undo/redo, hints, a timer, a win test. No
 opponent, no turn order.
@@ -38,7 +40,7 @@ opponent, no turn order.
   uniqueness-checked generator per difficulty; Solitaire and Mahjong Solitaire
   need *solvable* deals or players hit dead boards and blame the game.
 
-### 3. Real-time loop — Tetris, Snake, Racing, Tower Defense
+### 3. Real-time loop — Tetris, Snake, Worm Arena, Kart Racing, Tower Defense
 
 A canvas and a fixed-timestep loop. Nothing here is turn-based, so nothing here
 uses the board contract.
@@ -61,6 +63,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **2** | 黑白棋, Chess, 象棋, Solitaire, Mahjong Solitaire, Snake | **shipped 2026-09-07** — each slotted into a contract phase 1 had already proved |
 | **3** | Racing, Tower Defense | **shipped 2026-09-07** — the two that are real productions |
 | **4** | play with friends | not started — see below; it is a different job per family |
+| **5** | Spider Solitaire, Worm Arena, kart items for Racing | **shipped 2026-09-08** — two new games and one reworked, none of which touched the shell |
 
 Phases 2 and 3 also added a shared harness per family (`js/core/boardhost.js`
 and `js/core/loophost.js`). Those were the actual saving: by the fourth board

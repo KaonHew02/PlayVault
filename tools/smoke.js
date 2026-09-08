@@ -54,9 +54,11 @@ const FILES = [
   'js/games/xiangqi/engine.js', 'js/games/xiangqi/ai.js',
   'js/games/sudoku/generator.js', 'js/games/sudoku/engine.js',
   'js/games/solitaire/engine.js', 'js/games/solitaire/solver.js',
+  'js/games/spider/engine.js',
   'js/games/mahjong/layout.js', 'js/games/mahjong/engine.js',
   'js/games/tetris/engine.js',
   'js/games/snake/engine.js',
+  'js/games/worms/engine.js',
   'js/games/racing/track.js', 'js/games/racing/engine.js',
   'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js'
 ];
@@ -501,6 +503,88 @@ section('solitaire — solver and rules', () => {
   ok(!f.canToFoundation(14), 'the two of hearts went up with no ace of hearts');
 });
 
+/* ------------------------------------------------------------------ spider */
+
+section('spider — deal, runs, the deal rule and the sweep', () => {
+  const C = PV.Cards;
+
+  // 104 cards either way; only the suits in play are dealt, and the copies of
+  // each rank make up the difference.
+  for (const suits of [1, 2, 4]) {
+    const g = new PV.Spider({ seed: 100 + suits, suits: suits });
+    const all = g.stock.slice();
+    for (const p of g.tableau) for (const cd of p) all.push(cd.c);
+    ok(all.length === 104, suits + '-suit: a deal should hold 104 cards, got ' + all.length);
+    ok(g.stock.length === 50, suits + '-suit: the stock should keep 50 cards');
+    ok(g.tableau.map(p => p.length).join(',') === '6,6,6,6,5,5,5,5,5,5',
+      suits + '-suit: the tableau is not 6,6,6,6 then 5s');
+    ok(g.tableau.every(p => p[p.length - 1].up && p.slice(0, -1).every(cd => !cd.up)),
+      suits + '-suit: only the last card of each column should be face up');
+    ok(all.every(c => C.suit(c) < suits), suits + '-suit: a card outside the suits in play');
+    const per = Object.create(null);
+    for (const c of all) per[c] = (per[c] || 0) + 1;
+    ok(Object.keys(per).length === suits * 13, suits + '-suit: wrong number of distinct cards');
+    ok(Object.keys(per).every(k => per[k] === 8 / suits),
+      suits + '-suit: every rank should appear ' + (8 / suits) + ' times');
+  }
+
+  // A run travels only while it is one suit; a drop only cares about rank.
+  const r = new PV.Spider({ seed: 3, suits: 4 });
+  r.tableau[0] = [{ c: 12, up: true }, { c: 11, up: true }];        // K♠ Q♠
+  ok(r.runLength(0) === 2, 'a same-suit pair did not travel together');
+  r.tableau[0] = [{ c: 12, up: true }, { c: 24, up: true }];        // K♠ Q♥
+  ok(r.runLength(0) === 1, 'a mixed-suit pair travelled together');
+  ok(r.canDrop(23, 0), 'a jack was refused onto a queen of another suit');
+  ok(!r.canDrop(12, 0), 'a king was allowed onto a queen');
+  r.tableau[1] = [];
+  ok(r.canDrop(5, 1), 'an empty column refused a card');
+
+  // The stock deals ten at a time, and not at all while a column stands empty.
+  const d = new PV.Spider({ seed: 11, suits: 2 });
+  ok(d.dealsLeft === 5, 'a fresh game should have five deals left');
+  ok(d.apply({ type: 'deal' }) === true, 'the first deal was refused');
+  ok(d.stock.length === 40 && d.dealsLeft === 4, 'the deal did not take ten cards');
+  ok(d.tableau.every(p => p[p.length - 1].up), 'a dealt card landed face down');
+  d.tableau[3] = [];
+  ok(d.canDeal() === false && d.apply({ type: 'deal' }) === false,
+    'the stock dealt onto an empty column');
+
+  // A finished K-to-A run leaves for a foundation the moment it is completed,
+  // and the card it was covering turns over. Built by hand, played by apply().
+  const s = new PV.Spider({ seed: 7, suits: 1 });
+  const col = [{ c: 5, up: false }];                                // 6♠, buried
+  for (let rank = 13; rank >= 2; rank--) col.push({ c: rank - 1, up: true });
+  s.tableau[0] = col;
+  s.tableau[1] = [{ c: 0, up: true }];                              // the ace to close it
+  ok(s.runLength(0) === 12, 'the built column is not a K-down-to-2 run');
+  ok(s.apply({ type: 'tt', from: 1, to: 0, count: 1 }) === true, 'the ace was refused');
+  ok(s.foundations.length === 1, 'a finished run did not go to a foundation');
+  ok(s.tableau[0].length === 1 && s.tableau[0][0].up, 'the buried card did not turn over');
+  ok(s.score === 500 - 1 + 100, 'wrong score after one move and one set, got ' + s.score);
+  ok(s.undo() === true && s.foundations.length === 0 && s.tableau[0].length === 13,
+    'undo did not take the run back out of the foundation');
+
+  // Tipping a whole column into an empty one is legal and pointless, so it is
+  // not offered — otherwise a dead game never reads as dead.
+  const m = new PV.Spider({ seed: 4, suits: 1 });
+  m.tableau = m.tableau.map(() => []);
+  m.tableau[0] = [{ c: 12, up: true }];
+  ok(m.legalMoves().length === 0, 'a whole column was allowed to move to an empty one');
+  ok(m.isStuck() === true, 'a board with no move and no legal deal is not stuck');
+  m.tableau[0] = [{ c: 5, up: false }, { c: 12, up: true }];
+  ok(m.legalMoves().length === 9, 'a king over a face-down card should have nine homes');
+
+  // The hint ranks: turning a card over beats emptying a column.
+  const h = new PV.Spider({ seed: 9, suits: 1 });
+  h.tableau = h.tableau.map(() => []);
+  h.tableau[0] = [{ c: 7, up: false }, { c: 5, up: true }];         // 6♠ over a face-down card
+  h.tableau[1] = [{ c: 5, up: true }];                              // a lone 6♠
+  h.tableau[2] = [{ c: 6, up: true }];                              // 7♠
+  const best = h.bestMove();
+  ok(best && best.from === 0 && best.to === 2,
+    'the hint passed over the move that turns a card over');
+});
+
 /* ----------------------------------------------------------------- mahjong */
 
 section('mahjong — every board is solvable by construction', () => {
@@ -639,6 +723,73 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
 
 /* ------------------------------------------------------------------ racing */
 
+section('worm arena — appetite, the wall, and a repeatable run', () => {
+  const g = new PV.Worms({ seed: 500, bots: 5 });
+  ok(g.worms.length === 6, 'the arena should hold the player and five bots');
+  ok(g.food.length === 220, 'the food supply did not fill, got ' + g.food.length);
+  ok(g.worms.every(w => w.nodes.length >= 1), 'a worm was spawned with no body');
+
+  // A pellet in front of the head is swallowed, and it is worth what it says.
+  const e = new PV.Worms({ seed: 502, bots: 0 });
+  e.food.length = 0;
+  e.foodCount = 0;                                  // and stop it refilling
+  e.player.angle = 0; e.player.aim = 0;
+  e.food.push({ x: e.player.x + 6, y: e.player.y, v: 5, c: '#fff' });
+  const before = e.player.mass;
+  e.advance();
+  ok(e.food.length === 0, 'the pellet was not swallowed');
+  ok(e.player.mass === before + 5, 'the pellet did not count, got ' + (e.player.mass - before));
+
+  // The wall is fatal. Aim at it and wait.
+  const wall = new PV.Worms({ seed: 501, bots: 0 });
+  wall.player.x = wall.W - 60; wall.player.y = 300;
+  wall.player.angle = 0; wall.player.aim = 0;
+  let n = 0;
+  while (!wall.over && n++ < 600) wall.advance();
+  ok(wall.over && wall.overReason === 'wall', 'a worm walked through the wall');
+
+  // A dead worm is food. That is the whole economy of the game.
+  const s = new PV.Worms({ seed: 504, bots: 1 });
+  s.food.length = 0; s.foodCount = 0;
+  const bot = s.worms[1];
+  bot.mass = 100;
+  s.kill(bot, 'test');
+  ok(!bot.alive && s.food.length > 0, 'a dead worm left nothing behind');
+
+  // A dash costs mass, and a small worm cannot afford one at all.
+  const b = new PV.Worms({ seed: 505, bots: 0 });
+  b.food.length = 0; b.foodCount = 0;
+  b.player.mass = PV.Worms.BOOST_MIN - 5;
+  b.input('boost'); b.advance();
+  ok(!b.player.boosting, 'a worm under the floor was allowed to dash');
+  b.player.mass = 200;
+  b.input('boost'); b.advance();
+  ok(b.player.boosting && b.player.mass < 200, 'a dash cost nothing');
+
+  // Bots keep off the walls. The player is dead by then, so the tick is
+  // re-armed each time round to keep watching the ones still swimming.
+  const arena = new PV.Worms({ seed: 503, bots: 6 });
+  for (let i = 0; i < 900 * scale; i++) { arena.over = false; arena.advance(); }
+  const inside = w => w.x >= 0 && w.x <= arena.W && w.y >= 0 && w.y <= arena.H;
+  ok(arena.worms.filter(w => w.alive).every(inside), 'a worm left the arena');
+  ok(arena.worms.filter(w => w.alive && w.bot).length >= 4, 'the bots all died and stayed dead');
+  ok(arena.food.length >= 200, 'the food supply ran down to ' + arena.food.length);
+
+  // Same seed, same inputs, same run — the property a versus mode needs.
+  const run = () => {
+    const r = new PV.Worms({ seed: 777, bots: 4 });
+    for (let i = 0; i < 400; i++) {
+      if (i % 40 === 0) r.input(i % 80 === 0 ? 'left' : 'right');
+      if (!r.advance()) break;
+    }
+    return JSON.stringify({ x: r.player.x, y: r.player.y, m: r.player.mass,
+                            f: r.food.length, t: r.tick });
+  };
+  ok(run() === run(), 'the same seed and inputs gave two different runs');
+});
+
+/* ------------------------------------------------------------------ racing */
+
 section('racing — ' + (2 * scale) + ' races per circuit', () => {
   for (const track of PV.RaceTracks.keys) {
     const built = PV.RaceTracks.build(track);
@@ -674,6 +825,92 @@ section('racing — ' + (2 * scale) + ' races per circuit', () => {
   g.player.total -= 5;
   ok(Math.floor(g.player.total / g.track.n) <= Math.floor(before / g.track.n),
     'going backwards should never add a lap');
+});
+
+/* ------------------------------------------------------- kart items */
+
+section('kart racing — boxes, items and the drift', () => {
+  // A box is taken by driving over it, and it goes away for a while.
+  const g = new PV.Racing({ seed: 42, track: 'ring', laps: 3, rivals: 0 });
+  ok(g.boxes.length === 18, 'there should be eighteen item boxes, got ' + g.boxes.length);
+  const box = g.boxes[0];
+  g.player.x = box.x; g.player.y = box.y;
+  g.advance();
+  ok(g.player.item, 'driving over a box handed out nothing');
+  ok(box.at > g.tick, 'the box stayed live after it was taken');
+
+  // The roulette is weighted by position, which is the only thing keeping a
+  // race close: the leader draws bananas, the tail draws mushrooms.
+  const r = new PV.Racing({ seed: 8, track: 'ring', laps: 3, rivals: 3 });
+  const tally = place => {
+    const out = Object.create(null);
+    for (let i = 0; i < 500; i++) { const it = r.rollItem(place, 4); out[it] = (out[it] || 0) + 1; }
+    return out;
+  };
+  const leader = tally(1), tail = tally(4);
+  ok(!leader.lightning, 'the leader was handed a lightning bolt');
+  ok((tail.mushroom || 0) > (leader.mushroom || 0), 'the tail did not draw more mushrooms');
+  ok((leader.banana || 0) > (tail.banana || 0), 'the leader did not draw more bananas');
+
+  // A banana spins whoever drives into it, and is gone afterwards.
+  const b = new PV.Racing({ seed: 9, track: 'ring', laps: 3, rivals: 1 });
+  const rival = b.cars[1];
+  b.hazards.push({ x: rival.x, y: rival.y, owner: 0, at: 0 });
+  b.advance();
+  ok(rival.spin > 0, 'a banana did nothing');
+  ok(b.hazards.length === 0, 'the banana stayed on the road');
+
+  // A shell hits the kart in front of it.
+  const s = new PV.Racing({ seed: 10, track: 'ring', laps: 3, rivals: 1 });
+  s.player.item = 'shell';
+  ok(s.useItem(s.player) === true, 'the shell would not fire');
+  ok(s.shells.length === 1 && !s.player.item, 'firing did not spend the item');
+  const target = s.cars[1];
+  s.shells[0].x = target.x - 0.2;
+  s.shells[0].y = target.y;
+  s.shells[0].life = 100;                          // past the owner's grace window
+  s.advance();
+  ok(target.spin > 0, 'the shell went straight through a kart');
+
+  // Lightning only reaches the karts in front.
+  const l = new PV.Racing({ seed: 14, track: 'ring', laps: 3, rivals: 2 });
+  l.player.total = 10;
+  l.cars[1].total = 40;                            // ahead
+  l.cars[2].total = -10;                           // behind
+  l.player.item = 'lightning';
+  l.useItem(l.player);
+  ok(l.cars[1].spin > 0, 'the bolt missed the kart in front');
+  ok(l.cars[2].spin === 0, 'the bolt hit a kart that was behind');
+  ok(l.player.spin === 0, 'the bolt hit the kart that fired it');
+
+  // A mushroom is worth having. Measured over 25 ticks, which is the whole of
+  // the ring's opening straight: run it longer and the boosted kart is simply
+  // in the grass, going slower than the one that never had a mushroom.
+  const drive = mushroom => {
+    const d = new PV.Racing({ seed: 12, track: 'ring', laps: 3, rivals: 0 });
+    if (mushroom) { d.player.item = 'mushroom'; d.useItem(d.player); }
+    for (let i = 0; i < 25; i++) { d.input('accel'); d.advance(); }
+    return d.player.speed;
+  };
+  ok(drive(true) > drive(false) * 1.2, 'a mushroom was worth nothing');
+
+  // Hold a drift long enough and let go: that is the boost.
+  const dz = new PV.Racing({ seed: 13, track: 'ring', laps: 3, rivals: 0 });
+  dz.player.speed = 0.3;
+  for (let i = 0; i < 45; i++) {
+    dz.input('accel'); dz.input('drift'); dz.input('left');
+    dz.advance();
+  }
+  ok(dz.player.charge >= PV.Racing.DRIFT_CHARGE,
+    'the drift did not charge, got ' + dz.player.charge);
+  for (let i = 0; i < 12; i++) { dz.input('accel'); dz.advance(); }
+  ok(dz.player.boost > 0, 'letting go of a full drift paid no boost');
+  ok(dz.player.charge === 0, 'the charge was not spent');
+
+  // Kart classes trade acceleration against top speed. Neither is simply better.
+  ok(PV.Racing.KARTS.light.accel > PV.Racing.KARTS.heavy.accel
+    && PV.Racing.KARTS.heavy.max > PV.Racing.KARTS.light.max,
+    'the kart classes are not a trade-off');
 });
 
 /* ---------------------------------------------------------- tower defense */
@@ -761,7 +998,7 @@ section('core — rng, store, profile', () => {
   ok(PV.Store.importAll({ format: 'cardverse.backup', data: {} }).ok === false,
     'another app\'s save was accepted');
   ok(PV.Store.importAll(env).ok === true, 'our own export was rejected');
-  for (const key of ['solitaire.saved', 'mahjong.saved', 'sudoku.saved']) {
+  for (const key of ['solitaire.saved', 'spider.saved', 'mahjong.saved', 'sudoku.saved']) {
     ok(PV.Store.BACKUP_STORES.indexOf(key) >= 0, key + ' is missing from BACKUP_STORES');
   }
 });

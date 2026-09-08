@@ -13,14 +13,19 @@ window.PV = window.PV || {};
 
   const t = (k, p) => window.PV.t(k, p);
 
+  // The arcade palette rather than the app's own: players read the shape of a
+  // piece off its colour before they read the shape itself, and cyan-I,
+  // yellow-O, purple-T are thirty years of muscle memory.
   const COLOURS = {
-    I: '#38BDF8', J: '#5B7CFA', L: '#F59E0B', O: '#FACC15',
-    S: '#34D399', T: '#C084FC', Z: '#F87171'
+    I: '#31C7EF', J: '#5A65AD', L: '#EF7921', O: '#F7D308',
+    S: '#42B642', T: '#AD4D9C', Z: '#EF2029'
   };
   const DAS = 160, ARR = 40;   // ms before repeat, ms between repeats
+  const FLASH_MS = 240;        // how long a cleared row stays lit
 
   PV.TetrisView = function (ctx) {
     let game, ticker, ended = false, paused = false;
+    let flashRows = [], flashAt = 0, flashTick = -1;
     // Declared up here, not beside sizeCanvas(): reset() runs before the tail of
     // this closure, and a `let` further down would still be in its dead zone.
     let cell = 22;
@@ -84,6 +89,7 @@ window.PV = window.PV || {};
       releaseAll();
       if (ticker) ticker.stop();
       ended = false; paused = false;
+      flashRows = []; flashTick = -1;
       game = new PV.Tetris({ seed: PV.newSeed() });
       sizeCanvas();
       ticker = new PV.Ticker({
@@ -174,14 +180,46 @@ window.PV = window.PV || {};
       draw();
     }
 
-    function block(c, x, y, colour, alpha) {
-      c.globalAlpha = alpha == null ? 1 : alpha;
+    /**
+     * One tile, bevelled the way the arcade ones are: a lit top and left face,
+     * a dark bottom and right, a flat centre. Flat rectangles turn the well
+     * into a spreadsheet once it fills up — the bevel is the only thing that
+     * separates two touching blocks of the same colour.
+     */
+    function block(c, x, y, colour, size) {
+      const s = size == null ? cell : size;
+      const b = Math.max(2, s * 0.20);
+
       c.fillStyle = colour;
-      c.fillRect(x + 1, y + 1, cell - 2, cell - 2);
-      c.globalAlpha = (alpha == null ? 1 : alpha) * 0.35;
-      c.fillStyle = '#FFFFFF';
-      c.fillRect(x + 1, y + 1, cell - 2, Math.max(1, cell * 0.14));
-      c.globalAlpha = 1;
+      c.fillRect(x, y, s, s);
+
+      c.fillStyle = 'rgba(255,255,255,.45)';
+      c.beginPath();
+      c.moveTo(x, y); c.lineTo(x + s, y); c.lineTo(x + s - b, y + b);
+      c.lineTo(x + b, y + b); c.lineTo(x + b, y + s - b); c.lineTo(x, y + s);
+      c.closePath();
+      c.fill();
+
+      c.fillStyle = 'rgba(0,0,0,.34)';
+      c.beginPath();
+      c.moveTo(x + s, y); c.lineTo(x + s, y + s); c.lineTo(x, y + s);
+      c.lineTo(x + b, y + s - b); c.lineTo(x + s - b, y + s - b); c.lineTo(x + s - b, y + b);
+      c.closePath();
+      c.fill();
+
+      c.strokeStyle = 'rgba(0,0,0,.42)';
+      c.lineWidth = 1;
+      c.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
+    }
+
+    /** Where the piece will land: an outline, so it never reads as a block. */
+    function ghost(c, x, y, colour) {
+      c.save();
+      c.globalAlpha = 0.5;
+      c.strokeStyle = colour;
+      c.lineWidth = Math.max(1.5, cell * 0.09);
+      c.strokeRect(x + cell * 0.16, y + cell * 0.16, cell * 0.68, cell * 0.68);
+      c.restore();
     }
 
     function draw() {
@@ -192,9 +230,12 @@ window.PV = window.PV || {};
       const visRows = game.visibleRows();
       const w = cell * PV.Tetris.COLS, h = cell * visRows;
 
-      c.fillStyle = '#0D1218';
+      const bg = c.createLinearGradient(0, 0, 0, h);
+      bg.addColorStop(0, '#141C29');
+      bg.addColorStop(1, '#090D14');
+      c.fillStyle = bg;
       c.fillRect(0, 0, w, h);
-      c.strokeStyle = 'rgba(255,255,255,.045)';
+      c.strokeStyle = 'rgba(255,255,255,.05)';
       c.lineWidth = 1;
       c.beginPath();
       for (let x = 1; x < PV.Tetris.COLS; x++) { c.moveTo(x * cell, 0); c.lineTo(x * cell, h); }
@@ -214,13 +255,36 @@ window.PV = window.PV || {};
         const gy = game.ghostY();
         for (const cellPos of game.cellsOf({ type: p.type, rot: p.rot, x: p.x, y: gy })) {
           if (cellPos.y < PV.Tetris.HIDDEN) continue;
-          block(c, cellPos.x * cell, (cellPos.y - PV.Tetris.HIDDEN) * cell, COLOURS[p.type], 0.18);
+          ghost(c, cellPos.x * cell, (cellPos.y - PV.Tetris.HIDDEN) * cell, COLOURS[p.type]);
         }
         for (const cellPos of game.cellsOf(p)) {
           if (cellPos.y < PV.Tetris.HIDDEN) continue;
           block(c, cellPos.x * cell, (cellPos.y - PV.Tetris.HIDDEN) * cell, COLOURS[p.type]);
         }
       }
+
+      // A cleared line lights up on its way out. The rows are already gone from
+      // the grid by now; the band is painted where they were, which is where
+      // the eye is still looking.
+      const lc = game.lastClear;
+      if (lc && lc.tick !== flashTick) {
+        flashTick = lc.tick;
+        flashRows = (lc.at || []).slice();
+        flashAt = Date.now();
+      }
+      const age = Date.now() - flashAt;
+      if (flashRows.length && age < FLASH_MS) {
+        c.fillStyle = 'rgba(255,255,255,' + (0.5 * (1 - age / FLASH_MS)).toFixed(3) + ')';
+        for (const ry of flashRows) {
+          if (ry < PV.Tetris.HIDDEN) continue;
+          c.fillRect(0, (ry - PV.Tetris.HIDDEN) * cell, w, cell);
+        }
+      }
+
+      // The frame last, so nothing paints over it.
+      c.strokeStyle = 'rgba(148,178,214,.28)';
+      c.lineWidth = 2;
+      c.strokeRect(1, 1, w - 2, h - 2);
 
       if (paused) {
         c.fillStyle = 'rgba(11,15,20,.78)';
@@ -251,10 +315,7 @@ window.PV = window.PV || {};
         }
         const ox = (cv.width - (maxX - minX + 1) * unit) / 2 - minX * unit;
         const oy = n * slot + (slot - (maxY - minY + 1) * unit) / 2 - minY * unit;
-        c.fillStyle = COLOURS[type];
-        for (const s of cells) {
-          c.fillRect(ox + s.x * unit + 1, oy + s.y * unit + 1, unit - 2, unit - 2);
-        }
+        for (const s of cells) block(c, ox + s.x * unit, oy + s.y * unit, COLOURS[type], unit);
       });
     }
 

@@ -14,13 +14,13 @@ node tools/build-logo.mjs    # regenerate every logo asset
 
 ## What is built
 
-**All eleven games on the roster are playable.** Nothing is a stub.
+**All thirteen games on the roster are playable.** Nothing is a stub.
 
 | family | games |
 | --- | --- |
 | board | 五子棋 · 黑白棋 · Chess · 中国象棋 |
-| puzzle | Sudoku · Klondike Solitaire · Mahjong Solitaire |
-| arcade | Tetris · Snake · Racing · Tower Defense |
+| puzzle | Sudoku · Klondike Solitaire · Spider Solitaire · Mahjong Solitaire |
+| arcade | Tetris · Snake · Worm Arena · Kart Racing · Tower Defense |
 
 Each family sits on its own engine contract, and each contract has a shared
 harness so a game only writes its rules and its painting.

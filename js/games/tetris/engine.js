@@ -203,7 +203,10 @@ window.PV = window.PV || {};
         this.lines += cleared;
         this.score += LINE_SCORE[cleared] * this.level;
         this.level = 1 + Math.floor(this.lines / 10);
-        this.lastClear = { rows: cleared, tick: this.tick };
+        // `at` is where the lines were, so the view can flash them. They are
+        // recorded as the rows above collapse, which is exactly where the eye
+        // expects the flash to be.
+        this.lastClear = { rows: cleared, at: this.clearedRows.slice(), tick: this.tick };
       }
       this.holdUsed = false;
       if (!this.over) this.spawn();
@@ -211,11 +214,13 @@ window.PV = window.PV || {};
 
     clearLines() {
       let cleared = 0;
+      this.clearedRows = [];
       for (let y = ROWS - 1; y >= 0; y--) {
         let full = true;
         for (let x = 0; x < COLS; x++) if (this.grid[y * COLS + x] === -1) { full = false; break; }
         if (!full) continue;
         cleared++;
+        this.clearedRows.push(y);
         this.grid.copyWithin(COLS, 0, y * COLS);
         this.grid.fill(-1, 0, COLS);
         y++;                                     // re-check the row that slid down
