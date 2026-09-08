@@ -179,6 +179,9 @@ main {
   display: grid; gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
 }
+/* Four to a row once there is room: auto-fill would rather make five thin ones,
+   and a card that thin loses its blurb and its icon. */
+@media (min-width: 1040px) { .game-grid { grid-template-columns: repeat(4, 1fr); } }
 .game-card {
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line);
@@ -195,7 +198,7 @@ main {
 
 /* ------------------------------------------------------------------- play */
 
-.screen.play { position: relative; }
+.screen.play { position: relative; max-width: 1180px; margin: 0 auto; }
 .play-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .play-head h2 { margin: 0; font-size: 19px; }
 .game-host { display: block; }
@@ -341,6 +344,9 @@ main {
   .hide-sm { display: none; }
   .brand-slogan { display: none; }
   .tetris-pad { display: grid; }
+  .tetris-stage { flex-wrap: wrap; }
+  .well-box { order: 1; width: 100%; justify-content: center; }
+  .tetris-side { order: 2; flex-direction: row; flex-wrap: wrap; justify-content: center; }
   .tetris-side { min-width: 96px; }
   .mini-canvas { width: 78px; height: 58px; }
   .mini-canvas.tall { height: 176px; }

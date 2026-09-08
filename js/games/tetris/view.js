@@ -43,14 +43,18 @@ window.PV = window.PV || {};
     const btnPause = PV.el('button', { class: 'btn ghost', onclick: togglePause });
     const btnNew = PV.el('button', { class: 'btn ghost', onclick: () => reset() }, t('common.restart'));
 
-    const side = PV.el('div', { class: 'tetris-side' },
+    // Hold and the score on one side, next on the other, the well between them.
+    // Stacking all three panels down one edge leaves a tall narrow well pinned
+    // against a wall of empty page, which is what an arcade cabinet never does.
+    const sideL = PV.el('div', { class: 'tetris-side' },
       PV.el('div', { class: 'panel-mini' }, PV.el('span', { class: 'k' }, t('tetris.hold')), holdCv),
-      PV.el('div', { class: 'panel-mini' }, PV.el('span', { class: 'k' }, t('tetris.next')), nextCv),
       PV.el('div', { class: 'panel-mini stats' },
         PV.el('span', { class: 'k' }, t('common.score')), scoreEl,
         PV.el('span', { class: 'k' }, t('tetris.lines')), linesEl,
         PV.el('span', { class: 'k' }, t('common.level')), levelEl)
     );
+    const sideR = PV.el('div', { class: 'tetris-side' },
+      PV.el('div', { class: 'panel-mini' }, PV.el('span', { class: 'k' }, t('tetris.next')), nextCv));
 
     const padBtn = (label, action, aria) => {
       const b = PV.el('button', { class: 'tpad', 'aria-label': aria || action }, label);
@@ -71,7 +75,7 @@ window.PV = window.PV || {};
 
     wrap.appendChild(bar);
     wrap.appendChild(PV.el('div', { class: 'tetris-stage' },
-      PV.el('div', { class: 'well-box' }, canvas), side));
+      sideL, PV.el('div', { class: 'well-box' }, canvas), sideR));
     wrap.appendChild(pad);
     ctx.host.appendChild(wrap);
 
@@ -165,10 +169,14 @@ window.PV = window.PV || {};
       // Measure the row, not the well: .well-box is sized BY the canvas, so
       // asking it how wide it is gives back last frame's answer (or zero).
       const visRows = game ? game.visibleRows() : 20;
-      const rowW = wrap.getBoundingClientRect().width || 320;
-      const sideW = side.getBoundingClientRect().width || 112;
-      const availW = Math.max(120, rowW - sideW - 14);
-      const maxH = PV.stage().h;
+      const stage = PV.stage();
+      const rowW = Math.min(wrap.getBoundingClientRect().width || 320, stage.w);
+      // Below the stacking breakpoint the panels sit under the well, so their
+      // width is not the well's to give up.
+      const sideW = stage.phone ? 0
+        : sideL.getBoundingClientRect().width + sideR.getBoundingClientRect().width + 28;
+      const availW = Math.max(120, rowW - sideW);
+      const maxH = stage.h;
       cell = Math.floor(Math.min(availW / PV.Tetris.COLS, maxH / visRows));
       cell = PV.clamp(cell, 10, 46);
       const dpr = window.devicePixelRatio || 1;
