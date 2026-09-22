@@ -916,17 +916,112 @@ section('kart racing — the lights, the drift, the road and the items', () => {
   oz.advance();
   ok(oz.player.slip > 0, 'oil did nothing');
 
-  // The shortcut is dirt, and it is genuinely shorter than the corner it cuts.
-  const sc = lights(new PV.Racing({ seed: 50, track: 'ring', laps: 3, rivals: 0 }));
-  const chord = sc.track.shortcut;
-  const mid = chord.points[Math.floor(chord.points.length / 2)];
-  sc.player.x = mid.x; sc.player.y = mid.y;
-  sc.player.node = chord.from;
-  const surface = sc.surfaceOf(sc.player);
-  ok(sc.player.onShortcut, 'the middle of the chord did not read as the shortcut');
-  ok(surface.max === PV.Racing.DIRT.max, 'the chord is not dirt');
-  ok(chord.length < Math.abs(PV.RaceTracks.delta(sc.track, chord.from, chord.to)) * 2.2,
-    'the shortcut is no shorter than the corner it cuts');
+  /* A circuit gets a shortcut only where one is actually quicker, so at least
+     one track has none and every consumer has to cope with that. Where there
+     is one it is dirt, it joins the road instead of kinking off it, and it
+     genuinely beats going round — the point it kept failing on. */
+  let withChord = 0, without = 0;
+  for (const key of PV.RaceTracks.keys) {
+    const tkc = PV.RaceTracks.build(key);
+    const chord = tkc.shortcut;
+    if (!chord) { without++; continue; }
+    withChord++;
+    ok(chord.ticks < chord.road * 0.95,
+      key + ': the shortcut is slower than the corner it cuts');
+    ok(chord.length < Math.abs(PV.RaceTracks.delta(tkc, chord.from, chord.to)) * 2.4,
+      key + ': the shortcut is no shorter than the corner it cuts');
+
+    const last = chord.points.length - 1;
+    const join = (px, qx, tg) => {
+      let d = Math.atan2(qx.y - px.y, qx.x - px.x) - Math.atan2(tg.y, tg.x);
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      return Math.abs(d);
+    };
+    ok(join(chord.points[0], chord.points[1], tkc.tangents[chord.from]) < 0.45,
+      key + ': the shortcut kinks off the road at the entry');
+    ok(join(chord.points[last - 1], chord.points[last], tkc.tangents[chord.to]) < 0.45,
+      key + ': the shortcut kinks back on to the road at the exit');
+
+    const sc = lights(new PV.Racing({ seed: 50, track: key, laps: 3, rivals: 0 }));
+    const mid = chord.points[Math.floor(chord.points.length / 2)];
+    sc.player.x = mid.x; sc.player.y = mid.y;
+    sc.player.node = chord.from;
+    ok(sc.surfaceOf(sc.player).max === PV.Racing.DIRT.max, key + ': the chord is not dirt');
+    ok(sc.player.onShortcut, key + ': the middle of the chord did not read as the shortcut');
+  }
+  ok(withChord > 0, 'no circuit has a shortcut at all');
+  ok(without > 0, 'every circuit has a shortcut; the "is it worth it" gate is not gating');
+
+  /* The grass decelerates rather than clamping. It used to take two thirds of
+     your speed on the tick you crossed the line, which is not something a
+     player can catch. */
+  const gr = lights(new PV.Racing({ seed: 16, track: 'ring', laps: 3, rivals: 0 }));
+  const at = gr.player.node;
+  const hub = gr.track.points[at], hn = gr.track.normals[at];
+  gr.player.x = hub.x + hn.x * (gr.track.width / 2 + 2);   // two units past the kerb
+  gr.player.y = hub.y + hn.y * (gr.track.width / 2 + 2);
+  gr.player.angle = Math.atan2(hn.y, hn.x);   // and pointed away from it
+  gr.player.speed = PV.Racing.ON.max;
+  gr.player.ceiling = PV.Racing.ON.max;
+  gr.input('accel'); gr.advance();
+  ok(gr.player.offRoad, 'the kart was not put on the grass');
+  ok(gr.player.speed > PV.Racing.OFF.max * 1.5,
+    'the grass took the speed on one tick, got ' + gr.player.speed.toFixed(3));
+  for (let i = 0; i < 90; i++) { gr.input('accel'); gr.advance(); }
+  ok(gr.player.offRoad, 'the kart found its way back on to the road');
+  ok(gr.player.speed <= PV.Racing.OFF.max,
+    'the grass never took the speed at all, got ' + gr.player.speed.toFixed(3));
+
+  // A drift travels wide of the nose, and the slide comes back when it ends.
+  const sd = lights(new PV.Racing({ seed: 15, track: 'ring', laps: 3, rivals: 0 }));
+  sd.player.speed = 0.35;
+  for (let i = 0; i < 50; i++) {
+    sd.input('accel'); sd.input('drift'); sd.input('right'); sd.advance();
+  }
+  ok(sd.player.slide > 0.15, 'a kart drifting right did not slide, got ' + sd.player.slide);
+  for (let i = 0; i < 60; i++) { sd.input('accel'); sd.advance(); }
+  ok(Math.abs(sd.player.slide) < 0.02, 'the slide never came back after the drift');
+
+  /* The grid fits on one screen and the player starts at the back. Single file
+     five nodes apart strung the field over eighty units of a forty-eight unit
+     view, so half of it was off screen at the lights. */
+  for (const key of PV.RaceTracks.keys) {
+    const gg = new PV.Racing({ seed: 19, track: key, laps: 3 });
+    let far = 0;
+    for (const c of gg.cars) far = Math.max(far, Math.hypot(c.x - gg.player.x, c.y - gg.player.y));
+    ok(far < 40, key + ': the grid is ' + far.toFixed(0) + ' units long, wider than the view');
+    ok(gg.place(gg.player) === gg.cars.length, key + ': the player did not start at the back');
+  }
+
+  /* Rivals drive: never in reverse, never gaining nodes they did not cover,
+     and not in the grass unless something put them there. Each of those was a
+     live bug — a brake with no floor deadlocked a kart at -0.12 for the rest
+     of the race, an unclamped node search handed out half a lap at a time,
+     and aiming at the far end of the shortcut stranded four of seven rivals
+     in the middle of the circuit. */
+  for (const key of PV.RaceTracks.keys) {
+    const ai = new PV.Racing({ seed: 21, track: key, laps: 2, rivals: 7 });
+    ai.player.isPlayer = false;
+    const seen = ai.cars.map(() => 0);
+    let reverse = false, jump = 0, off = 0, on = 0;
+    while (!ai.isOver() && ai.tick < 60 * 60 * 3) {
+      ai.advance();
+      for (let i = 0; i < ai.cars.length; i++) {
+        const c = ai.cars[i];
+        if (c.done) continue;
+        if (c.speed < -0.001) reverse = true;
+        jump = Math.max(jump, Math.abs(c.total - seen[i]));
+        seen[i] = c.total;
+        if (c.offRoad) off++; else on++;
+      }
+    }
+    ok(ai.isOver(), key + ': a field of rivals could not finish two laps');
+    ok(!reverse, key + ': a rival drove backwards');
+    ok(jump <= 2, key + ': a kart gained ' + jump + ' nodes in one tick');
+    const pct = Math.round(off / (off + on) * 100);
+    ok(pct < 25, key + ': the field spent ' + pct + '% of the race in the grass');
+  }
 
   // Reset puts a stranded kart back on the centreline, stopped.
   const rs = lights(new PV.Racing({ seed: 51, track: 'ring', laps: 3, rivals: 0 }));

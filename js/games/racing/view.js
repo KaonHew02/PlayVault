@@ -17,7 +17,7 @@ window.PV = window.PV || {};
   'use strict';
 
   const t = (k, p) => window.PV.t(k, p);
-  const VIEW = 48;                        // world units across the canvas
+  const VIEW = 54, VIEW_SM = 42;          // world units across the canvas
   const COLOURS = ['#F6B32B', '#38BDF8', '#F87171', '#34D399', '#C084FC',
                    '#FB923C', '#22D3EE', '#A3E635'];
   const GLYPH = { mushroom: '🍄', banana: '🍌', shell: '🐚', shield: '🛡️', lightning: '⚡' };
@@ -27,6 +27,7 @@ window.PV = window.PV || {};
     const opts = ctx.opts || {};
     let lapEl, posEl, timeEl, bestEl, itemEl, itemName, speedEl, coinEl;
     let bounds = null;
+    let cam = null;                       // eased, and ahead of the kart
     let flash = { text: '', until: 0 };
 
     const fmtTicks = n => (n ? PV.fmtTime(Math.round(n / 60 * 1000)) : '—');
@@ -40,9 +41,12 @@ window.PV = window.PV || {};
         Shift: 'drift', z: 'drift', Z: 'drift', ' ': 'item',
         r: 'reset', R: 'reset'
       },
-      // Steering, throttle and the drift have to be held, so those repeat.
-      // Firing an item and resetting do not: one press, one thing.
-      repeatable: ['left', 'right', 'accel', 'brake', 'drift'],
+      // Steering, throttle and the drift are held, not tapped, so they are
+      // SUSTAINED: the harness re-queues them on every tick. On the repeat
+      // timer they landed on 41% of ticks with a 133 ms hole after each press,
+      // which is what made a held left arrow feel like a flinch.
+      // Firing an item and resetting do not repeat: one press, one thing.
+      sustained: ['left', 'right', 'accel', 'brake', 'drift'],
       pad: [
         { label: '◀', action: 'left' }, { label: '▲', action: 'accel', aria: 'accelerate' },
         { label: '▶', action: 'right' },
@@ -59,7 +63,7 @@ window.PV = window.PV || {};
         rivals: 7
       }),
 
-      onReset() { bounds = null; flash = { text: '', until: 0 }; },
+      onReset() { bounds = null; cam = null; flash = { text: '', until: 0 }; },
 
       fit(availW, availH) {
         const w = Math.max(240, Math.min(availW, 1000));
@@ -125,8 +129,20 @@ window.PV = window.PV || {};
 
       draw(c, game, geom) {
         const tk = game.track;
-        const scale = geom.w / VIEW;
-        const cam = game.player;
+        const scale = geom.w / (geom.w < 560 ? VIEW_SM : VIEW);
+
+        /* The camera leads the kart rather than sitting on it. Centred exactly,
+           the view showed 0.87 s of road at full speed and 0.56 s on a boost —
+           less than it takes to read a corner, so every mistake arrived before
+           the corner that caused it was on screen. The lead is dropped during a
+           spin, or it swings round with the nose. */
+        const p = game.player;
+        const lead = p.spin > 0 ? 0 : 6 + Math.min(9, p.speed * 16);
+        const tx = p.x + Math.cos(p.angle) * lead;
+        const ty = p.y + Math.sin(p.angle) * lead;
+        if (!cam) cam = { x: tx, y: ty };
+        cam.x += (tx - cam.x) * 0.12;
+        cam.y += (ty - cam.y) * 0.12;
 
         c.fillStyle = '#1B3326';
         c.fillRect(0, 0, geom.w, geom.h);

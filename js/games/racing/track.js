@@ -34,6 +34,38 @@ window.PV = window.PV || {};
     return out;
   }
 
+  /* How a kart corners, kept here rather than in the engine because the
+     track needs it too: every question this file asks about where to put
+     something — is this a corner, is that chord actually quicker — is really
+     "how fast can a kart hold this bend". The engine drives on the same two
+     numbers, so there is one answer, not two that drift apart. */
+  const TURN = 0.055, GRIP_FADE = 1.15;
+
+  /**
+   * The fastest a kart can hold a bend, from the radius the curvature implies.
+   *
+   * `bend` is 1 - cos(the tangent's turn across `span` units), so the angle
+   * and the span give a radius; steering rate TURN falling off as
+   * 1/(1 + GRIP_FADE·v) then solves for the speed that holds it.
+   */
+  function speedFor(r) {
+    return (Math.sqrt(1 + 4 * GRIP_FADE * TURN * r) - 1) / (2 * GRIP_FADE);
+  }
+
+  function holdSpeed(bend, span) {
+    const turn = Math.acos(Math.max(-1, Math.min(1, 1 - bend)));
+    return turn < 1e-3 ? Infinity : speedFor(span / turn);
+  }
+
+  /* What each surface is worth. Here rather than in the engine because the
+     track has to know: deciding whether a chord across a corner is actually
+     quicker means pricing dirt against asphalt. The engine reads these. */
+  const SURFACE = {
+    road: { max: 0.46, drag: 0.994 },
+    dirt: { max: 0.40, drag: 0.976 },
+    grass: { max: 0.19, drag: 0.955 }
+  };
+
   const P = (x, y) => ({ x: x, y: y });
 
   const DEFS = {
@@ -101,13 +133,104 @@ window.PV = window.PV || {};
     return sum;
   }
 
+  /** Seconds-ish to cover the road from node `a` to node `b`, driven properly. */
+  function roadTime(tk, a, b) {
+    const gap = tk.length / tk.n, span = gap * 8;
+    let ticks = 0;
+    for (let i = a; ; i = (i + 1) % tk.n) {
+      ticks += gap / Math.min(SURFACE.road.max, holdSpeed(tk.curve[i], span));
+      if (i === b) break;
+    }
+    return ticks;
+  }
+
   /**
-   * The shortcut: a straight chord thrown across the sharpest corner.
+   * One candidate slip road across the corner at `mid`, `reach` nodes either
+   * side, leaving and rejoining along the road's own tangents.
    *
-   * Derived rather than drawn so every circuit gets one, and straight because
-   * a chord is by definition shorter than the arc it replaces. It is narrow
-   * and it is dirt — quicker only if you hit the entry and hold the line, which
-   * is the risk half of a risk-and-reward.
+   * It used to be a literal straight chord — the shortest possible line, and
+   * the worst one to drive: a straight line between two points fifty degrees
+   * apart on the road meets that road at a kink at BOTH ends, and no kart can
+   * carry speed through a kink. `join` is how much road the curve is given to
+   * straighten out; too little and the whole bend piles up at the ends, which
+   * is worse than the kink it replaced.
+   */
+  function slipRoad(tk, mid, reach, joinFrac) {
+    const from = (mid - reach + tk.n) % tk.n;
+    const to = (mid + reach) % tk.n;
+    const a = tk.points[from], b = tk.points[to];
+    const t0 = tk.tangents[from], t1 = tk.tangents[to];
+    const m = Math.hypot(b.x - a.x, b.y - a.y) * joinFrac;
+    const at = t => {
+      const t2 = t * t, t3 = t2 * t;
+      const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t;
+      const h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+      return {
+        x: h00 * a.x + h10 * t0.x * m + h01 * b.x + h11 * t1.x * m,
+        y: h00 * a.y + h10 * t0.y * m + h01 * b.y + h11 * t1.y * m
+      };
+    };
+
+    // Walk it at a fixed step, so the dirt is sampled as evenly as the road.
+    const fine = [], run = [0];
+    for (let i = 0; i <= 400; i++) fine.push(at(i / 400));
+    for (let i = 1; i < fine.length; i++) {
+      run.push(run[i - 1] + Math.hypot(fine[i].x - fine[i - 1].x, fine[i].y - fine[i - 1].y));
+    }
+    const len = run[run.length - 1];
+    const steps = Math.max(4, Math.round(len / 2.2));
+    const pts = [];
+    for (let k = 0, j = 0; k <= steps; k++) {
+      const want = len * k / steps;
+      while (j < run.length - 2 && run[j + 1] < want) j++;
+      const seg = run[j + 1] - run[j] || 1;
+      const f = (want - run[j]) / seg;
+      pts.push({
+        x: fine[j].x + (fine[j + 1].x - fine[j].x) * f,
+        y: fine[j].y + (fine[j + 1].y - fine[j].y) * f
+      });
+    }
+
+    /* How fast the dirt can be taken, point by point, from the radius each
+       step actually turns through — not from a window average.
+       
+       The dirt's whole problem is concentrated in the last couple of units at
+       a join: a Hermite whose end tangent has to match a road that is itself
+       swinging round crams twenty degrees into one 2.2-unit step, a radius of
+       six. Any window wide enough to be smooth averages that straight out, so
+       the gate below prices a slip road whose real cost it cannot see, and
+       picks the one that hurts most. */
+    const gap = len / steps;
+    const hold = [];
+    let ticks = 0;
+    for (let i = 0; i <= steps; i++) {
+      const k = Math.max(1, Math.min(steps - 1, i));
+      const p = pts[k - 1], q = pts[k], r = pts[k + 1];
+      let d = Math.atan2(r.y - q.y, r.x - q.x) - Math.atan2(q.y - p.y, q.x - p.x);
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      hold.push(Math.min(SURFACE.dirt.max,
+        Math.abs(d) < 1e-4 ? Infinity : speedFor(gap / Math.abs(d))));
+      ticks += gap / hold[i];
+    }
+
+    return {
+      from: from, to: to, points: pts, half: tk.width * 0.33, length: len,
+      hold: hold, ticks: ticks, road: roadTime(tk, from, to)
+    };
+  }
+
+  /**
+   * The shortcut, or nothing.
+   *
+   * Spans and join lengths are tried across the most bent stretch of the lap
+   * and the quickest is kept — but only if it actually beats going round. A
+   * "shortcut" slower than the corner is a trap, and a chord across a gentle
+   * sweep is exactly that: short on paper, but the tight bit at each join
+   * costs more than the distance saves. The ring is a rounded octagon with no
+   * corner to cut and so ends up with no shortcut, which is the honest answer
+   * for it — rivals that took the old one lapped 1.3 s slower than those that
+   * did not, and so did anyone who followed them.
    */
   function chordFor(tk) {
     let bestI = 0, bestBend = -1;
@@ -115,18 +238,15 @@ window.PV = window.PV || {};
       const b = bendAt(tk, i, 10);
       if (b > bestBend) { bestBend = b; bestI = i; }
     }
-    const reach = Math.min(18, Math.floor(tk.n / 6));
-    const from = (bestI - reach + tk.n) % tk.n;
-    const to = (bestI + reach) % tk.n;
-    const a = tk.points[from], b = tk.points[to];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const steps = Math.max(4, Math.round(len / 2.2));
-    const pts = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      pts.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    const most = Math.min(20, Math.floor(tk.n / 5));
+    let best = null;
+    for (let reach = 6; reach <= most; reach += 2) {
+      for (const join of [0.3, 0.45, 0.6, 0.8]) {
+        const cand = slipRoad(tk, bestI, reach, join);
+        if (!best || cand.ticks - cand.road < best.ticks - best.road) best = cand;
+      }
     }
-    return { from: from, to: to, points: pts, half: tk.width * 0.30, length: len };
+    return best && best.ticks < best.road * 0.95 ? best : null;
   }
 
   /** Boost pads on the flattest stretch of each quarter of the lap. */
@@ -172,7 +292,11 @@ window.PV = window.PV || {};
     for (const c of corners) {
       if (out.some(o => Math.abs(PV.RaceTracks.delta(tk, o.node, c.i)) < tk.n / 6)) continue;
       const p = tk.points[c.i], nrm = tk.normals[c.i];
-      const side = tk.curve[c.i] ? 1 : 1;
+      // Which way the road bends here. `tk.curve[c.i] ? 1 : 1` was meant to be
+      // this and answered 1 either way, so every slick sat on the +normal side
+      // — the inside of half the corners, where nobody drives.
+      const a = tk.tangents[(c.i - 5 + tk.n) % tk.n], b = tk.tangents[(c.i + 5) % tk.n];
+      const side = (a.x * b.y - a.y * b.x) > 0 ? -1 : 1;
       out.push({ node: c.i, x: p.x + nrm.x * side * 1.7, y: p.y + nrm.y * side * 1.7, r: 1.5 });
       if (out.length === 3) break;
     }
@@ -181,6 +305,11 @@ window.PV = window.PV || {};
 
   PV.RaceTracks = {
     DEFS: DEFS,
+    SURFACE: SURFACE,
+    TURN: TURN,
+    GRIP_FADE: GRIP_FADE,
+    holdSpeed: holdSpeed,
+    speedFor: speedFor,
     keys: Object.keys(DEFS),
     build: key => build(DEFS[key] || DEFS.ring),
 
@@ -195,6 +324,14 @@ window.PV = window.PV || {};
         const p = track.points[i];
         const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
         if (d < bestD) { bestD = d; best = i; }
+      }
+      /* A kart that has wandered well off the road can be nearest a node the
+         window never looked at — in the infield of the ring, the whole far
+         side of the circuit is inside the search radius and none of it is in
+         the window. Carrying a wrong node is worse than one full scan: it is
+         what a lap count is made of. */
+      if (from != null && bestD > track.width * track.width * 4) {
+        return PV.RaceTracks.nearest(track, x, y, null, 0);
       }
       return { node: best, dist: Math.sqrt(bestD) };
     },

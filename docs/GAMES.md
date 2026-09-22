@@ -67,6 +67,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **4** | play with friends | **shipped 2026-09-08** — two jobs, not five: host authority for the board family, one shared seed for the other two |
 | **5** | Spider Solitaire, Worm Arena, kart items for Racing | **shipped 2026-09-08** — two new games and one reworked, none of which touched the shell. Klondike Solitaire was removed the same day |
 | **6** | Worm Arena and Kart Racing rebuilt to written specs | **shipped 2026-09-08** — the user supplied a spec for each; both name their own MVP, and everything past it (coins-as-currency, wardrobes, Grand Prix, battle modes) is deliberately still unbuilt |
+| **7** | Kart Racing made to drive properly | **shipped 2026-09-22** — no new content, no new screens. The kart felt wrong because the harness was feeding a driving game on a Tetris key-repeat; the rest fell out of measuring rather than reading. See below |
 
 Phases 2 and 3 also added a shared harness per family (`js/core/boardhost.js`
 and `js/core/loophost.js`). Those were the actual saving: by the fourth board
@@ -88,9 +89,17 @@ The point of phase 1 is the contracts, not the content.
   checks uniqueness on every removal; the tile and card puzzles need the same
   discipline for solvability.
 - **Arcade**: `PV.LoopGame` + `PV.Ticker` — fixed 60 Hz timestep, inputs applied
-  on tick boundaries, key repeat kept in the view. The smoke test runs each seed
-  twice with the same scripted inputs and asserts an identical run, which is the
-  property the versus mode will be built on.
+  on tick boundaries, key repeat kept in the harness. The smoke test runs each
+  seed twice with the same scripted inputs and asserts an identical run, which
+  is the property the versus mode will be built on.
+
+  **Two kinds of held key, and a game must say which it wants.** `repeatable`
+  is the Tetris kind — one press, a pause, then a steady stream of discrete
+  steps, because a held left arrow should shift a piece a cell at a time.
+  `sustained` is the steering-wheel kind: the action is re-queued on every
+  tick, because a held left arrow on a kart is not a request to turn once, it
+  is the wheel being at full lock. Both land on a tick boundary, so both still
+  replay from the seed.
 
 ## What phase 4 actually shipped
 
@@ -155,3 +164,59 @@ race holds its end card back until the table is in.
   OAuth client, one origin. PlayVault needs only its own sub-folder id,
   `playvault-data.json`, and envelope `format: 'playvault.backup'` — and those
   must be wired **before the first push**, or the orphaning trap bites.
+
+## What phase 7 actually fixed
+
+Kart Racing "felt weird". It was not one thing, and none of it was visible by
+reading the code — each item below is a number that came out of driving the
+engine headlessly and counting.
+
+- **The controls only arrived on 41% of ticks.** `loophost` delivered a held
+  key on a DAS/ARR timer (one press, 160 ms of nothing, then one every 40 ms =
+  25 Hz) while the engine re-reads steer and throttle fresh on all 60 of its
+  ticks. A held arrow gave 78 deg/s of the 189 it asked for, and a 200 ms
+  corrective tap turned 9.5 degrees instead of 37.8. Hence `sustained` above;
+  measured live in the running app afterwards at 182 ticks of 182.
+- **Rivals spent 29–83% of a race on the grass**, up to 27 units off a road
+  four wide, and four of seven were permanently stranded in the infield. Three
+  separate causes: aiming at the far *end* of the shortcut rather than along
+  it, a brake with no floor that deadlocked a kart at −0.12 for the rest of
+  the race, and a corner-speed multiplier that saturated for any bend past
+  0.26 — the whole ring — so the field pinned itself to 38% of top speed and
+  then could not steer either. Now 9–14%, and **none** of it is a kart running
+  wide: every off-road tick is traceable to a spin, a slick or contact.
+- **Lap times were impossible** — 5.85 s on a circuit whose theoretical best is
+  6.8. The node search only looked ±12 nodes either side of the last one, so a
+  kart out in the infield could be handed half a lap in a single tick. A lost
+  kart now pays for one full scan, and a tick can be worth at most two nodes.
+- **The shortcut was a trap.** A straight chord meets the road at a fifty-
+  degree kink at *both* ends; rivals that took the ring's lapped 1.3 s slower
+  than those that did not. It is now a Hermite slip road leaving and rejoining
+  along the road's own tangents, and **a circuit only gets one if it is
+  actually quicker**. The ring is a rounded octagon with no corner to cut, so
+  it has none; Old Town's saves 0.57 s a lap.
+- **The grass was a wall, not a penalty** — a bare clamp took two thirds of
+  your speed on the tick you crossed the line. It eases now, which also makes
+  a boost fade rather than snap off.
+- **The camera showed 0.87 s of road** at speed and 0.56 s on a boost, so a
+  mistake arrived before the corner that caused it was on screen.
+- **Steering had no weight and the drift was free.** The wheel now takes a
+  moment to reach lock, grip fades with speed, and a drifting kart travels
+  wide of where its nose points — which is what the boost is paying for.
+- **The grid was 79 units long on a 48-unit screen**, single file, with the
+  player on pole. Two abreast now, about 20 units, and the player starts last.
+- Smaller, all real: oil sat on the +normal side of every corner because
+  `tk.curve[c.i] ? 1 : 1` answers 1 either way; a boost pad announced itself
+  sixty times a second; bananas never expired; and pressing R for a tow was
+  quicker than staying on the road.
+
+`track.js` now owns the surface speeds and the cornering model, because the
+track has to price dirt against asphalt to decide whether its own shortcut is
+worth having. The engine reads them, so there is one answer rather than two
+that drift apart.
+
+Two things deliberately left alone, both balance rather than defect: **boost
+pads dominate a lap** (four pads at 55 ticks on a 1.55x multiplier is about
+two thirds of a ring lap, so nominal top speed and the kart classes barely
+register), and **the ring losing its shortcut** is a consequence of the
+worth-it gate in `chordFor` that one threshold reverts.

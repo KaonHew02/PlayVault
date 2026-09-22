@@ -14,7 +14,8 @@
 
    Surfaces are the difficulty: asphalt is fast, the dirt chord is a little
    slower but much shorter, and the grass is punishing. Those three numbers are
-   the first thing to tune.
+   the first thing to tune and they live in track.js — the track has to price
+   dirt against asphalt to work out whether its own shortcut is worth having.
 
    What makes it a kart race rather than a driving model:
 
@@ -31,10 +32,19 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const ON = { max: 0.46, drag: 0.994 };
-  const DIRT = { max: 0.40, drag: 0.976 };      // the shortcut
-  const OFF = { max: 0.19, drag: 0.955 };       // the grass
-  const ACCEL = 0.0105, BRAKE = 0.021, TURN = 0.055;
+  const ON = PV.RaceTracks.SURFACE.road;
+  const DIRT = PV.RaceTracks.SURFACE.dirt;      // the shortcut
+  const OFF = PV.RaceTracks.SURFACE.grass;      // the grass
+  const ACCEL = 0.0105, BRAKE = 0.021;
+  // Steering rate and its fade are shared with track.js, which needs them to
+  // tell a corner from a sweep and a shortcut from a trap.
+  const TURN = PV.RaceTracks.TURN, GRIP_FADE = PV.RaceTracks.GRIP_FADE;
+  const STEER_EASE = 0.22;                      // how fast the wheel reaches lock
+  const GRIP_IN = 0.12;                         // speed at which steering bites
+  const LIMIT_EASE = 0.12;                      // ticks it takes to lose a surface
+  const GRID_ROW = 3;                           // nodes between rows on the grid
+  const NODE_STEP = 2;                          // most nodes a tick can be worth
+  const CRAWL = 0.15;                           // slowest a rival will ever go
 
   /** Kart classes trade the same budget three ways. */
   const KARTS = {
@@ -49,12 +59,17 @@ window.PV = window.PV || {};
   const SPIN_TICKS = 45;                        // a banana, a shell or a bolt
   const SLIP_TICKS = 42;                        // oil: you keep going, you just cannot steer
   const DRIFT_TURN = 1.75;
+  const DRIFT_SLIP = 0.42;                      // radians a drift travels wide
+  const SLIP_EASE = 0.14;
   const DRIFT_LEVELS = [40, 95, 165];           // ticks held for mini / super / ultra
   const DRIFT_BOOST = [36, 58, 86];
   const COUNTDOWN = 180;                        // three seconds of lights
   const COIN_CAP = 10, COIN_BONUS = 0.01;       // ten coins, one per cent each
   const COIN_BACK = 420;                        // ticks before a coin comes back
   const SHELL_SPEED = 0.62, SHELL_LIFE = 300;
+  const BANANA_LIFE = 60 * 45, HAZARD_CAP = 14;
+  const PAD_QUIET = 30;                         // ticks between two pad flashes
+  const RESET_STALL = 30;                       // the price of asking for a tow
 
   const ITEMS = ['mushroom', 'banana', 'shell', 'shield', 'lightning'];
 
@@ -84,15 +99,24 @@ window.PV = window.PV || {};
       this.startTick = -1;
       this.startKind = '';
 
+      /* Two abreast, three nodes between rows, and the player on the back row.
+         Single file five nodes apart strung eight karts over eighty units of a
+         forty-eight unit screen: half the field started out of sight, and the
+         player started on pole with nothing to overtake. A short grid puts the
+         whole race on screen at the lights and gives the item weighting — which
+         exists to arm the tail — something to do. */
       const rivals = o.rivals == null ? 7 : o.rivals;
-      for (let i = 0; i <= rivals; i++) {
-        const node = (this.track.n - 5 * i) % this.track.n;
+      const field = rivals + 1;
+      for (let i = 0; i < field; i++) {
+        const slot = i === 0 ? field - 1 : i - 1;
+        const node = (this.track.n - Math.floor(slot / 2) * GRID_ROW) % this.track.n;
         const start = this.track.points[node];
         const nrm = this.track.normals[node];
-        const lane = (i % 2 ? 1 : -1) * 1.7;
-        const style = STYLES[GRID_STYLES[(i - 1) % GRID_STYLES.length]] || STYLES.balanced;
+        const lane = (slot % 2 ? 1 : -1) * 1.7;
+        const style = STYLES[GRID_STYLES[slot % GRID_STYLES.length]] || STYLES.balanced;
         this.cars.push({
           i: i,
+          grid: slot,                  // decides the standings while all are level
           isPlayer: i === 0,
           name: i === 0 ? 'You' : NAMES[(i - 1) % NAMES.length],
           kart: KARTS[i === 0 ? (o.kart || 'medium') : 'medium'] || KARTS.medium,
@@ -100,6 +124,10 @@ window.PV = window.PV || {};
           y: start.y + nrm.y * lane,
           angle: Math.atan2(this.track.tangents[node].y, this.track.tangents[node].x),
           speed: 0,
+          wheel: 0,                    // where the steering actually is
+          slide: 0,                    // radians the kart is travelling wide
+          ceiling: 0,                  // the speed the surface is letting you keep
+          padAt: 0,
           node: node,
           total: 0,
           lap: 0,
@@ -123,7 +151,8 @@ window.PV = window.PV || {};
           // demo mode) can hand its car to the AI without a null.
           style: i === 0 ? STYLES.balanced : style,
           skill: i === 0 ? 1 : style.skill * (0.97 + this.rng.next() * 0.06),
-          lane: i === 0 ? 0 : (this.rng.next() * 2 - 1) * 2.2
+          lane: i === 0 ? 0
+            : (this.rng.next() * 2 - 1) * Math.min(1.6, this.track.width / 2 - 2)
         });
       }
       this.player = this.cars[0];
@@ -131,6 +160,10 @@ window.PV = window.PV || {};
       this.steer = 0;
       this.throttle = 0;
       this.driftHold = 0;
+
+      // `curve` measures the tangent's turn across eight nodes; this is how
+      // many units of road that is, which turns a curve value into a radius.
+      this.curveSpan = this.track.length / this.track.n * 8;
 
       this.buildBoxes();
       this.coinBack = new Int32Array(this.track.coins.length);
@@ -157,24 +190,121 @@ window.PV = window.PV || {};
       const near = PV.RaceTracks.locate(this.track, car.x, car.y, car.node, 12);
       car.node = near.node;
       car.onShortcut = near.shortcut;
-      if (near.dist > near.half) return OFF;
+      car.offRoad = near.dist > near.half;
+      if (car.offRoad) return OFF;
       return near.shortcut ? DIRT : ON;
+    }
+
+    /**
+     * How much of the steering reaches the road.
+     *
+     * Two terms, and the second one is new: grip ramps IN off the line, so a
+     * stopped kart cannot pirouette, and washes OUT with speed, so a kart at
+     * full chat runs a wider arc than one picking its way out of a spin. Flat
+     * grip is what made the kart handle like a turret — the same 189 deg/s
+     * whether it was crawling or flying.
+     */
+    gripOf(car) {
+      return Math.min(1, car.speed / GRIP_IN)
+        / (1 + Math.max(0, car.speed) * GRIP_FADE)
+        * (car.slip ? 0.35 : 1);
+    }
+
+    /**
+     * The fastest a kart can hold a bend of this curvature — the same model
+     * the track uses to place its furniture, rather than a tuned multiplier.
+     *
+     * The multiplier it replaces, `1 - min(0.62, bend * 2.4)`, saturated for
+     * any bend past 0.26, which on the ring is the whole lap: the field
+     * pinned itself to 38% of top speed all the way round a circuit it could
+     * have taken flat, then crawled off the road, because a kart doing 0.16
+     * cannot steer either.
+     */
+    cornerSpeed(bend, span) {
+      return PV.RaceTracks.holdSpeed(bend, span || this.curveSpan);
     }
 
     /** Where a rival is aiming: up the road in its lane, or down the chord. */
     aimFor(car) {
       const tk = this.track, s = tk.shortcut;
       if (car.sc && s) {
-        if (PV.RaceTracks.delta(tk, car.node, s.to) <= 1) car.sc = false;
-        else {
-          const exit = tk.points[s.to];
-          return { x: exit.x, y: exit.y, node: s.to };
+        /* Follow the chord, do not aim at the end of it. A single target fifty
+           units away is a straight line from wherever the kart happens to be,
+           so the first metre of dirt threw it into the grass — and once off,
+           the exit node never arrived, `sc` never cleared, and the kart drove
+           at that exit across the infield for the rest of the race. Every
+           rival stranded in the middle of the ring was this one branch.
+
+           The entry and the exit both get a lead: aim a little way DOWN the
+           dirt while still approaching it, and up the road past the exit
+           before running out of it. A kart that arrives at either end still
+           pointing the old way has to turn fifty-odd degrees on the spot, and
+           at full lock that takes long enough to put it in the grass. */
+        const last = s.points.length - 1;
+        const togo = PV.RaceTracks.delta(tk, car.node, s.from);
+        const lead = 2 + Math.round(car.speed * 4);
+        if (togo > 0) {
+          /* Still short of the mouth. The dirt now leaves the circuit along
+             the road's own tangent, so aiming up the road IS aiming at its
+             entry: no special case, and nothing cutting across the grass to
+             get there early. */
+          const i = (car.node + 4 + Math.round(car.speed * 6)) % tk.n;
+          const q = tk.points[i];
+          return { x: q.x, y: q.y, node: i };
+        }
+        let bi = 0, bd = Infinity;
+        for (let k = 0; k <= last; k++) {
+          const q = s.points[k];
+          const d = (q.x - car.x) * (q.x - car.x) + (q.y - car.y) * (q.y - car.y);
+          if (d < bd) { bd = d; bi = k; }
+        }
+        const reach = s.half + 4;
+        if (bd > reach * reach) {
+          car.sc = false;                        // lost the dirt: back to the road
+        } else if (bi + lead >= last) {
+          if (bi >= last - 1) car.sc = false;
+          const j = (s.to + 5) % tk.n;
+          const q = tk.points[j];
+          return { x: q.x, y: q.y, node: j };
+        } else {
+          car.scIdx = bi;                        // the dirt's own bend, for the cap
+          const q = s.points[bi + lead];
+          return { x: q.x, y: q.y, node: s.to };
         }
       }
-      const ahead = 7 + Math.round(car.speed * 22);
+
+      /* Look further up the road the faster you are going, but much less far
+         through a bend, and shorten right up when you are already in the grass.
+         A look-ahead fixed to speed alone aims across the inside of a corner,
+         and a straight line to a point that is off the road puts you off the
+         road: that one number had the field spending a third of every race —
+         and one rival four fifths of it — on the infield. */
+      const bend = tk.curve[(car.node + 3) % tk.n] + tk.curve[(car.node + 7) % tk.n]
+        + tk.curve[(car.node + 11) % tk.n];
+      const lost = car.offRoad;
+      const ahead = lost ? 4
+        : Math.max(3, Math.round((4 + car.speed * 8) / (1 + bend * 2.6)));
+
+      /* A slick on the line ahead: the quick ones go round it, the slow ones
+         find out. Every rival used to drive through every patch about once a
+         lap, and oil was far and away the commonest reason one of them was in
+         the grass — not a mistake it made, just one it never saw coming. */
+      const edge = tk.width / 2 - 1;
+      let lane = lost ? 0 : car.lane;
+      if (!lost && car.skill > 0.92) {
+        for (const o of tk.oil) {
+          const d = PV.RaceTracks.delta(tk, car.node, o.node);
+          if (d < 0 || d > ahead + 6) continue;
+          const q = tk.points[o.node], qn = tk.normals[o.node];
+          const at = (o.x - q.x) * qn.x + (o.y - q.y) * qn.y;
+          if (Math.abs(at - lane) > o.r + 1.1) continue;     // not on our line
+          lane = Math.max(-edge, Math.min(edge, at - (at < 0 ? -1 : 1) * (o.r + 1.5)));
+          break;
+        }
+      }
       const i = (car.node + ahead) % tk.n;
       const p = tk.points[i], nrm = tk.normals[i];
-      return { x: p.x + nrm.x * car.lane, y: p.y + nrm.y * car.lane, node: i };
+      return { x: p.x + nrm.x * lane, y: p.y + nrm.y * lane, node: i };
     }
 
     /* ------------------------------------------------------------- items */
@@ -231,6 +361,9 @@ window.PV = window.PV || {};
         car.shield = true;
       } else if (it === 'banana') {
         this.hazards.push({ x: car.x - cos * 1.7, y: car.y - sin * 1.7, owner: car.i, at: this.tick });
+        // A five-lap race otherwise ends with forty bananas nobody dropped
+        // this minute still sitting on the apexes.
+        if (this.hazards.length > HAZARD_CAP) this.hazards.shift();
       } else if (it === 'shell') {
         this.shells.push({
           x: car.x + cos * 1.6, y: car.y + sin * 1.6,
@@ -288,8 +421,11 @@ window.PV = window.PV || {};
       for (const pad of this.track.pads) {
         const dx = pad.x - car.x, dy = pad.y - car.y;
         if (dx * dx + dy * dy < 1.5 * 1.5) {
-          if (car.boost < PAD_BOOST) {
-            car.boost = PAD_BOOST;
+          if (car.boost < PAD_BOOST) car.boost = PAD_BOOST;
+          // Sitting on a pad keeps topping the boost up, but it should not
+          // announce itself sixty times a second while it does.
+          if (this.tick >= car.padAt) {
+            car.padAt = this.tick + PAD_QUIET;
             this.events.push({ kind: 'pad', x: pad.x, y: pad.y, player: car.isPlayer });
           }
           break;
@@ -366,7 +502,7 @@ window.PV = window.PV || {};
       // Only the bold take the chord, and only when its entry is right there.
       if (car.style.shortcut && !car.sc && tk.shortcut) {
         const d = PV.RaceTracks.delta(tk, car.node, tk.shortcut.from);
-        if (d > 0 && d < 8) car.sc = true;
+        if (d > 0 && d < 6) car.sc = true;
       }
 
       const aim = this.aimFor(car);
@@ -375,24 +511,66 @@ window.PV = window.PV || {};
       while (err > Math.PI) err -= Math.PI * 2;
       while (err < -Math.PI) err += Math.PI * 2;
 
-      const grip = Math.min(1, car.speed / 0.12) * (car.slip ? 0.35 : 1);
-      car.angle += Math.max(-TURN, Math.min(TURN, err * 1.6)) * grip;
+      // Rivals run the player's physics, grip fade included. An AI that could
+      // turn harder than you can is not a rival, it is a cheat.
+      car.angle += Math.max(-TURN, Math.min(TURN, err * 1.6)) * this.gripOf(car);
 
-      // Lift off for the corner that is coming, not the one already here.
-      const bend = tk.curve[(car.node + 10) % tk.n];
-      const cap = ON.max * car.skill * (1 - Math.min(0.55, bend * 2.4));
-      if (Math.abs(err) > 0.9 || (car.speed > cap && car.boost === 0)) car.speed -= BRAKE * 0.6;
-      else car.speed += ACCEL * (car.boost > 0 ? BOOST_ACCEL : 1);
+      /* Lift off for the corner that is coming, over a window rather than one
+         sample: a single node ahead means the brakes come on at the apex and
+         come off again halfway round. */
+      let cap;
+      const sc = car.sc && tk.shortcut && tk.shortcut.hold ? tk.shortcut : null;
+      if (sc) {
+        // On the dirt, read the dirt: it carries its own limit, worked out
+        // from the radius of every step along it. Reading the road's
+        // curvature at a node the kart is nowhere near is how it used to
+        // arrive at the slip road flat out.
+        const h = sc.hold, ci = car.scIdx || 0, end = h.length - 1;
+        cap = Math.min(h[Math.min(end, ci)], h[Math.min(end, ci + 3)]) * car.skill;
+      } else {
+        let bend = 0;
+        for (let k = 4; k <= 16; k += 4) bend = Math.max(bend, tk.curve[(car.node + k) % tk.n]);
+        cap = Math.min(ON.max, this.cornerSpeed(bend) * 0.92) * car.skill;
+      }
+      const wide = Math.abs(err) > 0.9;
+      if (wide || (car.speed > cap && car.boost === 0)) {
+        car.speed -= BRAKE * (car.speed > cap * 1.25 ? 1 : 0.5);
+      } else {
+        car.speed += ACCEL * (car.boost > 0 ? BOOST_ACCEL : 1);
+      }
+
+      /* Rivals never reverse, and never stop. Braking with no floor put a kart
+         that had run wide into a deadlock: too slow to steer, so the heading
+         error never closed, so it never stopped braking — it drove the rest of
+         the race backwards at -0.12 while still collecting nodes. A kart that
+         has lost the road should crawl forward and turn round, which is what a
+         player would do. */
+      if (car.speed < CRAWL) car.speed = Math.min(CRAWL, car.speed + ACCEL * 2);
 
       this.aiItem(car);
     }
 
     drivePlayer(car) {
       const drifting = car.drift && this.steer !== 0 && car.speed > 0.17 && !car.slip;
-      if (this.steer) {
-        const grip = Math.min(1, car.speed / 0.12) * (car.slip ? 0.35 : 1);
-        car.angle += this.steer * TURN * car.kart.turn * (drifting ? DRIFT_TURN : 1) * grip;
+
+      /* The wheel takes a moment to reach lock and a moment to come back. The
+         engine used to put the steering straight into the heading on the tick
+         the key went down, which is why the kart read as a twitch rather than
+         a weight — and why it snapped straight the instant you let go. */
+      car.wheel += (this.steer - car.wheel) * STEER_EASE;
+      if (Math.abs(car.wheel) < 0.004) car.wheel = 0;
+      if (car.wheel) {
+        car.angle += car.wheel * TURN * car.kart.turn
+          * (drifting ? DRIFT_TURN : 1) * this.gripOf(car);
       }
+
+      /* A drifting kart travels wide of where its nose is pointing. That slide
+         is what the boost is paying for: without it the drift was simply a
+         free tighter turn with a prize at the end, so there was no reason not
+         to hold it everywhere. */
+      const slip = drifting ? car.wheel * DRIFT_SLIP : 0;
+      car.slide += (slip - car.slide) * SLIP_EASE;
+
       if (drifting) {
         car.charge++;
         car.speed *= 0.9965;                    // a drift scrubs a little speed
@@ -428,7 +606,9 @@ window.PV = window.PV || {};
           const push = (1.7 - d) / 2;
           A.x -= (dx / d) * push; A.y -= (dy / d) * push;
           B.x += (dx / d) * push; B.y += (dy / d) * push;
-          A.speed *= 0.90; B.speed *= 0.90;
+          // A scrape costs a little speed. At ten per cent a tick, a second
+          // of contact in the pack was a standing start.
+          A.speed *= 0.975; B.speed *= 0.975;
         }
       }
     }
@@ -443,7 +623,13 @@ window.PV = window.PV || {};
       car.spin = 0;
       car.slip = 0;
       car.charge = 0;
+      car.wheel = 0;
+      car.slide = 0;
+      car.ceiling = 0;
       car.sc = false;
+      // A tow is not free. Without this, hopping back to the centreline beat
+      // driving off it, so the road's edges stopped mattering.
+      car.stall = RESET_STALL;
       this.events.push({ kind: 'reset', x: p.x, y: p.y, player: car.isPlayer });
     }
 
@@ -526,16 +712,35 @@ window.PV = window.PV || {};
         const coins = 1 + Math.min(COIN_CAP, car.coins) * COIN_BONUS;
         const limit = surface.max * (car.skill + behind) * car.kart.max * coins
           * (car.boost > 0 ? BOOST_MAX : 1);
-        car.speed = Math.min(car.speed, limit);
+
+        /* The ceiling chases the limit: instantly when the limit RISES, and
+           over about a third of a second when it falls. A bare clamp made the
+           grass a wall — cross the white line and two thirds of your speed was
+           gone on one tick, with no deceleration to read and nothing to catch.
+           Easing keeps the punishment and gives it a shape you can drive out
+           of, and it doubles as the boost fading rather than snapping off.
+           Clamping to the ceiling rather than easing the speed itself is what
+           stops the throttle from simply outrunning it. */
+        car.ceiling = limit > car.ceiling ? limit
+          : car.ceiling + (limit - car.ceiling) * LIMIT_EASE;
+        car.speed = Math.min(car.speed, car.ceiling);
         car.speed *= surface.drag;
         if (car.speed < 0) car.speed = Math.max(car.speed, -0.12);
 
-        car.x += Math.cos(car.angle) * car.speed;
-        car.y += Math.sin(car.angle) * car.speed;
+        // Drifters travel wide of their nose; everyone else goes where they point.
+        const heading = car.angle - car.slide;
+        car.x += Math.cos(heading) * car.speed;
+        car.y += Math.sin(heading) * car.speed;
 
+        /* A kart covers at most a third of a node per tick, so anything much
+           larger is the node search jumping rather than progress made. Off in
+           the infield the nearest node is genuinely ambiguous, and one
+           unclamped jump was worth up to half a lap — which is how a rival
+           posted a 5.85 s lap on a circuit whose theoretical best is 6.8. */
         const before = car.node;
         const near = PV.RaceTracks.locate(this.track, car.x, car.y, before, 12);
-        car.total += PV.RaceTracks.delta(this.track, before, near.node);
+        const step = PV.RaceTracks.delta(this.track, before, near.node);
+        car.total += Math.max(-NODE_STEP, Math.min(NODE_STEP, step));
         car.node = near.node;
 
         this.collect(car);
@@ -558,6 +763,9 @@ window.PV = window.PV || {};
 
       this.moveShells();
       this.separate();
+      for (let i = this.hazards.length - 1; i >= 0; i--) {
+        if (this.tick - this.hazards[i].at > BANANA_LIFE) this.hazards.splice(i, 1);
+      }
 
       if (this.player.done) this.finish('finished');
       else if (this.tick > 60 * 60 * 8) this.finish('timeout');   // nobody races for eight minutes
@@ -568,7 +776,8 @@ window.PV = window.PV || {};
       return this.cars.slice().sort((a, b) => {
         if (a.done !== b.done) return a.done ? -1 : 1;
         if (a.done && b.done) return a.finishTick - b.finishTick;
-        return b.total - a.total;
+        if (b.total !== a.total) return b.total - a.total;
+        return a.grid - b.grid;        // level on distance: the grid decides
       });
     }
 

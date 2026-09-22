@@ -8,6 +8,15 @@
    one discrete action per tick, which is what keeps a run reproducible from its
    seed — the property a versus mode between two friends will be built on.
 
+   Two kinds of held key, and a game must say which it wants. `repeatable` is
+   the Tetris kind: one press, a pause, then a steady stream of discrete steps,
+   because a held left arrow should shift a piece a cell at a time. `sustained`
+   is the steering-wheel kind: the action is re-queued on EVERY tick while the
+   key is down, because a held left arrow on a kart is not a request to turn
+   once, it is the wheel being at full lock. Driving a racer off `repeatable`
+   delivers the input on 41% of ticks with a 133 ms hole after every press —
+   still reproducible, but it reads as a twitchy kart rather than a heavy one.
+
    The pad is not a fallback. On a phone it is the only control, so its buttons
    repeat while held exactly as the keyboard does. */
 window.PV = window.PV || {};
@@ -25,6 +34,7 @@ window.PV = window.PV || {};
    *   draw(c, game, geom, api)
    *   keymap                       { 'ArrowLeft': 'left', ... }
    *   repeatable                   ['left','right'] actions that auto-repeat
+   *   sustained                    ['accel'] actions re-sent every tick while held
    *   pad                          [{label, action, aria}] or null
    *   build(api)                   optional: add side panels / HUD to api.side
    *   onFrame(game, api)           optional: called once per painted frame
@@ -34,7 +44,8 @@ window.PV = window.PV || {};
    */
   PV.loopHost = function (ctx, spec) {
     let game = null, ticker = null, ended = false, paused = false;
-    const held = Object.create(null);
+    const held = Object.create(null);        // repeat timers, per action
+    const down = Object.create(null);        // sustained actions currently held
 
     const wrap = PV.el('div', { class: 'g-loop' });
     const canvas = PV.el('canvas', { class: 'loop-canvas' });
@@ -114,6 +125,10 @@ window.PV = window.PV || {};
       ticker = new PV.Ticker({
         hz: spec.hz || 60,
         onTick: () => {
+          // Held controls are sampled here, on the tick, so they land on a tick
+          // boundary exactly as a discrete press does and the run still replays
+          // from its seed.
+          for (const a in down) { game.input(a); down[a].read = true; }
           if (!game.advance()) { finish(); return false; }
           return true;
         },
@@ -134,6 +149,10 @@ window.PV = window.PV || {};
 
     function press(action) {
       if (ended || paused || !game) return;
+      if ((spec.sustained || []).indexOf(action) >= 0) {
+        down[action] = { read: false };      // the tick will read it, every tick
+        return;
+      }
       game.input(action);
       if ((spec.repeatable || []).indexOf(action) < 0) return;
       if (held[action]) return;
@@ -145,6 +164,11 @@ window.PV = window.PV || {};
     }
 
     function release(action) {
+      const d = down[action];
+      // A tap that began and ended between two ticks was never sampled, so
+      // deliver it once rather than swallow it.
+      if (d && !d.read && game) game.input(action);
+      delete down[action];
       const h = held[action];
       if (!h) return;
       clearTimeout(h.das);
@@ -152,7 +176,10 @@ window.PV = window.PV || {};
       delete held[action];
     }
 
-    function releaseAll() { for (const k in held) release(k); }
+    function releaseAll() {
+      for (const k in held) release(k);
+      for (const k in down) release(k);
+    }
 
     function actionFor(e) {
       const map = spec.keymap || {};
