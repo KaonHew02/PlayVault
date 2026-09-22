@@ -199,7 +199,20 @@ engine headlessly and counting.
   your speed on the tick you crossed the line. It eases now, which also makes
   a boost fade rather than snap off.
 - **The camera showed 0.87 s of road** at speed and 0.56 s on a boost, so a
-  mistake arrived before the corner that caused it was on screen.
+  mistake arrived before the corner that caused it was on screen. It now
+  leads the kart and shows about 1.1 s.
+- **The camera did not turn, and steering is relative to the kart.** Those two
+  together mean that for the half of every lap spent heading down the screen —
+  a quarter of it steeply — a press of left swings the kart visibly right. The
+  file's own comment claimed the opposite ("left on the key is always left on
+  the screen"), which is true of a game where the key names a direction, like
+  Snake, and false of one where it steers. The camera now turns with the kart,
+  so the road ahead is always straight up the screen. The minimap is the only
+  thing left holding still, so the player is an arrow on it rather than a dot.
+- **The coin counter could read 11 / 10.** The cap is on the speed bonus, not
+  on the coins — the eleventh is still worth score, it just stops making you
+  faster — so the HUD is a meter that fills and stops, and the end-of-race
+  line is the plain total.
 - **Steering had no weight and the drift was free.** The wheel now takes a
   moment to reach lock, grip fades with speed, and a drifting kart travels
   wide of where its nose points — which is what the boost is paying for.

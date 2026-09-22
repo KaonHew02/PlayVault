@@ -1,9 +1,15 @@
 /* 卡丁车 / Kart Racing — view.
 
-   The camera follows the player without rotating. A rotating camera looks
-   better in a screenshot and is much harder to drive: with the world fixed,
-   "left" on the key is always left on the screen, which is what a top-down
-   racer needs on a phone.
+   The camera turns with the kart, so the road ahead is always straight up the
+   screen.
+
+   It used to hold the world still, on the grounds that "left on the key is
+   always left on the screen". That is true of a game where the key names a
+   direction, like Snake. It is not true here: steering is relative to the
+   kart, `car.angle += wheel * TURN`, and half of every lap on both circuits is
+   spent heading DOWN the screen — a quarter of it steeply. For all of that, a
+   press of left swings the kart visibly right. Turning the camera is what
+   makes the controls mean what they look like.
 
    Everything the track does is drawn on the track — the dirt chord, the pads,
    the coins, the oil, the boxes, the banana somebody left on the apex. A HUD
@@ -17,7 +23,8 @@ window.PV = window.PV || {};
   'use strict';
 
   const t = (k, p) => window.PV.t(k, p);
-  const VIEW = 54, VIEW_SM = 42;          // world units across the canvas
+  const VIEW = 66, VIEW_SM = 46;          // world units across the canvas
+  const DROP = 0.70;                      // how far down the screen the kart sits
   const COLOURS = ['#F6B32B', '#38BDF8', '#F87171', '#34D399', '#C084FC',
                    '#FB923C', '#22D3EE', '#A3E635'];
   const GLYPH = { mushroom: '🍄', banana: '🍌', shell: '🐚', shield: '🛡️', lightning: '⚡' };
@@ -27,7 +34,7 @@ window.PV = window.PV || {};
     const opts = ctx.opts || {};
     let lapEl, posEl, timeEl, bestEl, itemEl, itemName, speedEl, coinEl;
     let bounds = null;
-    let cam = null;                       // eased, and ahead of the kart
+    let cam = null;                       // eased position and heading
     let flash = { text: '', until: 0 };
 
     const fmtTicks = n => (n ? PV.fmtTime(Math.round(n / 60 * 1000)) : '—');
@@ -98,7 +105,11 @@ window.PV = window.PV || {};
         lapEl.textContent = game.lapNumber + ' / ' + game.laps;
         posEl.textContent = game.place(p) + ' / ' + game.cars.length;
         speedEl.textContent = String(game.kmh);
-        coinEl.textContent = p.coins + ' / ' + PV.Racing.COIN_CAP;
+        /* The cap is on the BONUS, not on the coins: the eleventh coin is
+           still worth score, it just stops making you faster. So the HUD is a
+           meter that fills and stops, rather than a tally that reads 11 / 10. */
+        coinEl.textContent = Math.min(p.coins, PV.Racing.COIN_CAP)
+          + ' / ' + PV.Racing.COIN_CAP;
         timeEl.textContent = game.phase === 'countdown' ? '0:00'
           : fmtTicks(game.tick - PV.Racing.COUNTDOWN);
         bestEl.textContent = fmtTicks(p.best);
@@ -130,26 +141,37 @@ window.PV = window.PV || {};
       draw(c, game, geom) {
         const tk = game.track;
         const scale = geom.w / (geom.w < 560 ? VIEW_SM : VIEW);
-
-        /* The camera leads the kart rather than sitting on it. Centred exactly,
-           the view showed 0.87 s of road at full speed and 0.56 s on a boost —
-           less than it takes to read a corner, so every mistake arrived before
-           the corner that caused it was on screen. The lead is dropped during a
-           spin, or it swings round with the nose. */
         const p = game.player;
-        const lead = p.spin > 0 ? 0 : 6 + Math.min(9, p.speed * 16);
-        const tx = p.x + Math.cos(p.angle) * lead;
-        const ty = p.y + Math.sin(p.angle) * lead;
-        if (!cam) cam = { x: tx, y: ty };
-        cam.x += (tx - cam.x) * 0.12;
-        cam.y += (ty - cam.y) * 0.12;
+
+        /* Follow where the kart is GOING, not where its nose points: in a
+           drift those differ by up to twenty-four degrees, and tracking the
+           nose makes the whole world twitch sideways every time you flick it
+           in. Tracking the travel line instead leaves the kart visibly cocked
+           into the corner, which is the part worth seeing. */
+        const head = p.angle - p.slide;
+        if (!cam) cam = { x: p.x, y: p.y, a: head };
+        cam.x += (p.x - cam.x) * 0.22;
+        cam.y += (p.y - cam.y) * 0.22;
+        if (p.spin === 0) {
+          // A spin-out turns the kart two and a half times in three quarters
+          // of a second. The camera sits that out and eases back afterwards.
+          let d = head - cam.a;
+          while (d > Math.PI) d -= Math.PI * 2;
+          while (d < -Math.PI) d += Math.PI * 2;
+          cam.a += d * 0.16;
+        }
+        // Rotate the world so the kart's heading points up the screen, and sit
+        // it low, so most of the canvas is road you have not driven yet.
+        const rot = -Math.PI / 2 - cam.a;
 
         c.fillStyle = '#1B3326';
         c.fillRect(0, 0, geom.w, geom.h);
 
         c.save();
-        c.translate(geom.w / 2 - cam.x * scale, geom.h / 2 - cam.y * scale);
+        c.translate(geom.w / 2, geom.h * DROP);
+        c.rotate(rot);
         c.scale(scale, scale);
+        c.translate(-cam.x, -cam.y);
 
         // The dirt chord goes under the asphalt, so the join reads as a fork
         // off the road rather than a stripe painted over it.
@@ -206,7 +228,7 @@ window.PV = window.PV || {};
 
         for (const box of game.boxes) {
           if (box.at > game.tick) continue;
-          itemBox(c, box, game.tick);
+          itemBox(c, box, game.tick, rot);
         }
 
         for (const h of game.hazards) banana(c, h);
@@ -233,7 +255,7 @@ window.PV = window.PV || {};
           lines: [
             t('common.time') + ': ' + fmtTicks(game.tick - PV.Racing.COUNTDOWN)
               + ' · ' + t('racing.best') + ': ' + fmtTicks(p.best),
-            t('racing.coins') + ': ' + p.coins + ' / ' + PV.Racing.COIN_CAP,
+            t('racing.coins') + ': ' + p.coins,      // the total, cap or no cap
             '@best'
           ]
         };
@@ -287,7 +309,7 @@ window.PV = window.PV || {};
     c.fill();
   }
 
-  function itemBox(c, box, tick) {
+  function itemBox(c, box, tick, rot) {
     c.save();
     c.translate(box.x, box.y);
     c.rotate(tick * 0.04);
@@ -300,12 +322,18 @@ window.PV = window.PV || {};
     c.lineWidth = 0.12;
     c.stroke();
     c.restore();
-    // The mark stays upright while the box spins, or it is unreadable.
+    /* The mark stays upright while the box spins, or it is unreadable — and
+       upright now means upright ON SCREEN, so it has to undo the camera as
+       well as the box. */
+    c.save();
+    c.translate(box.x, box.y + 0.04);
+    c.rotate(-rot);
     c.fillStyle = '#3A2A05';
     c.font = '0.9px system-ui, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText('?', box.x, box.y + 0.04);
+    c.fillText('?', 0, 0);
+    c.restore();
   }
 
   function banana(c, h) {
@@ -423,10 +451,26 @@ window.PV = window.PV || {};
     c.fillStyle = '#EAF0F7';
     c.fillRect(sx(tk.points[0].x) - 2, sy(tk.points[0].y) - 2, 4, 4);
     for (const car of game.cars) {
-      const me = car.isPlayer;
-      c.fillStyle = me ? '#FFFFFF' : COLOURS[car.i % COLOURS.length];
-      const d = me ? 4 : 3;
-      c.fillRect(sx(car.x) - d / 2, sy(car.y) - d / 2, d, d);
+      if (!car.isPlayer) {
+        c.fillStyle = COLOURS[car.i % COLOURS.length];
+        c.fillRect(sx(car.x) - 1.5, sy(car.y) - 1.5, 3, 3);
+        continue;
+      }
+      /* An arrow, not a dot. With the world turning under the kart this map
+         is the only thing left holding still, so it is what says which way
+         round the lap you are pointing. */
+      c.save();
+      c.translate(sx(car.x), sy(car.y));
+      c.rotate(car.angle);
+      c.fillStyle = '#FFFFFF';
+      c.beginPath();
+      c.moveTo(5, 0);
+      c.lineTo(-3.5, -3.5);
+      c.lineTo(-1.5, 0);
+      c.lineTo(-3.5, 3.5);
+      c.closePath();
+      c.fill();
+      c.restore();
     }
   }
 
