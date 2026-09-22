@@ -643,6 +643,17 @@ window.PV = window.PV || {};
     return s;
   }
 
+  /* A map's own picture for the option sheet, painted by the code that
+     paints the board — so the thumbnail cannot drift from the map. */
+  PV.TowerDefThumb = function (key, w) {
+    const map = PV.TDMaps.build(key);
+    const h = Math.round(w * map.rows / map.cols);
+    const cv = paintTerrain(map, w, h, Math.max(2, window.devicePixelRatio || 1));
+    cv.style.width = '100%';
+    cv.style.height = 'auto';
+    return cv;
+  };
+
   /* ----------------------------------------------------------- the view */
 
   PV.TowerDefView = function (ctx) {

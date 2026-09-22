@@ -23,7 +23,10 @@
         // so adding a map never means editing this list.
         key: 'map', labelKey: 'td.map', def: 'meadow',
         choices: PV.TDMaps.keys.map(k => ({
-          value: k, labelKey: 'td.' + k, tag: '\u2605'.repeat(PV.TDMaps.tierOf(k))
+          value: k, labelKey: 'td.' + k, tag: '\u2605'.repeat(PV.TDMaps.tierOf(k)),
+          // The picker shows the map itself: the lanes, the gate and the
+          // keep, drawn by the board's own painter.
+          preview: () => PV.TowerDefThumb(k, 170)
         }))
       },
       {

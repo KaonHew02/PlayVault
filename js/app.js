@@ -167,18 +167,34 @@ window.PV = window.PV || {};
       (g.options || []).forEach(o => {
         if (inRoom && o.solo) return;
         if (o.showIf && !o.showIf(chosen)) return;
-        const row = el('div', { class: 'opt-row' }, el('span', { class: 'k' }, t(o.labelKey)));
-        const seg = el('div', { class: 'seg' });
+        // Two, three choices are a segmented control. More than that — or any
+        // choice with a picture to show — wraps badly in one and becomes a
+        // grid of cards instead: every cell the same size, every row full.
+        const asGrid = !!o.grid || o.choices.length > 3 || o.choices.some(c => c.preview);
+        const row = el('div', { class: 'opt-row' + (asGrid ? ' stack' : '') },
+          el('span', { class: 'k' }, t(o.labelKey)));
+        const box = el('div', { class: asGrid ? 'choice-grid' : 'seg' });
         o.choices.forEach(c => {
+          const pick = () => { chosen[o.key] = c.value; paint(); if (onChange) onChange(chosen); };
+          const on = chosen[o.key] === c.value;
           // `tag` is a language-neutral decoration on a choice — difficulty
           // stars, today. The label itself still goes through i18n.
-          const label = t(c.labelKey) + (c.tag ? ' ' + c.tag : '');
-          seg.appendChild(el('button', {
-            class: 'seg-btn' + (chosen[o.key] === c.value ? ' on' : ''),
-            onclick: () => { chosen[o.key] = c.value; paint(); if (onChange) onChange(chosen); }
-          }, label));
+          if (!asGrid) {
+            box.appendChild(el('button', {
+              class: 'seg-btn' + (on ? ' on' : ''), onclick: pick
+            }, t(c.labelKey) + (c.tag ? ' ' + c.tag : '')));
+            return;
+          }
+          // `preview` is the game's own business: it hands back a node (a map
+          // thumbnail, today) and the shell only finds it a place to sit.
+          let art = null;
+          try { art = c.preview ? c.preview(c.value) : null; } catch (e) { art = null; }
+          box.appendChild(el('button', { class: 'choice' + (on ? ' on' : ''), onclick: pick },
+            art ? el('span', { class: 'thumb' }, art) : null,
+            el('span', { class: 'nm' }, t(c.labelKey)),
+            c.tag ? el('span', { class: 'tag' }, c.tag) : null));
         });
-        row.appendChild(seg);
+        row.appendChild(box);
         body.appendChild(row);
       });
     }
@@ -189,9 +205,12 @@ window.PV = window.PV || {};
   function openSheet(g) {
     const chosen = defaultsFor(g);
     const body = optionsBody(g, chosen, null, false);
+    // A sheet with a card grid in it needs the room to lay three across.
+    const wide = (g.options || []).some(o =>
+      o.grid || o.choices.length > 3 || o.choices.some(c => c.preview));
 
     const modal = el('div', { class: 'modal', onclick: e => { if (e.target === modal) modal.remove(); } },
-      el('div', { class: 'sheet' },
+      el('div', { class: 'sheet' + (wide ? ' wide' : '') },
         el('h3', {}, g.name),
         body,
         el('div', { class: 'sheet-foot' },

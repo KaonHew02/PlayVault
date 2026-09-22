@@ -6,8 +6,8 @@ existed, which is the point of the three families — and Klondike Solitaire was
 dropped at the user's request, leaving one card solitaire on the roster.
 
 Spider Solitaire · Mahjong Solitaire · Sudoku · Tetris · Snake · Worm Arena ·
-Kart Racing · Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋 — plus Crowd
-Rush, added 2026-09-22
+Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋 — plus Crowd Rush, added
+2026-09-22. Kart Racing was removed the same day
 
 ## Three families, three contracts
 
@@ -43,7 +43,7 @@ opponent, no turn order.
   solitaires need boards that can actually be finished, or players hit dead
   ones and blame the game.
 
-### 3. Real-time loop — Tetris, Snake, Worm Arena, Kart Racing, Tower Defense, Crowd Rush
+### 3. Real-time loop — Tetris, Snake, Worm Arena, Tower Defense, Crowd Rush
 
 A canvas and a fixed-timestep loop. Nothing here is turn-based, so nothing here
 uses the board contract.
@@ -71,6 +71,29 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **7** | Kart Racing made to drive properly | **shipped 2026-09-22** — no new content, no new screens. The kart felt wrong because the harness was feeding a driving game on a Tetris key-repeat; the rest fell out of measuring rather than reading. See below |
 | **8** | Tower Defense: six maps, three difficulties, drawn turrets | **shipped 2026-09-22** — see below. Snake gained a third rule the same day: biting yourself can cut the tail instead of ending the run |
 | **9** | Crowd Rush | **shipped 2026-09-22** — a new game, asked for as "count masters" plus a crazygames link. See below |
+| **10** | Kart Racing removed | **2026-09-22** — the user asked for it to go. `js/games/racing/` and its strings, tests and script tags are gone; the phase 5, 6 and 7 notes above are kept as the record of what was learnt building it. A circuit racer to the crazygames *Circuit Racing* reference is the replacement, and is not built yet |
+| **11** | The option sheet grows cards, and the worm dash eats the tail | **2026-09-22** — see below |
+
+### Phase 11 — the map picker, and what a dash costs
+
+- **A segmented control that wraps is ugly**, and with six maps in it that is
+  exactly what happened: a ragged hole at the end of every row. An option with
+  more than three choices — or any choice with a picture to show — is now a
+  grid of equal cards instead, full width under its own label, three across on
+  a desktop sheet and two on a phone. `preview` on a choice is a callback that
+  hands the shell a node; the shell finds it a place to sit and knows nothing
+  about what is in it.
+- **A map card shows the map**, painted by `paintTerrain` — the same function
+  that paints the board — so a thumbnail cannot drift from the thing it is a
+  picture of. You can see the meadow's zigzag, the crossroads crossing and
+  Ember Pass's two lanes merging before you pick.
+- **The worm's dash now burns its tail** instead of a meter: nine segments a
+  second while held, never below the ten you started at, and every third
+  segment lands behind you as a crumb anyone can eat. The tank is gone. This
+  is the Worms Zone bargain and it is a better one — a dash costs the thing
+  you spent the round collecting, and it hands that thing to whoever is
+  chasing you. The one thing it needed was a cap on crumbs, or a forty-second
+  chase carpets the arena.
 
 ### Phase 9 — Crowd Rush
 

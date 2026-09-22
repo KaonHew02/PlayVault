@@ -14,14 +14,14 @@ node tools/build-logo.mjs    # regenerate every logo asset
 
 ## What is built
 
-**All thirteen games on the roster are playable, alone or with friends.**
+**All twelve games on the roster are playable, alone or with friends.**
 Nothing is a stub.
 
 | family | games |
 | --- | --- |
 | board | 五子棋 · 黑白棋 · Chess · 中国象棋 |
 | puzzle | Sudoku · Spider Solitaire · Mahjong Solitaire |
-| arcade | Tetris · Snake · Worm Arena · Kart Racing · Tower Defense · Crowd Rush |
+| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush |
 
 Each family sits on its own engine contract, and each contract has a shared
 harness so a game only writes its rules and its painting.

@@ -34,12 +34,16 @@ window.PV = window.PV || {};
   const START_SEGMENTS = 10;
   const EDGE = 120;               // the soft boundary band
 
-  /* The dash tank: 100 full, 20 a second to hold, 10 a second to come back.
-     Five seconds of dashing, ten to refill it. Nothing else limits a dash —
-     no length cost — so the tank is the whole decision. */
-  const ENERGY_MAX = 100;
-  const ENERGY_DRAIN = 20 / 60;
-  const ENERGY_REFILL = 10 / 60;
+  /* The dash BURNS THE TAIL. There is no tank to refill: holding the button
+     spends nine segments a second off the back of the worm, and every third
+     one is dropped on the floor behind you as food anyone can eat. That is
+     the Worms Zone bargain and it is a far better one than a meter — a dash
+     costs you the thing you spent the whole round collecting, the length you
+     lose is visibly handed to whoever is chasing you, and a small worm still
+     gets to run because the floor is the size you started at. */
+  const BOOST_FLOOR = START_SEGMENTS;      // never dash yourself away
+  const BOOST_BURN = 9 / 60;               // segments per tick
+  const SHED_EVERY = 3;                    // segments burned per dropped crumb
 
   /* Food. `score` is points, `growth` is segments; the two are deliberately
      not proportional, so a pizza is a meal and a berry is a snack. `w` is how
@@ -78,7 +82,8 @@ window.PV = window.PV || {};
       this.segments = START_SEGMENTS;
       this.score = 0;
       this.kills = 0;
-      this.energy = ENERGY_MAX;
+      this.burn = 0;                 // fractional segments owed to the dash
+      this.shed = 0;                 // segments burned since the last crumb
       this.alive = true;
       this.atEdge = false;
       this.boosting = false;
@@ -89,6 +94,8 @@ window.PV = window.PV || {};
       this.nodes = [{ x: x, y: y }];
     }
 
+    /** Segments this worm may still spend on dashing. */
+    get fuel() { return Math.max(0, this.segments - BOOST_FLOOR); }
     get radius() { return 6 + Math.pow(this.segments, 0.40) * 1.7; }
     /** The body in world units — what the arena sees of all those segments. */
     get bodyLength() { return 60 + this.segments * 2.4; }
@@ -162,6 +169,29 @@ window.PV = window.PV || {};
       }
     }
 
+    /**
+     * A segment burned by the dash is not destroyed, it is dropped: a crumb
+     * on the floor behind the tail, worth rather less than it cost. That is
+     * what makes chasing a fleeing worm pay, and what stops a dash from being
+     * a free way to shed a body you no longer want.
+     */
+    shedCrumb(w) {
+      const tail = w.nodes[w.nodes.length - 1] || { x: w.x, y: w.y };
+      this.food.push({
+        x: PV.clamp(tail.x + (this.rng.next() - 0.5) * 8, 8, this.W - 8),
+        y: PV.clamp(tail.y + (this.rng.next() - 0.5) * 8, 8, this.H - 8),
+        kind: 'crumb', score: 4, growth: SHED_EVERY - 1, r: 3.6, c: w.colour
+      });
+      // Crumbs are the one food the arena does not budget for, so cap the
+      // floor rather than let a long chase turn it into a carpet.
+      const cap = Math.max(60, this.foodCount * 3);
+      if (this.food.length > cap) {
+        for (let i = 0; i < this.food.length && this.food.length > cap; i++) {
+          if (this.food[i].kind === 'crumb') { this.food.splice(i, 1); i--; }
+        }
+      }
+    }
+
     /** What beating a worm is worth, by how big it had got. */
     killScore(victim) {
       const s = victim.segments;
@@ -205,13 +235,18 @@ window.PV = window.PV || {};
 
       // `boosting` arrives as "wants to dash"; this is the one place that
       // decides whether it can, so every control scheme pays the same price.
-      w.boosting = w.boosting && w.energy > 0;
+      w.boosting = w.boosting && w.fuel > 0;
       let speed = BASE_SPEED;
       if (w.boosting) {
         speed = BOOST_SPEED;
-        w.energy = Math.max(0, w.energy - ENERGY_DRAIN);
+        w.burn += BOOST_BURN;
+        while (w.burn >= 1 && w.segments > BOOST_FLOOR) {
+          w.burn -= 1;
+          w.segments -= 1;
+          if (++w.shed >= SHED_EVERY) { w.shed = 0; this.shedCrumb(w); }
+        }
       } else {
-        w.energy = Math.min(ENERGY_MAX, w.energy + ENERGY_REFILL);
+        w.burn = 0;
       }
       if (w.atEdge) speed *= 0.82;                 // the edge drags
 
@@ -321,7 +356,7 @@ window.PV = window.PV || {};
       w.aim = Math.atan2(ty - w.y, tx - w.x);
 
       if (w.boostTicks > 0) w.boostTicks--;
-      else if (w.energy > 70 && this.rng.next() < 0.004) w.boostTicks = 40;
+      else if (w.fuel > 30 && this.rng.next() < 0.004) w.boostTicks = 40;
       w.boosting = w.boostTicks > 0;
     }
 
@@ -388,7 +423,8 @@ window.PV = window.PV || {};
   PV.Worms.FOODS = FOODS;
   PV.Worms.NODE = NODE;
   PV.Worms.EDGE = EDGE;
-  PV.Worms.ENERGY_MAX = ENERGY_MAX;
   PV.Worms.START_SEGMENTS = START_SEGMENTS;
+  PV.Worms.BOOST_FLOOR = BOOST_FLOOR;
+  PV.Worms.BOOST_BURN = BOOST_BURN;
 
 })(window.PV);

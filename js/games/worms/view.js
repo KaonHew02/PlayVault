@@ -139,7 +139,9 @@ window.PV = window.PV || {};
         const r = game.rank();
         rankEl.textContent = r.place + '/' + r.of;
 
-        const pct = Math.max(0, Math.round(p.energy / PV.Worms.ENERGY_MAX * 100));
+        // The bar is seconds of dash left, not a tank: the tail IS the fuel,
+        // so it reads full whenever you have eight seconds' worth to spend.
+        const pct = Math.round(Math.min(1, p.fuel / (PV.Worms.BOOST_BURN * 60 * 8)) * 100);
         energyBar.style.width = pct + '%';
         energyBar.className = pct < 25 ? 'low' : '';
 
@@ -231,11 +233,11 @@ window.PV = window.PV || {};
           label(c, PV.fmtNum(w.score), sx, top + 11, w.colour);
         }
 
-        // The dash tank, drawn as a ring round your own head: on the panel it
+        // The dash left, drawn as a ring round your own head: on the panel it
         // is a number you have to look away to read.
         if (p.alive) {
           const rad = p.radius * scale + 8;
-          const frac = Math.max(0, p.energy / PV.Worms.ENERGY_MAX);
+          const frac = Math.min(1, p.fuel / (PV.Worms.BOOST_BURN * 60 * 8));
           c.lineWidth = 3;
           c.strokeStyle = 'rgba(255,255,255,.13)';
           c.beginPath();

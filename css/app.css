@@ -126,7 +126,9 @@ main {
 .btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line-2)); }
 .btn.back { padding: 6px 11px; }
 
-/* Wraps, because an option with six choices still has to fit a 375px phone. */
+/* Still wraps as a last resort on a very narrow phone, but an option with
+   more than three choices is given the card grid below instead — a segmented
+   bar that wraps leaves a ragged hole at the end of every row. */
 .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
 .seg-btn {
   appearance: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
@@ -328,6 +330,25 @@ main {
 .opt-row:last-child { margin-bottom: 0; }
 .opt-row .k { font-weight: 600; font-size: 14px; }
 
+/* Many choices, or choices with a picture: a grid of cards, full width under
+   its own label. Every cell is the same size at every count, which a wrapped
+   segmented control can never be. */
+.opt-row.stack { flex-direction: column; align-items: stretch; gap: 9px; margin-bottom: 16px; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(106px, 1fr)); gap: 8px; }
+.choice {
+  appearance: none; cursor: pointer; font: inherit; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 7px; border-radius: 12px;
+  border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted);
+  transition: border-color .12s, background .12s, color .12s;
+}
+.choice:hover { color: var(--ink); border-color: var(--line); }
+.choice.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.choice .nm { font-size: 13px; font-weight: 600; line-height: 1.25; }
+.choice .tag { font-size: 11px; line-height: 1; letter-spacing: 1.5px; color: var(--accent); }
+.choice .thumb { display: block; width: 100%; line-height: 0; border-radius: 8px; overflow: hidden; }
+.choice .thumb canvas, .choice .thumb svg { display: block; width: 100%; height: auto; }
+
 .modal {
   position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px;
   background: rgba(4, 7, 11, .6); backdrop-filter: blur(3px);
@@ -336,6 +357,8 @@ main {
   background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px;
   padding: 20px; width: 100%; max-width: 380px; box-shadow: var(--shadow);
 }
+/* Room for three cards across. */
+.sheet.wide { max-width: 470px; }
 .sheet-body { margin: 14px 0 18px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; }
 
