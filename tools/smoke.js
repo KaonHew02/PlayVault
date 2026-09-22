@@ -59,6 +59,7 @@ const FILES = [
   'js/games/snake/engine.js',
   'js/games/worms/engine.js',
   'js/games/racing/track.js', 'js/games/racing/engine.js',
+  'js/games/crowd/course.js', 'js/games/crowd/engine.js',
   'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
@@ -676,6 +677,37 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
   g.advance();
   ok(!g.isOver(), 'reversing into the neck killed the snake instead of being ignored');
   ok(g.dir.x === 1, 'the snake accepted a straight reversal');
+
+  /* Biting yourself: fatal, or a haircut. Drive a long snake in a tight square
+     until it meets itself, once with each rule, from the same state. */
+  function selfBite(tail) {
+    const s = new PV.Snake({ seed: 3, walls: false, speed: 'fast', tail: tail });
+    s.body = [];
+    for (let i = 0; i < 12; i++) s.body.push({ x: 8 - i, y: 8 });   // head at (8,8)
+    s.dir = PV.Snake.DIRS.right;
+    s.grow = 0;
+    s.food = { x: 0, y: 0 };
+    // Right, down, left, and it walks back into its own flank.
+    const script = ['down', 'left', 'left', 'left', 'left', 'up'];
+    for (const a of script) {
+      s.input(a);
+      for (let i = 0; i < s.stepTicks(); i++) s.advance();
+      if (s.isOver()) break;
+    }
+    return s;
+  }
+  const fatal = selfBite('deadly'), trimmed = selfBite('trim');
+  ok(fatal.isOver() && fatal.overReason === 'self', 'a self-bite was survivable with the fatal rule');
+  ok(!trimmed.isOver(), 'the trim rule still killed the snake');
+  ok(trimmed.cuts === 1, 'the trim rule did not record the cut, got ' + trimmed.cuts);
+  ok(trimmed.body.length < 12 && trimmed.body.length >= 2,
+    'the cut left the snake at ' + trimmed.body.length + ' segments');
+  ok(!trimmed.tailCut === false, 'the option did not reach the engine');
+
+  // Two runs of the trim rule from one seed still match, cuts and all.
+  const r1 = selfBite('trim'), r2 = selfBite('trim');
+  ok(r1.body.length === r2.body.length && r1.cuts === r2.cuts && r1.score === r2.score,
+    'the trim rule is not deterministic');
 });
 
 /* -------------------------------------------------------------- worm arena */
@@ -1075,17 +1107,43 @@ section('kart racing — the lights, the drift, the road and the items', () => {
 section('tower defense — ' + (2 * scale) + ' runs per map', () => {
   for (const map of PV.TDMaps.keys) {
     const built = PV.TDMaps.build(map);
-    ok(built.path.length > 15, map + ': the path is suspiciously short');
-    for (let i = 1; i < built.path.length; i++) {
-      const a = built.path[i - 1], b = built.path[i];
-      ok(Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1,
-        map + ': the path jumps between ' + JSON.stringify(a) + ' and ' + JSON.stringify(b));
+    ok(built.lanes.length >= 1 && built.lanes.length <= 2, map + ': odd lane count');
+
+    for (const lane of built.lanes) {
+      ok(lane.path.length > 12, map + ': a lane is suspiciously short');
+      for (let i = 1; i < lane.path.length; i++) {
+        const a = lane.path[i - 1], b = lane.path[i];
+        ok(Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1,
+          map + ': the path jumps between ' + JSON.stringify(a) + ' and ' + JSON.stringify(b));
+        ok(built.onPath.has(b.y * built.cols + b.x), map + ': a lane cell is not blocked for building');
+      }
+      // Enemies have to walk IN from somewhere: a lane starts at the border.
+      const s = lane.path[0];
+      ok(s.x === 0 || s.y === 0 || s.x === built.cols - 1 || s.y === built.rows - 1,
+        map + ': a lane starts inside the map at ' + JSON.stringify(s));
     }
 
+    // A stretch of road no tower can reach is a hole in the map, not a design.
+    const g0 = new PV.TowerDef({ seed: 1, map: map });
+    for (const lane of built.lanes) {
+      for (const p of lane.points) {
+        let covered = false;
+        for (let y = 0; y < built.rows && !covered; y++) {
+          for (let x = 0; x < built.cols && !covered; x++) {
+            if (!g0.canBuild(x, y)) continue;
+            if (Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y) <= PV.TowerDef.TOWERS.gun.range) covered = true;
+          }
+        }
+        ok(covered, map + ': no tower can cover the road at ' + JSON.stringify(p));
+      }
+    }
+
+    const diffs = Object.keys(PV.TowerDef.DIFFS);
     for (let n = 0; n < 2 * scale; n++) {
       const seed = 11000 + n;
+      const difficulty = diffs[n % diffs.length];
       const run = () => {
-        const g = new PV.TowerDef({ seed: seed, map: map });
+        const g = new PV.TowerDef({ seed: seed, map: map, difficulty: difficulty });
         const spots = [];
         for (let y = 0; y < g.map.rows; y++) {
           for (let x = 0; x < g.map.cols; x++) if (g.canBuild(x, y)) spots.push({ x: x, y: y });
@@ -1102,6 +1160,10 @@ section('tower defense — ' + (2 * scale) + ' runs per map', () => {
           ok(g.money >= 0, map + ' seed ' + seed + ': gold went negative');
           ok(g.lives >= 0, map + ' seed ' + seed + ': lives went below zero');
           ok(g.wave <= g.waves, map + ' seed ' + seed + ': waves ran past the last one');
+          for (const e of g.enemies) {
+            ok(e.x >= 0 && e.y >= 0 && e.x <= g.map.cols && e.y <= g.map.rows,
+              map + ': an enemy walked off the map');
+          }
         }
         return g;
       };
@@ -1129,6 +1191,186 @@ section('tower defense — ' + (2 * scale) + ' runs per map', () => {
     ok(g.money > before, 'selling returned nothing');
     ok(g.towerAt(0, 0) === null, 'the sold tower is still standing');
   }
+
+  // Difficulty scales the enemies and the purse, and nothing else.
+  const easy = new PV.TowerDef({ seed: 5, map: 'meadow', difficulty: 'easy' });
+  const hard = new PV.TowerDef({ seed: 5, map: 'meadow', difficulty: 'hard' });
+  ok(easy.lives > hard.lives && easy.money > hard.money, 'hard starts no poorer than easy');
+  easy.wave = hard.wave = 8;
+  easy.spawn('grunt'); hard.spawn('grunt');
+  ok(easy.enemies[0].maxHp < hard.enemies[0].maxHp, 'the same grunt is not tougher on hard');
+  ok(easy.enemies[0].speed < hard.enemies[0].speed, 'the same grunt is not faster on hard');
+  ok(easy.waves === hard.waves, 'difficulty changed the number of waves');
+
+  // Armour is taken off every hit, and a hit always does something.
+  const ag = new PV.TowerDef({ seed: 2, map: 'meadow' });
+  ag.wave = 1;
+  ag.spawn('grunt'); ag.spawn('armour');
+  const bare = ag.enemies[0], plated = ag.enemies[1];
+  ok(ag.damage(plated, 10) < ag.damage(bare, 10), 'armour soaked nothing');
+  ok(ag.damage(plated, 1) >= 1, 'a hit was absorbed completely');
+
+  // Enemies rank up as the player upgrades: same kind, later wave, more of it.
+  const rg = new PV.TowerDef({ seed: 7, map: 'meadow' });
+  ok(rg.rankFor(1) === 1 && rg.rankFor(7) === 2 && rg.rankFor(14) === 3,
+    'the rank schedule moved');
+  ok(rg.rankFor(20) <= PV.TowerDef.MAX_RANK, 'a rank went past the last one');
+  rg.wave = 1; rg.spawn('grunt');
+  rg.wave = 14; rg.spawn('grunt');
+  const early = rg.enemies[0], late = rg.enemies[1];
+  ok(late.rank === 3 && early.rank === 1, 'the spawned rank does not follow the wave');
+  ok(late.maxHp > early.maxHp && late.armour > early.armour && late.bounty > early.bounty,
+    'a rank 3 grunt is not tougher, better armoured and worth more than a rank 1');
+  ok(late.speed > early.speed, 'a rank 3 grunt is not quicker');
+  ok(rg.damage(late, 10) < rg.damage(early, 10), 'rank armour soaked nothing');
+
+  // Bosses: never before wave 10, and last through the gate when they come.
+  ok(ag.waveComposition(5).indexOf('boss') < 0, 'a boss turned up in wave 5');
+  ok(ag.waveComposition(10).indexOf('boss') === 0, 'the boss is not at the back of the queue');
+  ok(PV.TowerDef.KINDS.boss.leak > 1, 'a boss costs a single life');
+
+  // Two lanes means the wave is dealt between them, not doubled onto one.
+  const two = new PV.TowerDef({ seed: 3, map: 'ember' });
+  ok(two.map.lanes.length === 2, 'ember lost a lane');
+  two.wave = 1;
+  for (let i = 0; i < 6; i++) two.spawn('grunt');
+  ok(two.enemies.filter(e => e.lane === 0).length === 3
+    && two.enemies.filter(e => e.lane === 1).length === 3, 'one lane took the whole wave');
+
+  // The barrel tracks its target rather than teleporting its shots at it.
+  const tg = new PV.TowerDef({ seed: 4, map: 'meadow' });
+  const spot = tg.map.path[6];
+  let turret = null;
+  for (const d of [[0, -1], [0, 1], [-1, 0], [1, 0], [1, 1], [-1, -1]]) {
+    if (tg.canBuild(spot.x + d[0], spot.y + d[1]) && tg.build(spot.x + d[0], spot.y + d[1], 'gun')) {
+      turret = tg.towerAt(spot.x + d[0], spot.y + d[1]); break;
+    }
+  }
+  ok(!!turret, 'nowhere to build beside the road');
+  if (turret) {
+    tg.wave = 1; tg.spawn('grunt');
+    const e = tg.enemies[0];
+    e.dist = 5; tg.place(e);
+    for (let i = 0; i < 40 && tg.enemies.indexOf(e) >= 0; i++) tg.advance();
+    if (tg.enemies.indexOf(e) >= 0) {
+      const want = Math.atan2(e.y - turret.y, e.x - turret.x);
+      const off = Math.abs(((turret.aim - want + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      ok(off < 0.3, 'the barrel is not pointing at what it shoots, off by ' + off.toFixed(2));
+    }
+  }
+});
+
+/* ------------------------------------------------------------ crowd rush */
+
+section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
+  const DIFFS = Object.keys(PV.CrowdRush.DIFFS);
+
+  /** A player who always takes the better gate and steps off the hazards. */
+  function aimFor(g) {
+    const f = g.course.features[g.at];
+    if (!f) return 0;
+    const d = f.at - g.dist;
+    if (f.kind === 'gates') {
+      let best = null, bv = -Infinity;
+      for (const lane of f.lanes) {
+        const v = PV.CrowdCourse.apply(lane.op, lane.val, g.n);
+        if (v > bv) { bv = v; best = lane; }
+      }
+      const side = (best.x0 + best.x1) / 2;
+      // Hug the outer edge, so the whole crowd fits inside the good gate.
+      return side > 0 ? Math.max(0, 1 - g.width / 2) : Math.min(0, -1 + g.width / 2);
+    }
+    if (f.kind === 'rivals' || f.kind === 'castle') return 0;
+    if (d > 7) return 0;
+    return PV.CrowdRush.hazardX(f, g.tick) > 0 ? -0.8 : 0.8;
+  }
+
+  function play(course, difficulty, seed, smart) {
+    const g = new PV.CrowdRush({ seed: seed, course: course, difficulty: difficulty });
+    let ticks = 0;
+    while (!g.isOver() && ticks < 60 * 60 * 6) {
+      if (smart) g.input({ lane: aimFor(g) });
+      g.advance();
+      ticks++;
+      ok(g.n >= 0, course + ': the crowd went negative');
+      ok(Math.abs(g.x) <= g.reach + 1e-6, course + ': the crowd hung off the track');
+      ok(g.dist <= g.course.length + 1, course + ': ran past the end of the course');
+    }
+    return g;
+  }
+
+  for (const course of PV.CrowdCourse.keys) {
+    const built = PV.CrowdCourse.build(course, PV.CrowdRush.DIFFS.normal, new PV.RNG(4));
+    ok(built.features.length > 5, course + ': the course is nearly empty');
+    ok(built.features[built.features.length - 1].kind === 'castle',
+      course + ': the keep is not the last thing on the course');
+    for (let i = 1; i < built.features.length; i++) {
+      ok(built.features[i].at >= built.features[i - 1].at, course + ': features are out of order');
+    }
+    for (const f of built.features) {
+      ok(f.at > 0 && f.at < built.length, course + ': a feature sits off the course');
+      if (f.kind === 'gates') {
+        ok(f.lanes.length === 2 && f.lanes[0].x0 === -1 && f.lanes[1].x1 === 1,
+          course + ': a gate pair does not span the track');
+      }
+      if (f.kind === 'rivals' || f.kind === 'castle') ok(f.n > 0, course + ': an empty crowd was placed');
+    }
+
+    for (let n = 0; n < 2 * scale; n++) {
+      const seed = 21000 + n;
+      const difficulty = DIFFS[n % DIFFS.length];
+      const a = play(course, difficulty, seed, true);
+      ok(a.isOver(), course + ' seed ' + seed + ': the run never ended');
+      ok(['stormed', 'overrun', 'wiped', 'held'].indexOf(a.overReason) >= 0,
+        course + ' seed ' + seed + ': odd ending ' + a.overReason);
+      const b = play(course, difficulty, seed, true);
+      ok(a.tick === b.tick && a.score === b.score && a.n === b.n,
+        course + ' seed ' + seed + ': the same seed gave a different run');
+    }
+  }
+
+  // The gate split is by overlap, not by where the middle of the crowd is.
+  const g = new PV.CrowdRush({ seed: 9, course: 'fields', difficulty: 'normal' });
+  const pair = {
+    kind: 'gates', at: 0,
+    lanes: [{ x0: -1, x1: 0, op: 'mul', val: 2 }, { x0: 0, x1: 1, op: 'sub', val: 1000 }]
+  };
+  g.n = 100; g.x = -g.reach;                 // hard against the good side
+  g.runGates(pair);
+  ok(g.n === 200, 'a crowd wholly inside the x2 gate did not double, got ' + g.n);
+
+  g.n = 100; g.x = 0;                        // straddling both
+  g.runGates(pair);
+  ok(g.n > 90 && g.n < 130, 'straddling the line did not split the crowd, got ' + g.n);
+
+  // A clash is a one-for-one trade: the bigger crowd wins by the difference.
+  function clash(mine, theirs) {
+    const c = new PV.CrowdRush({ seed: 1, course: 'fields', difficulty: 'normal' });
+    c.n = mine;
+    c.startClash({ kind: 'rivals', at: 0, n: theirs });
+    let guard = 0;
+    while (c.clash && !c.isOver() && guard++ < 20000) c.fight();
+    return c;
+  }
+  const won = clash(100, 40);
+  ok(won.n === 60, '100 against 40 should leave 60, left ' + won.n);
+  ok(won.beaten === 40, 'the win was not credited, got ' + won.beaten);
+  const lostIt = clash(30, 80);
+  ok(lostIt.isOver() && lostIt.n === 0, 'the smaller crowd survived a clash');
+  ok(clash(900, 400).n === 500, 'a big clash does not trade one for one');
+
+  // Easy is a course a good player clears; that is what the shadow run is for.
+  let cleared = 0;
+  for (let n = 0; n < 3; n++) {
+    const r = play('fields', 'easy', 31000 + n, true);
+    if (r.overReason === 'stormed') cleared++;
+  }
+  ok(cleared >= 2, 'a perfect player cleared only ' + cleared + '/3 easy runs');
+
+  // ...and a player who never steers is not supposed to get there.
+  const idle = play('keep', 'hard', 777, false);
+  ok(idle.overReason !== 'stormed' || idle.n < idle.peak,
+    'standing still won the hardest course outright');
 });
 
 /* ------------------------------------------------------------------- core */

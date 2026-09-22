@@ -6,7 +6,8 @@ existed, which is the point of the three families — and Klondike Solitaire was
 dropped at the user's request, leaving one card solitaire on the roster.
 
 Spider Solitaire · Mahjong Solitaire · Sudoku · Tetris · Snake · Worm Arena ·
-Kart Racing · Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋
+Kart Racing · Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋 — plus Crowd
+Rush, added 2026-09-22
 
 ## Three families, three contracts
 
@@ -42,7 +43,7 @@ opponent, no turn order.
   solitaires need boards that can actually be finished, or players hit dead
   ones and blame the game.
 
-### 3. Real-time loop — Tetris, Snake, Worm Arena, Kart Racing, Tower Defense
+### 3. Real-time loop — Tetris, Snake, Worm Arena, Kart Racing, Tower Defense, Crowd Rush
 
 A canvas and a fixed-timestep loop. Nothing here is turn-based, so nothing here
 uses the board contract.
@@ -68,6 +69,77 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **5** | Spider Solitaire, Worm Arena, kart items for Racing | **shipped 2026-09-08** — two new games and one reworked, none of which touched the shell. Klondike Solitaire was removed the same day |
 | **6** | Worm Arena and Kart Racing rebuilt to written specs | **shipped 2026-09-08** — the user supplied a spec for each; both name their own MVP, and everything past it (coins-as-currency, wardrobes, Grand Prix, battle modes) is deliberately still unbuilt |
 | **7** | Kart Racing made to drive properly | **shipped 2026-09-22** — no new content, no new screens. The kart felt wrong because the harness was feeding a driving game on a Tetris key-repeat; the rest fell out of measuring rather than reading. See below |
+| **8** | Tower Defense: six maps, three difficulties, drawn turrets | **shipped 2026-09-22** — see below. Snake gained a third rule the same day: biting yourself can cut the tail instead of ending the run |
+| **9** | Crowd Rush | **shipped 2026-09-22** — a new game, asked for as "count masters" plus a crazygames link. See below |
+
+### Phase 9 — Crowd Rush
+
+A crowd runner: one number, one position across a two-unit track, gates that
+multiply or subtract, hazards that bite, rival crowds to trade with, and a
+keep at the end. Three courses (★ to ★★★) and three difficulties.
+
+- **The gate split is by overlap, not by where the middle of the crowd is.**
+  The crowd is wide — wider the more of you there are — so the part inside
+  each gate takes that gate's op and the parts are added back together.
+  Straddling the line really does send half of you through the red gate, and
+  a crowd wider than a gate can never get all of itself through one: at the
+  outside edge exactly 1/w of it is inside. That cap is the tax on being big,
+  and it is what stops a ×2 gate from being a free doubling forever.
+- **Rival crowds are sized by a SHADOW RUN.** Gates multiply, so a rival
+  written as a flat number is a walkover at the end or a wall at the start.
+  The generator keeps a running estimate of what a good player would be
+  holding, applies its own best gate to it — width tax and all — and sizes
+  every rival and the king as a fraction of that. Difficulty moves the
+  fraction; it never writes numbers by hand.
+  Two bugs that estimate had, both worth remembering: a lane nobody walks
+  through still handed out its `+30`, so the shadow gained free runners at
+  every gate and ended ten times the size of the player it stood in for; and
+  before the width tax it assumed a perfect funnel, which made EASY harder
+  than normal, because easy grows the biggest crowds and therefore pays the
+  widest tax. Measured with a bot: perfect play now clears easy and normal on
+  every course and hard on three runs in four.
+- **A clash is a one-for-one trade** — the bigger crowd always wins, by the
+  difference — with a rate that follows the smaller side, so a fight takes
+  about the same time at 20 against 10 as at 900 against 400.
+- The crowd is drawn as up to 140 stickmen with legs that swing, spread over
+  a few metres of depth. Spread *backward* they all clamp to the same y and
+  scale and the crowd reads as one blue slab; spread away from the camera
+  they overlap the way a running mob does.
+
+### Phase 8 — what changed in Tower Defense
+
+- **Six maps, not two**, and a map carries its own `tier` (1–4, shown as stars
+  in the option sheet). A map is one or **two lanes** of waypoints; two lanes
+  means the wave is dealt between them, so one wall of towers can only be in
+  one of the places it is needed. Lanes may cross (Crossroads) or merge into a
+  last shared run (Ember Pass). Cells are unioned for building, so a crossing
+  is blocked once and shot at twice.
+- **Difficulty (easy / normal / hard)** scales the enemies and the purse and
+  nothing else: same twenty waves, same order. Measured with a bot that builds
+  on the highest-coverage squares — normal is a win for a good build, hard is
+  not, and the two-lane maps run about two waves harder at the same tower count.
+- **Armour** is flat damage soaked per hit, which is what makes mixing towers
+  the answer: the gun's twelve small bites do far less to an armoured enemy
+  than the cannon's one big one. Bosses arrive from wave 10, last through the
+  gate, and cost four lives.
+- **Enemies rank up too** — 1 at wave 1, 2 from wave 7, 3 from wave 14 — worth
+  health, armour, a little speed and a bigger bounty, and drawn as plate on the
+  face they walk into fire with, with the same pips a tower wears. The player
+  is upgrading; a wave 15 grunt that is only a wave 1 grunt with more health
+  does not read as the game answering back. Ranks made hard unwinnable for the
+  measuring bot, so hard's own health multiplier came down to 1.25 to pay for
+  them — and with ranks in, guns + frost + cannon now beats gun spam on hard,
+  which is the trade the towers were designed to have.
+- **The towers are drawn.** A base plate plus a turret that rotates to what it
+  is shooting — the engine tracks the barrel every tick whether or not it can
+  fire — and each level changes the silhouette (one barrel, two, then two plus
+  a muzzle brake, a drum and a gilded plate) and wears a pip badge. A number
+  painted inside a circle is not something you can read across a board with
+  fourteen towers on it.
+- The terrain is painted once into an offscreen canvas and blitted; per-cell
+  scenery at sixty frames a second is the only thing here that would cost
+  anything. Scenery comes from a **hash of the cell**, never the game's RNG,
+  so it cannot change what a seed does.
 
 Phases 2 and 3 also added a shared harness per family (`js/core/boardhost.js`
 and `js/core/loophost.js`). Those were the actual saving: by the fourth board

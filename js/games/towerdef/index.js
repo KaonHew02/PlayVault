@@ -7,8 +7,8 @@
     family: 'arcade',
     name: 'Tower Defense',
     nameZh: '塔防',
-    blurb: 'Twenty waves, three towers, twenty lives. Hold the line.',
-    blurbZh: '二十波敌人，三种防御塔，二十条命。守住防线。',
+    blurb: 'Six maps, three difficulties, twenty waves. Hold the line.',
+    blurbZh: '六张地图，三种难度，二十波敌人。守住防线。',
     accent: '#F59E0B',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
       + '<path d="M8 36h32" stroke="currentColor" stroke-width="2" opacity=".45"/>'
@@ -19,10 +19,19 @@
 
     options: [
       {
+        // The stars are the map's own difficulty and come from the map data,
+        // so adding a map never means editing this list.
         key: 'map', labelKey: 'td.map', def: 'meadow',
+        choices: PV.TDMaps.keys.map(k => ({
+          value: k, labelKey: 'td.' + k, tag: '\u2605'.repeat(PV.TDMaps.tierOf(k))
+        }))
+      },
+      {
+        key: 'difficulty', labelKey: 'td.diff', def: 'normal',
         choices: [
-          { value: 'meadow', labelKey: 'td.meadow' },
-          { value: 'canyon', labelKey: 'td.canyon' }
+          { value: 'easy', labelKey: 'diff.easy' },
+          { value: 'normal', labelKey: 'diff.normal' },
+          { value: 'hard', labelKey: 'diff.hard' }
         ]
       }
     ],

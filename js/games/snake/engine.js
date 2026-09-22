@@ -10,7 +10,13 @@
    - A turn is only taken at the moment the snake actually moves. Turning twice
      inside one step is how you fold a snake back into its own neck.
    - The illegal reverse is judged against the direction the snake is ACTUALLY
-     travelling, not against the last key pressed. */
+     travelling, not against the last key pressed.
+
+   Biting yourself is fatal or it is a haircut, and the option says which. In
+   `trim` the snake loses everything from the segment it bit — the head takes
+   that square and carries on — so a long snake is a risk you can survive and
+   the run ends only at a wall. The cut is what it costs: length is score's
+   companion here, and you just gave a lap of it back. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';
@@ -28,7 +34,11 @@ window.PV = window.PV || {};
       this.cols = o.cols || 20;
       this.rows = o.rows || 20;
       this.walls = o.walls !== false;              // false == wrap around
+      this.tailCut = o.tail === 'trim';            // biting yourself trims it
       this.baseSpeed = SPEEDS[o.speed] || SPEEDS.normal;
+      this.cuts = 0;
+      this.cutAt = null;
+      this.cutFlash = 0;
       this.dir = DIRS.right;
       this.pending = [];
       this.grow = 2;
@@ -58,6 +68,7 @@ window.PV = window.PV || {};
     }
 
     step() {
+      if (this.cutFlash > 0) this.cutFlash--;
       for (const a of this.takeInputs()) {
         if (DIRS[a]) this.pending.push(DIRS[a]);
         if (this.pending.length > 2) this.pending.shift();
@@ -86,7 +97,17 @@ window.PV = window.PV || {};
       // The tail square frees up on the same move, unless we are growing into it.
       const growing = this.grow > 0 || (this.food && nx === this.food.x && ny === this.food.y);
       for (let i = 0; i < this.body.length - (growing ? 0 : 1); i++) {
-        if (this.body[i].x === nx && this.body[i].y === ny) { this.finish('self'); return; }
+        if (this.body[i].x !== nx || this.body[i].y !== ny) continue;
+        if (!this.tailCut) { this.finish('self'); return; }
+        // A bite drops the bitten segment and everything behind it; the head
+        // then takes that square below. Never below a head and a neck, or the
+        // snake would vanish into a single square.
+        this.body.length = Math.max(2, i);
+        this.cuts++;
+        this.cutAt = { x: nx, y: ny };
+        this.cutFlash = 14;
+        this.grow = 0;
+        break;
       }
 
       this.body.unshift({ x: nx, y: ny });

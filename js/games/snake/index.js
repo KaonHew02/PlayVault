@@ -7,8 +7,8 @@
     family: 'arcade',
     name: 'Snake',
     nameZh: '贪吃蛇',
-    blurb: 'Eat, grow, and run out of room.',
-    blurbZh: '吃掉食物，越长越长，直到无路可走。',
+    blurb: 'Eat, grow, and run out of room — or bite yourself and lose the tail.',
+    blurbZh: '吃掉食物，越长越长，直到无路可走；也可以选择咬到自己只断尾。',
     accent: '#34D399',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
       + '<path d="M12 34h12a6 6 0 0 0 0-12h-6a6 6 0 0 1 0-12h12" fill="none" stroke="#34D399" '
@@ -29,6 +29,13 @@
         choices: [
           { value: 'walls', labelKey: 'snake.solid' },
           { value: 'wrap', labelKey: 'snake.wrap' }
+        ]
+      },
+      {
+        key: 'tail', labelKey: 'snake.tail', def: 'deadly',
+        choices: [
+          { value: 'deadly', labelKey: 'snake.tailDeadly' },
+          { value: 'trim', labelKey: 'snake.tailTrim' }
         ]
       }
     ],

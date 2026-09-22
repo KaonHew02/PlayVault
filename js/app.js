@@ -170,10 +170,13 @@ window.PV = window.PV || {};
         const row = el('div', { class: 'opt-row' }, el('span', { class: 'k' }, t(o.labelKey)));
         const seg = el('div', { class: 'seg' });
         o.choices.forEach(c => {
+          // `tag` is a language-neutral decoration on a choice — difficulty
+          // stars, today. The label itself still goes through i18n.
+          const label = t(c.labelKey) + (c.tag ? ' ' + c.tag : '');
           seg.appendChild(el('button', {
             class: 'seg-btn' + (chosen[o.key] === c.value ? ' on' : ''),
             onclick: () => { chosen[o.key] = c.value; paint(); if (onChange) onChange(chosen); }
-          }, t(c.labelKey)));
+          }, label));
         });
         row.appendChild(seg);
         body.appendChild(row);

@@ -74,7 +74,7 @@ window.PV = window.PV || {};
 
   PV.SnakeView = function (ctx) {
     const opts = ctx.opts || {};
-    let scoreEl, lenEl, lvlEl;
+    let scoreEl, lenEl, lvlEl, cutsEl;
 
     return PV.loopHost(ctx, {
       hz: 60,
@@ -92,7 +92,8 @@ window.PV = window.PV || {};
       create: () => new PV.Snake({
         seed: ctx.seed(),
         speed: opts.speed || 'normal',
-        walls: opts.walls !== 'wrap'
+        walls: opts.walls !== 'wrap',
+        tail: opts.tail || 'deadly'
       }),
 
       fit(availW, availH) {
@@ -104,10 +105,17 @@ window.PV = window.PV || {};
         scoreEl = PV.el('b', {}, '0');
         lenEl = PV.el('b', {}, '3');
         lvlEl = PV.el('b', {}, '1');
-        api.side.appendChild(PV.el('div', { class: 'panel-mini stats' },
+        cutsEl = PV.el('b', {}, '0');
+        const stats = PV.el('div', { class: 'panel-mini stats' },
           PV.el('span', { class: 'k' }, t('common.score')), scoreEl,
           PV.el('span', { class: 'k' }, t('snake.length')), lenEl,
-          PV.el('span', { class: 'k' }, t('common.level')), lvlEl));
+          PV.el('span', { class: 'k' }, t('common.level')), lvlEl);
+        // Only a run that can be cut counts cuts.
+        if (opts.tail === 'trim') {
+          stats.appendChild(PV.el('span', { class: 'k' }, t('snake.cuts')));
+          stats.appendChild(cutsEl);
+        }
+        api.side.appendChild(stats);
         api.below.appendChild(PV.el('p', { class: 'muted small hide-sm' }, t('snake.controls')));
       },
 
@@ -115,6 +123,7 @@ window.PV = window.PV || {};
         scoreEl.textContent = PV.fmtNum(game.score);
         lenEl.textContent = String(game.body.length);
         lvlEl.textContent = String(game.level);
+        cutsEl.textContent = String(game.cuts);
       },
 
       draw(c, game, geom) {
@@ -201,6 +210,17 @@ window.PV = window.PV || {};
         }
 
         head(c, pts[0], game.dir, cell);
+
+        // Where it bit itself: a ring on the square the tail came off, so a
+        // sudden loss of half the snake has a visible cause.
+        if (game.cutFlash > 0 && game.cutAt) {
+          const p = pt(game.cutAt), k = game.cutFlash / 14;
+          c.strokeStyle = 'rgba(255,255,255,' + (0.9 * k).toFixed(3) + ')';
+          c.lineWidth = Math.max(2, cell * 0.14 * k);
+          c.beginPath();
+          c.arc(p.x, p.y, cell * (0.45 + (1 - k) * 0.85), 0, Math.PI * 2);
+          c.stroke();
+        }
       },
 
       outcome(game, st) {
@@ -213,6 +233,7 @@ window.PV = window.PV || {};
           lines: [
             t('common.score') + ': ' + PV.fmtNum(game.score),
             t('snake.length') + ': ' + game.body.length + ' · ' + t('common.time') + ': ' + PV.fmtTime(st.timeMs),
+            game.tailCut ? t('snake.cuts') + ': ' + game.cuts : null,
             '@best'
           ]
         };

@@ -126,7 +126,8 @@ main {
 .btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line-2)); }
 .btn.back { padding: 6px 11px; }
 
-.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+/* Wraps, because an option with six choices still has to fit a 375px phone. */
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
 .seg-btn {
   appearance: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
   padding: 8px 13px; border: 0; background: transparent; color: var(--muted);
@@ -416,9 +417,19 @@ main {
 .worm-board li.me { color: var(--ink); font-weight: 600; }
 .worm-board .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Tower defense shop */
+/* Tower defense shop. The buy buttons carry the real turret art, drawn by the
+   same code that paints the board, so the icon can never drift from the tower. */
 .td-shop { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .td-buy { display: inline-flex; align-items: center; gap: 7px; }
+.td-buy canvas, .td-lv canvas { display: block; }
+.td-buy.poor { opacity: .55; }
+.td-where { text-align: center; width: 100%; }
+.td-boss {
+  width: 100%; justify-content: center; font-weight: 600;
+  color: var(--bad); border-color: var(--bad); background: transparent;
+}
+/* .chip sets display, so the hidden attribute needs saying again. */
+.td-boss[hidden] { display: none; }
 .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .td-info {
   display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
