@@ -20,7 +20,11 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const scale = Math.max(1, Number(process.argv[2] || 1));
+/* The scale is the first bare number on the command line, so flags such as
+   --min can sit anywhere without turning it into NaN and quietly running
+   every loop zero times. */
+const scaleArg = process.argv.slice(2).filter(a => a[0] !== '-')[0];
+const scale = Math.max(1, Number(scaleArg || 1) || 1);
 
 /* ------------------------------------------------------------------- shim */
 
@@ -64,8 +68,16 @@ const FILES = [
   // extends; nothing here opens a socket — the tests pair rooms in memory.
   'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
 ];
+/* `node tools/smoke.js --min` runs this whole suite against the MINIFIED
+   source instead of the readable source. The deploy bundle is built by the
+   same stripper, so two and a half million checks passing here is the
+   evidence that stripping the comments out did not change what the code
+   does — which is the one thing that could go wrong with shipping a bundle
+   and the one thing a syntax check cannot tell you. */
+const MINIFIED = process.argv.indexOf('--min') >= 0;
+const strip = MINIFIED ? require('./minify.js').minify : (x => x);
 for (const f of FILES) {
-  vm.runInThisContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), { filename: f });
+  vm.runInThisContext(strip(fs.readFileSync(path.join(ROOT, f), 'utf8')), { filename: f });
 }
 const PV = global.PV;
 // i18n.js is a browser file and is not loaded here; room.js reaches for t()
@@ -1237,6 +1249,54 @@ section('security — a hostile peer in a friends room', () => {
   ok(host.phase === 'lobby', 'a guest moved the host to phase ' + host.phase);
   ok(host.gameCode === 'chess', 'a guest changed the game');
   ok(!host.dead, 'a guest closed the host room');
+});
+
+
+section('security — sealed records and a fresh bundle', () => {
+  // A record this app wrote comes back; the same record edited does not.
+  PV.Store.set('profile', { name: 'Kaon', xp: 120, created: '' });
+  ok(PV.Store.get('profile', null).xp === 120, 'a sealed record did not come back');
+
+  const raw = JSON.parse(localStorage.getItem('playvault.profile'));
+  ok(typeof raw.c === 'string' && 'd' in raw, 'the record was not sealed at all');
+
+  // The console edit that started all this: change the number in place.
+  raw.d.xp = 999999;
+  localStorage.setItem('playvault.profile', JSON.stringify(raw));
+  ok(PV.Store.get('profile', null) === null, 'an edited record was believed');
+  ok(PV.Profile.level().level === 1, 'an edited record still levelled the player');
+
+  // ...and writing the bare object with no seal at all is not a way round it.
+  localStorage.setItem('playvault.profile', JSON.stringify({ name: 'x', xp: 999999 }));
+  ok(PV.Store.get('profile', null) === null, 'an unsealed record was believed');
+
+  // The app carries on from a clean record rather than breaking.
+  PV.Profile.setName('Kaon');
+  ok(PV.Profile.name() === 'Kaon', 'the profile could not be rebuilt after tampering');
+  ok(PV.Store.get('profile', null).xp === 0, 'the rebuilt record kept the edited xp');
+
+  // Unsigned stores still round-trip, and a backup still imports.
+  PV.Store.set('sudoku.saved', { grid: [1, 2, 3] });
+  ok(PV.Store.get('sudoku.saved', null).grid.length === 3, 'an unsigned store broke');
+  const env = PV.Store.exportAll();
+  ok(PV.Store.importAll(env).ok === true, 'a sealed export did not import');
+  PV.Store.del('sudoku.saved');
+
+  // The deploy bundle must match the source it was built from. A bundle one
+  // edit behind is a bug that only appears in production, after a push.
+  const build = require('./build.js');
+  const fs2 = require('fs');
+  const dev = fs2.readFileSync(path.join(ROOT, 'index.dev.html'), 'utf8');
+  const files = build.sources(dev);
+  ok(files.length > 20, 'index.dev.html lists only ' + files.length + ' scripts');
+  const stamp = build.stampOf(files);
+  const onDisk = fs2.readFileSync(path.join(ROOT, 'js/playvault.min.js'), 'utf8');
+  ok(onDisk.indexOf('stamp:' + stamp) > 0,
+    'js/playvault.min.js is stale — run `node tools/build.js`');
+  const html = fs2.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  ok(html.indexOf('js/playvault.min.js?v=' + stamp) > 0,
+    'index.html points at a different bundle — run `node tools/build.js`');
+  ok(html.indexOf('<script src="js/core/') < 0, 'the deployed page still loads loose sources');
 });
 
 /* ------------------------------------------------------------------- core */

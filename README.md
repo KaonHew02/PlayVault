@@ -11,10 +11,17 @@ including the short answer to "can you hide the JavaScript?" (no, and here is
 what to do instead).
 
 ```
-node tools/serve.js 8099     # then open http://localhost:8099/
+node tools/serve.js 8099     # then open http://localhost:8099/index.dev.html
 node tools/smoke.js          # headless engine tests; [scale] for a longer run
+node tools/smoke.js --min    # ...the same tests against the minified source
+node tools/build.js          # write js/playvault.min.js and the deployed index.html
 node tools/build-logo.mjs    # regenerate every logo asset
 ```
+
+**Work against `index.dev.html`** — it loads every file separately, so the
+debugger shows real filenames and real line numbers. `index.html` is
+generated: it loads one bundle and is what GitHub Pages serves. Run
+`node tools/build.js` before pushing; the smoke tests fail if you forget.
 
 ## What is built
 

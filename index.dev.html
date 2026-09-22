@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlayVault — One Hub. Endless Games.</title>
+<meta name="description" content="PlayVault — one hub, endless games. Board, puzzle and arcade games that run entirely in your browser.">
+<meta name="theme-color" content="#0B0F14">
+<meta name="referrer" content="no-referrer">
+<!-- The page's own limits. Everything this app runs is its own file; the one
+     exception is the PeerJS broker client, which is named here and pinned by
+     hash below. No inline script, no eval, nowhere to post a form to, and
+     nothing loadable as a plugin. `frame-ancestors` is deliberately absent:
+     browsers ignore it in a meta tag, and a static host cannot send headers,
+     so that one is honestly out of reach rather than quietly listed. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' https://cdnjs.cloudflare.com;
+  style-src 'self';
+  img-src 'self' data:;
+  font-src 'self';
+  connect-src 'self' https://0.peerjs.com wss://0.peerjs.com;
+  media-src 'none';
+  object-src 'none';
+  base-uri 'none';
+  form-action 'none'">
+<link rel="icon" href="assets/logo/favicon.svg">
+<link rel="apple-touch-icon" href="assets/logo/icon.svg">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#/games">
+    <img src="assets/logo/logo-simple.svg" alt="" width="36" height="36" decoding="async">
+    <span class="brand-text">
+      <span class="brand-name">Play<b>Vault</b></span>
+      <span class="brand-slogan" data-i18n="app.tagline"></span>
+    </span>
+  </a>
+  <nav class="nav">
+    <a href="#/games" data-nav="games" data-i18n="nav.lobby"></a>
+    <a href="#/stats" data-nav="stats" data-i18n="nav.stats"></a>
+    <a href="#/settings" data-nav="settings" data-i18n="nav.settings"></a>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<noscript><p class="noscript">PlayVault needs JavaScript.</p></noscript>
+
+<!-- PeerJS, for playing with friends and nothing else. Loaded async: if it never
+     arrives, PV.Net.available() is false, the friends screen says so, and every
+     other part of PlayVault carries on working offline.
+
+     PINNED BY HASH. This is the only third-party code in the app, and without
+     `integrity` a bad day at the CDN is arbitrary code running on this page
+     with full access to every save in it. If the file ever fails to match,
+     the browser refuses to run it and playing with friends stops working —
+     which is the correct outcome, and the reason the rest of the app is
+     built to carry on without it. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"
+        integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR"
+        crossorigin="anonymous" referrerpolicy="no-referrer" async defer></script>
+
+<!-- THE DEVELOPMENT PAGE. It loads every source file separately, which is
+     what you want while working: real filenames in the debugger, real line
+     numbers in a stack trace, and no build step between an edit and a reload.
+     Serve it as /index.dev.html.
+
+     `node tools/build.js` reads THIS file for the list and the order, and
+     writes the deployed index.html from it. Change a script tag here, never
+     there. -->
+<!-- app:start -->
+<!-- core -->
+<script src="js/core/safe.js"></script>
+<script src="js/core/util.js"></script>
+<script src="js/core/rng.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/core/i18n.js"></script>
+<script src="js/core/profile.js"></script>
+<script src="js/core/registry.js"></script>
+
+<!-- playing with friends: the pipe, the room, the two ways to share a game,
+     the room's pixels, and the screen that opens one -->
+<script src="js/core/net.js"></script>
+<script src="js/core/room.js"></script>
+<script src="js/core/boardnet.js"></script>
+<script src="js/core/race.js"></script>
+<script src="js/core/roomui.js"></script>
+<script src="js/core/friends.js"></script>
+
+<!-- the three engine contracts, and the harness each family shares -->
+<script src="js/core/board.js"></script>
+<script src="js/core/puzzle.js"></script>
+<script src="js/core/loop.js"></script>
+<script src="js/core/boardhost.js"></script>
+<script src="js/core/loophost.js"></script>
+<script src="js/core/cards.js"></script>
+
+<!-- board games -->
+<script src="js/games/gomoku/engine.js"></script>
+<script src="js/games/gomoku/ai.js"></script>
+<script src="js/games/gomoku/view.js"></script>
+<script src="js/games/gomoku/index.js"></script>
+
+<script src="js/games/reversi/engine.js"></script>
+<script src="js/games/reversi/ai.js"></script>
+<script src="js/games/reversi/view.js"></script>
+<script src="js/games/reversi/index.js"></script>
+
+<script src="js/games/chess/engine.js"></script>
+<script src="js/games/chess/ai.js"></script>
+<script src="js/games/chess/view.js"></script>
+<script src="js/games/chess/index.js"></script>
+
+<script src="js/games/xiangqi/engine.js"></script>
+<script src="js/games/xiangqi/ai.js"></script>
+<script src="js/games/xiangqi/view.js"></script>
+<script src="js/games/xiangqi/index.js"></script>
+
+<!-- puzzles -->
+<script src="js/games/sudoku/generator.js"></script>
+<script src="js/games/sudoku/engine.js"></script>
+<script src="js/games/sudoku/view.js"></script>
+<script src="js/games/sudoku/index.js"></script>
+
+<script src="js/games/spider/engine.js"></script>
+<script src="js/games/spider/view.js"></script>
+<script src="js/games/spider/index.js"></script>
+
+<script src="js/games/mahjong/layout.js"></script>
+<script src="js/games/mahjong/engine.js"></script>
+<script src="js/games/mahjong/view.js"></script>
+<script src="js/games/mahjong/index.js"></script>
+
+<!-- arcade -->
+<script src="js/games/tetris/engine.js"></script>
+<script src="js/games/tetris/view.js"></script>
+<script src="js/games/tetris/index.js"></script>
+
+<script src="js/games/snake/engine.js"></script>
+<script src="js/games/snake/view.js"></script>
+<script src="js/games/snake/index.js"></script>
+
+<script src="js/games/worms/engine.js"></script>
+<script src="js/games/worms/view.js"></script>
+<script src="js/games/worms/index.js"></script>
+
+<script src="js/games/crowd/course.js"></script>
+<script src="js/games/crowd/engine.js"></script>
+<script src="js/games/crowd/view.js"></script>
+<script src="js/games/crowd/index.js"></script>
+
+<script src="js/games/towerdef/maps.js"></script>
+<script src="js/games/towerdef/engine.js"></script>
+<script src="js/games/towerdef/view.js"></script>
+<script src="js/games/towerdef/index.js"></script>
+
+<script src="js/games/stubs.js"></script>
+
+<!-- shell, last: it reads the registry at boot -->
+<script src="js/app.js"></script>
+<!-- app:end -->
+
+</body>
+</html>

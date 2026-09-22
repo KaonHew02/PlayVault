@@ -8,7 +8,10 @@ That one fact decides everything below.
 
 ## The thing people ask first: can the JavaScript be hidden?
 
-**No.** Not here, not anywhere, not by anyone.
+**No.** Not here, not anywhere, not by anyone. The deployed code IS bundled
+and stripped of comments (see "speed bumps" below, and `tools/build.js`)
+because being tiresome to read is worth something — but that is tidiness, not
+protection, and the rest of this section is why.
 
 A browser cannot run code it has not been given. Every `.js` file in this repo
 is downloaded to the machine that plays it, and from there it can be read in
@@ -101,14 +104,50 @@ pretended away, and the rooms are six digits read out loud to people you know.
 `X-Content-Type-Options` need real response headers, which GitHub Pages does
 not let you set. They are listed here as known gaps rather than left implied.
 
-## If you want the source to be less convenient to read
+## Two speed bumps, filed honestly as speed bumps
 
-That is a product decision, not a security one, and it has a real cost here:
-this project has no build step, and every file is commented for the next
-person who opens it. A minified bundle would slow down a casual reader by
-about a minute and would not stop anyone who is actually trying. Ask, and it
-can be added as an optional build — but it belongs under "housekeeping", not
-under this heading.
+These were asked for, they are worth having, and neither is a lock. They are
+listed apart from the section above for that reason.
+
+### The deployed site is one stripped bundle
+
+`node tools/build.js` reads the script list from `index.dev.html`, strips the
+comments and indentation out of all 65 files and writes `js/playvault.min.js`
+plus the `index.html` that loads it. 482 kB of commented source becomes one
+282 kB file, and the deployed page has exactly two script tags.
+
+What it buys: someone opening Sources on the live site sees one dense file
+instead of a tour of the codebase with the reasoning written in.
+
+What it does not buy: **anything at all against a determined reader.** Every
+identifier keeps its name, devtools pretty-prints it in one click, and the
+readable original is in this public repository. If the source itself must not
+be readable, the only lever that actually moves is making the repository
+private — and even then the bundle is still downloadable by anyone who can
+load the page, because a browser cannot run code it has not been given.
+
+Two guards come with it, because a build step's real risk is shipping
+something that does not match the source:
+
+- `node tools/smoke.js --min` runs the entire test suite — 2.7 million checks
+  — against the minified source, which is the evidence that stripping it did
+  not change what it does.
+- The bundle carries a hash of the files that went into it, and the smoke
+  tests fail if it no longer matches. A bundle one edit behind the code is a
+  bug that only appears in production, after a push.
+
+### Records are sealed against a hand edit
+
+`profile` and `stats` are stored with a checksum of themselves. A value that
+does not match its own sum is dropped on the next read and the app starts
+that record again, so editing a number in devtools does not survive a
+refresh — which is the thing that actually happened.
+
+The salt is a constant in the same JavaScript the player already has, so
+anyone who reads the bundle can recompute a sum. Treat this as what it is: it
+stops casual editing of a local save, and it is not a defence against
+anybody who is trying. Nothing stored locally can be, and nothing needs to be
+while the records mean something only on that machine.
 
 ## Reporting
 

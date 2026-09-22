@@ -63,95 +63,11 @@
         integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR"
         crossorigin="anonymous" referrerpolicy="no-referrer" async defer></script>
 
-<!-- core -->
-<script src="js/core/safe.js"></script>
-<script src="js/core/util.js"></script>
-<script src="js/core/rng.js"></script>
-<script src="js/core/store.js"></script>
-<script src="js/core/i18n.js"></script>
-<script src="js/core/profile.js"></script>
-<script src="js/core/registry.js"></script>
-
-<!-- playing with friends: the pipe, the room, the two ways to share a game,
-     the room's pixels, and the screen that opens one -->
-<script src="js/core/net.js"></script>
-<script src="js/core/room.js"></script>
-<script src="js/core/boardnet.js"></script>
-<script src="js/core/race.js"></script>
-<script src="js/core/roomui.js"></script>
-<script src="js/core/friends.js"></script>
-
-<!-- the three engine contracts, and the harness each family shares -->
-<script src="js/core/board.js"></script>
-<script src="js/core/puzzle.js"></script>
-<script src="js/core/loop.js"></script>
-<script src="js/core/boardhost.js"></script>
-<script src="js/core/loophost.js"></script>
-<script src="js/core/cards.js"></script>
-
-<!-- board games -->
-<script src="js/games/gomoku/engine.js"></script>
-<script src="js/games/gomoku/ai.js"></script>
-<script src="js/games/gomoku/view.js"></script>
-<script src="js/games/gomoku/index.js"></script>
-
-<script src="js/games/reversi/engine.js"></script>
-<script src="js/games/reversi/ai.js"></script>
-<script src="js/games/reversi/view.js"></script>
-<script src="js/games/reversi/index.js"></script>
-
-<script src="js/games/chess/engine.js"></script>
-<script src="js/games/chess/ai.js"></script>
-<script src="js/games/chess/view.js"></script>
-<script src="js/games/chess/index.js"></script>
-
-<script src="js/games/xiangqi/engine.js"></script>
-<script src="js/games/xiangqi/ai.js"></script>
-<script src="js/games/xiangqi/view.js"></script>
-<script src="js/games/xiangqi/index.js"></script>
-
-<!-- puzzles -->
-<script src="js/games/sudoku/generator.js"></script>
-<script src="js/games/sudoku/engine.js"></script>
-<script src="js/games/sudoku/view.js"></script>
-<script src="js/games/sudoku/index.js"></script>
-
-<script src="js/games/spider/engine.js"></script>
-<script src="js/games/spider/view.js"></script>
-<script src="js/games/spider/index.js"></script>
-
-<script src="js/games/mahjong/layout.js"></script>
-<script src="js/games/mahjong/engine.js"></script>
-<script src="js/games/mahjong/view.js"></script>
-<script src="js/games/mahjong/index.js"></script>
-
-<!-- arcade -->
-<script src="js/games/tetris/engine.js"></script>
-<script src="js/games/tetris/view.js"></script>
-<script src="js/games/tetris/index.js"></script>
-
-<script src="js/games/snake/engine.js"></script>
-<script src="js/games/snake/view.js"></script>
-<script src="js/games/snake/index.js"></script>
-
-<script src="js/games/worms/engine.js"></script>
-<script src="js/games/worms/view.js"></script>
-<script src="js/games/worms/index.js"></script>
-
-<script src="js/games/crowd/course.js"></script>
-<script src="js/games/crowd/engine.js"></script>
-<script src="js/games/crowd/view.js"></script>
-<script src="js/games/crowd/index.js"></script>
-
-<script src="js/games/towerdef/maps.js"></script>
-<script src="js/games/towerdef/engine.js"></script>
-<script src="js/games/towerdef/view.js"></script>
-<script src="js/games/towerdef/index.js"></script>
-
-<script src="js/games/stubs.js"></script>
-
-<!-- shell, last: it reads the registry at boot -->
-<script src="js/app.js"></script>
+<!-- Every script this app owns, in one file. Built by
+     `node tools/build.js`; edit index.dev.html and the sources, never
+     this line. The version is a hash of those sources, so a browser
+     holding the old bundle fetches the new one. -->
+<script src="js/playvault.min.js?v=0b1264a9f4e7"></script>
 
 </body>
 </html>
