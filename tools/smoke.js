@@ -1216,6 +1216,27 @@ section('security — a hostile peer in a friends room', () => {
   ok(guest.gameCode.length <= 24, 'the game code was not capped, got ' + guest.gameCode.length);
   ok(String(guest.opts.a).length <= 32, 'an option value was not capped');
 
+  /* A roster that crossed the wire must still be a roster the app can use.
+     Rebuilding member by member means a field left OUT is a field deleted,
+     and `alive` is the one everything else asks about: live() filters on it,
+     the chips grey out without it, and a board game with no live opponent
+     decides the opponent has left. Dropping it made a guest who had joined
+     perfectly well look, to itself, like an empty room — which is what a
+     friend typing the code actually saw. */
+  guest.receive(0, {
+    t: 'roster',
+    members: [{ seat: 0, name: 'Host', level: 3, host: true, alive: true },
+              { seat: 1, name: 'Guest', level: 1, host: false, alive: true }]
+  });
+  ok(guest.live().length === 2, 'a joined roster counted ' + guest.live().length + ' live players');
+  ok(guest.members.every(m => m.alive === true), 'the alive flag was dropped in transit');
+  guest.receive(0, {
+    t: 'roster',
+    members: [{ seat: 0, name: 'Host', host: true, alive: true },
+              { seat: 1, name: 'Gone', host: false, alive: false }]
+  });
+  ok(guest.live().length === 1, 'a member the host marked gone is still live');
+
   // Nothing on the wire may reach a prototype.
   guest.receive(0, {
     t: 'roster', members: [{ seat: 0, name: 'ok' }],

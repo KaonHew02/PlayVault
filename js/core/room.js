@@ -45,7 +45,13 @@ window.PV = window.PV || {};
       name: PV.Safe.str(src.name, 24, t('profile.player')),
       level: PV.Safe.int(src.level, 1, 9999, 1),
       host: PV.Safe.bool(src.host),
-      ready: PV.Safe.bool(src.ready)
+      // Present unless the host says otherwise. Rebuilding a roster field by
+      // field means a field left out is a field DELETED, and `alive` is the
+      // one every other file asks about: live() filters on it, the chips grey
+      // out without it, and a board game with no live opponent decides its
+      // opponent has left. Dropping it made a joined guest look like an empty
+      // room to itself.
+      alive: src.alive !== false
     };
   }
 
