@@ -73,6 +73,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **9** | Crowd Rush | **shipped 2026-09-22** — a new game, asked for as "count masters" plus a crazygames link. See below |
 | **10** | Kart Racing removed | **2026-09-22** — the user asked for it to go. `js/games/racing/` and its strings, tests and script tags are gone; the phase 5, 6 and 7 notes above are kept as the record of what was learnt building it. A circuit racer to the crazygames *Circuit Racing* reference is the replacement, and is not built yet |
 | **11** | The option sheet grows cards, and the worm dash eats the tail | **2026-09-22** — see below |
+| **12** | Crowd Rush repainted to its reference | **2026-09-22** — see below |
 
 ### Phase 11 — the map picker, and what a dash costs
 
@@ -328,3 +329,28 @@ pads dominate a lap** (four pads at 55 ticks on a 1.55x multiplier is about
 two thirds of a ring lap, so nominal top speed and the kart classes barely
 register), and **the ring losing its shortcut** is a consequence of the
 worth-it gate in `chordFor` that one threshold reverts.
+
+
+### Phase 12 — Crowd Rush, repainted
+
+The user sent the crazygames link again with "I want like this". Opening the
+reference's own cover art rather than reading its description was the whole
+job: Count Masters is **bright**, and what had been built was dark.
+
+- **The runners are chunky blob people, not stick figures.** A big round
+  head, a rounded body, stubby limbs, a gloss up and to the left, and a soft
+  shadow on the ground. This is most of why the reference reads as a crowd of
+  characters rather than a scribble. Limbs are dropped above seventy on
+  screen — at that size a swinging arm is two pixels and 280 fills a frame.
+- **A near-white road on bright ground, under a bright sky.** The old dirt
+  track on dark grass was the second half of the problem.
+- **Gates are solid slabs on dark posts**, saturated green and red, with a
+  darker skirt where they meet the road. Translucent panels were the thing
+  that made them look homemade: a gate you can see the road through does not
+  read as a wall.
+- Everything else followed from the new background: the floating gate totals
+  got a white halo, the progress bar a white frame and a flag, the hazards
+  darker bodies, and the saw a pale face and a red hub — a dark disc on a
+  white road reads as a hole in it.
+- The crowd's own count sits above the heads of the FRONT rank. Anchored to
+  the back of the crowd it climbs into whatever gate is coming.

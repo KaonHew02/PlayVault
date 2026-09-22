@@ -25,22 +25,29 @@ window.PV = window.PV || {};
 
   const THEMES = {
     fields: {
-      sky: ['#1A2E3E', '#2C5066'], ground: '#2B4F37', ground2: '#2F5A3E',
-      road: '#7A6B4C', edge: '#5E5238', dash: '#D8C89A', prop: '#3E6B49'
+      sky: ['#4CC3F0', '#BDE9FB'], ground: '#43BE6B', ground2: '#4ACB74',
+      road: '#F4F7FA', edge: '#D6DEE7', dash: '#C9D4E0', prop: '#2FA85C'
     },
     dunes: {
-      sky: ['#3A2A1E', '#7A5330'], ground: '#6E5730', ground2: '#786035',
-      road: '#B79A63', edge: '#8A7142', dash: '#EBD9A8', prop: '#8A6E42'
+      sky: ['#63C7F2', '#D9EFFB'], ground: '#E0B564', ground2: '#E8C075',
+      road: '#FAF6EE', edge: '#DFD2BC', dash: '#D3C4AA', prop: '#C79B4C'
     },
     keep: {
-      sky: ['#14161F', '#2A2F44'], ground: '#28303F', ground2: '#2C3547',
-      road: '#6A6B78', edge: '#4C4D58', dash: '#C2C4D2', prop: '#3A4152'
+      sky: ['#3BAFE0', '#C6E9F7'], ground: '#5FC7C9', ground2: '#68D2D4',
+      road: '#EFF3F7', edge: '#CFD8E2', dash: '#BFCBD8', prop: '#3FA9AC'
     }
   };
 
-  const GOOD_FACE = '#22C55E', BAD_FACE = '#EF4444';
-  const MINE = '#3B82F6', MINE_DARK = '#1D4ED8';
-  const THEIRS = '#F43F5E', THEIRS_DARK = '#9F1239';
+  /* Count Masters' own palette: a near-white road on bright ground, flat
+     saturated gates, and chunky blue runners. Nothing here is translucent —
+     the reference reads at a glance because everything in it is solid. */
+  const GOOD_FACE = '#2DC44E', GOOD_DARK = '#1F9C3A';
+  const BAD_FACE = '#EF4444', BAD_DARK = '#C0342F';
+  const POST = '#2C3440';
+  const MINE = '#3F8EF7', MINE_DARK = '#2463C9', MINE_LIT = '#8FC0FF';
+  const THEIRS = '#F2484E', THEIRS_DARK = '#B32A33', THEIRS_LIT = '#FF9AA0';
+  const BLUE = { body: MINE, dark: MINE_DARK, lit: MINE_LIT };
+  const RED = { body: THEIRS, dark: THEIRS_DARK, lit: THEIRS_LIT };
 
   function hash(i, salt) {
     let h = Math.imul(i + 17, 374761393) + Math.imul(salt || 1, 668265263) | 0;
@@ -83,32 +90,48 @@ window.PV = window.PV || {};
     };
   }
 
-  /** One stickman, feet at (x, y), `hp` pixels tall. */
-  function stick(c, x, y, hp, phase, body, dark) {
-    const head = hp * 0.26, lw = Math.max(1, hp * 0.11);
-    const sw = Math.sin(phase), sw2 = Math.sin(phase + Math.PI);
-    c.strokeStyle = body;
-    c.lineWidth = lw;
-    c.lineCap = 'round';
-    c.beginPath();
-    c.moveTo(x, y - hp * 0.52);                       // spine
-    c.lineTo(x, y - hp * 0.22);
-    c.moveTo(x, y - hp * 0.22);                       // legs
-    c.lineTo(x + sw * hp * 0.16, y);
-    c.moveTo(x, y - hp * 0.22);
-    c.lineTo(x + sw2 * hp * 0.16, y);
-    c.moveTo(x, y - hp * 0.46);                       // arms
-    c.lineTo(x + sw2 * hp * 0.17, y - hp * 0.30);
-    c.moveTo(x, y - hp * 0.46);
-    c.lineTo(x + sw * hp * 0.17, y - hp * 0.30);
-    c.stroke();
-    c.fillStyle = body;
-    c.beginPath();
-    c.arc(x, y - hp * 0.66, head, 0, TAU);
+  /**
+   * One runner, feet at (x, y), `hp` pixels tall. Not a stick figure: the
+   * reference's crowd is made of chunky blob people — a big round head, a
+   * rounded body, stubby limbs and a highlight — and that is most of why it
+   * reads as a crowd of characters rather than a scribble.
+   *
+   * `lod` drops the limbs when there are hundreds on screen. At that size a
+   * swinging arm is two pixels nobody can see, and it is 280 fills a frame.
+   */
+  function runner(c, x, y, hp, phase, skin, lod) {
+    const head = hp * 0.30, bw = hp * 0.40;
+    const sw = Math.sin(phase), sw2 = -sw;
+    const hipY = y - hp * 0.30, topY = y - hp * 0.62;
+
+    if (lod) {
+      // Legs first, so the body overlaps where they meet it.
+      c.fillStyle = skin.dark;
+      for (const s of [sw, sw2]) {
+        const lx = x + s * hp * 0.13;
+        rr(c, lx - hp * 0.09, hipY - hp * 0.02, hp * 0.18, hp * 0.32 - s * hp * 0.05, hp * 0.09);
+        c.fill();
+      }
+    }
+    c.fillStyle = skin.body;
+    rr(c, x - bw / 2, topY, bw, hipY - topY + hp * 0.06, bw * 0.42);
     c.fill();
-    c.fillStyle = dark;
+    if (lod) {
+      c.fillStyle = skin.body;
+      for (const s of [sw2, sw]) {
+        const ax = x + (s > 0 ? bw * 0.42 : -bw * 0.42 - hp * 0.12);
+        rr(c, ax, topY + hp * 0.04 - s * hp * 0.05, hp * 0.12, hp * 0.24, hp * 0.06);
+        c.fill();
+      }
+    }
+    c.fillStyle = skin.body;
     c.beginPath();
-    c.arc(x, y - hp * 0.66, head, Math.PI * 0.15, Math.PI * 0.85);
+    c.arc(x, topY - head * 0.72, head, 0, TAU);
+    c.fill();
+    // The gloss, up and to the left, the way every one of these games does it.
+    c.fillStyle = skin.lit;
+    c.beginPath();
+    c.ellipse(x - head * 0.30, topY - head * 1.05, head * 0.34, head * 0.24, -0.5, 0, TAU);
     c.fill();
   }
 
@@ -116,8 +139,9 @@ window.PV = window.PV || {};
    * A crowd of `n`, centred on `xt` at distance `d`, `width` track units
    * across. Drawn back to front so the near rank overlaps the far one.
    */
-  function crowd(c, cam, n, xt, d, width, tick, body, dark, salt) {
+  function crowd(c, cam, n, xt, d, width, tick, skin, salt) {
     const shown = Math.min(CAP, Math.max(1, n));
+    const lod = shown <= 70;                 // limbs only while you can see them
     // A crowd needs DEPTH to read as a crowd. Packed into one rank they merge
     // into a single blue slab; spread back over a few metres they overlap the
     // way a running mob does, and the ones at the back are visibly smaller.
@@ -132,16 +156,27 @@ window.PV = window.PV || {};
       rows.push({ x: xt + rx, d: rd, i: i });
     }
     rows.sort((a, b) => b.d - a.d);
+    // One pass of soft shadows under the whole crowd, then the crowd: drawn
+    // per figure they stack into a dark smear where the ranks overlap.
+    c.fillStyle = 'rgba(20,40,60,.16)';
+    for (const u of rows) {
+      const s = cam.s(u.d), hp = cam.h * 0.052 * s;
+      c.beginPath();
+      c.ellipse(cam.x(u.x, u.d), cam.y(u.d), hp * 0.34, hp * 0.13, 0, 0, TAU);
+      c.fill();
+    }
     for (const u of rows) {
       const s = cam.s(u.d);
-      stick(c, cam.x(u.x, u.d), cam.y(u.d), cam.h * 0.052 * s,
-        tick * 0.34 + u.i * 0.9, body, dark);
+      runner(c, cam.x(u.x, u.d), cam.y(u.d), cam.h * 0.052 * s,
+        tick * 0.34 + u.i * 0.9, skin, lod);
     }
   }
 
   /** The number over a crowd's heads — the thing the game is actually about. */
   function tally(c, cam, n, xt, d, colour) {
-    const s = cam.s(d), y = cam.y(d) - cam.h * 0.115 * s;
+    // Just over the heads of the front rank. Anchoring it to the back of the
+    // crowd instead pushes it up into whatever gate is coming.
+    const s = cam.s(d), y = cam.y(d) - cam.h * 0.16 * s;
     const size = Math.max(13, cam.h * 0.072 * s);
     c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
     c.textAlign = 'center';
@@ -217,31 +252,47 @@ window.PV = window.PV || {};
     void sFar;
   }
 
+  /** A gate pair: two solid slabs on dark posts, the way the reference has
+      them. Translucent panels were the other thing making this look homemade —
+      a gate you can see the road through does not read as a wall. */
   function gateWall(c, cam, f, dist) {
     const d = f.at - dist;
-    const s = cam.s(d), yb = cam.y(d), hp = cam.h * 0.30 * s;
+    const s = cam.s(d), yb = cam.y(d), hp = cam.h * 0.34 * s;
+    const post = Math.max(2, hp * 0.075);
+
     for (const g of f.lanes) {
       const x0 = cam.x(g.x0, d), x1 = cam.x(g.x1, d);
       const good = gateGood(g);
-      c.fillStyle = good ? 'rgba(34,197,94,.28)' : 'rgba(239,68,68,.28)';
-      c.fillRect(x0, yb - hp, x1 - x0, hp);
       c.fillStyle = good ? GOOD_FACE : BAD_FACE;
-      c.fillRect(x0, yb - hp - hp * 0.14, x1 - x0, Math.max(2, hp * 0.14));
-      c.fillStyle = 'rgba(255,255,255,.22)';
-      c.fillRect(x0, yb - hp, Math.max(1, s * 3), hp);
-      c.fillRect(x1 - Math.max(1, s * 3), yb - hp, Math.max(1, s * 3), hp);
+      c.fillRect(x0, yb - hp, x1 - x0, hp);
+      // A darker skirt, so the slab sits ON the road instead of floating.
+      c.fillStyle = good ? GOOD_DARK : BAD_DARK;
+      c.fillRect(x0, yb - hp * 0.16, x1 - x0, hp * 0.16);
+      c.fillStyle = 'rgba(255,255,255,.18)';
+      c.fillRect(x0, yb - hp, x1 - x0, hp * 0.10);
 
-      const size = Math.max(11, hp * 0.30);
+      const size = Math.max(12, hp * 0.34);
       c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.lineWidth = size * 0.26;
+      c.lineWidth = size * 0.22;
       c.lineJoin = 'round';
-      c.strokeStyle = 'rgba(8,11,16,.8)';
-      c.strokeText(gateText(g), (x0 + x1) / 2, yb - hp * 0.55);
+      c.strokeStyle = 'rgba(18,24,32,.75)';
+      c.strokeText(gateText(g), (x0 + x1) / 2, yb - hp * 0.52);
       c.fillStyle = '#FFFFFF';
-      c.fillText(gateText(g), (x0 + x1) / 2, yb - hp * 0.55);
+      c.fillText(gateText(g), (x0 + x1) / 2, yb - hp * 0.52);
     }
+
+    // The posts go on last: one at each end and one on the split, which is
+    // the line the player is actually aiming at.
+    c.fillStyle = POST;
+    const edges = [f.lanes[0].x0].concat(f.lanes.map(g => g.x1));
+    for (const xt of edges) {
+      const px = cam.x(xt, d);
+      c.fillRect(px - post / 2, yb - hp * 1.06, post, hp * 1.06);
+    }
+    c.fillStyle = 'rgba(0,0,0,.14)';
+    c.fillRect(cam.x(f.lanes[0].x0, d), yb, cam.x(f.lanes[f.lanes.length - 1].x1, d) - cam.x(f.lanes[0].x0, d), Math.max(1, hp * 0.05));
   }
 
   /** Saw, hammer, spikes — each drawn where the engine says it is this tick. */
@@ -254,7 +305,7 @@ window.PV = window.PV || {};
     const half = (cam.x(hx + f.w / 2, d) - cam.x(hx - f.w / 2, d)) / 2;
     const hp = cam.h * 0.14 * s;
 
-    c.fillStyle = 'rgba(0,0,0,.28)';
+    c.fillStyle = 'rgba(20,40,60,.20)';
     c.beginPath();
     c.ellipse(x, yb, Math.max(2, half), Math.max(1.5, hp * 0.14), 0, 0, TAU);
     c.fill();
@@ -266,7 +317,7 @@ window.PV = window.PV || {};
       c.save();
       c.translate(x, yb - r * 0.42);
       c.rotate(tick * 0.22);
-      c.fillStyle = '#9AA6B4';
+      c.fillStyle = '#8A94A6';
       c.beginPath();
       for (let i = 0; i < 12; i++) {
         const a = i / 12 * TAU;
@@ -274,15 +325,21 @@ window.PV = window.PV || {};
         c.lineTo(Math.cos(a + 0.16) * r, Math.sin(a + 0.16) * r * 0.54);
       }
       c.closePath(); c.fill();
-      c.fillStyle = '#4B5563';
+      // A rim and a pale face, or a dark disc on a white road reads as a hole.
+      c.strokeStyle = '#4A5568';
+      c.lineWidth = Math.max(1, r * 0.06);
+      c.stroke();
+      c.fillStyle = '#CBD3DE';
+      c.beginPath(); c.ellipse(0, 0, r * 0.62, r * 0.30, 0, 0, TAU); c.fill();
+      c.fillStyle = '#EF4444';
       c.beginPath(); c.ellipse(0, 0, r * 0.26, r * 0.14, 0, 0, TAU); c.fill();
       c.restore();
     } else if (f.kind === 'hammer') {
       const drop = live ? 1 : 0.35;
       const headH = hp * 0.8;
-      c.fillStyle = '#7C4A2A';
+      c.fillStyle = '#8B5E3C';
       c.fillRect(x - Math.max(1, half * 0.10), yb - hp * 2.4, Math.max(2, half * 0.2), hp * 2.4 * (1 - drop * 0.55));
-      c.fillStyle = live ? '#E0663A' : '#8A94A4';
+      c.fillStyle = live ? '#EF4444' : '#5A6678';
       rr(c, x - half, yb - headH - hp * 1.5 * (1 - drop), half * 2, headH, headH * 0.22);
       c.fill();
       if (live) {
@@ -292,7 +349,7 @@ window.PV = window.PV || {};
       }
     } else {
       const n = Math.max(3, Math.round(half / 6));
-      c.fillStyle = '#B9C2CE';
+      c.fillStyle = '#5A6678';
       for (let i = 0; i < n; i++) {
         const px = x - half + (i + 0.5) * (half * 2 / n);
         c.beginPath();
@@ -310,16 +367,16 @@ window.PV = window.PV || {};
     const s = cam.s(d), yb = cam.y(d);
     const x0 = cam.x(-1.25, d), x1 = cam.x(1.25, d);
     const wallH = cam.h * 0.34 * s;
-    c.fillStyle = '#4A4F5E';
+    c.fillStyle = '#8E99A8';
     c.fillRect(x0, yb - wallH, x1 - x0, wallH);
-    c.fillStyle = '#5A6070';
+    c.fillStyle = '#A7B2C0';
     for (let i = 0; i < 9; i++) {
       const bw = (x1 - x0) / 9;
       c.fillRect(x0 + i * bw, yb - wallH - wallH * 0.16, bw * 0.62, wallH * 0.16);
     }
     for (const side of [-1, 1]) {
       const tx = cam.x(side * 1.05, d);
-      c.fillStyle = '#3E4351';
+      c.fillStyle = '#76818F';
       c.fillRect(tx - wallH * 0.16, yb - wallH * 1.35, wallH * 0.32, wallH * 1.35);
       c.fillStyle = '#F43F5E';
       c.beginPath();
@@ -330,7 +387,7 @@ window.PV = window.PV || {};
       c.fillStyle = '#C8D2DE';
       c.fillRect(tx - wallH * 0.02, yb - wallH * 1.72, wallH * 0.04, wallH * 0.42);
     }
-    c.fillStyle = '#2A2E38';
+    c.fillStyle = '#3B4452';
     const gw = (x1 - x0) * 0.22;
     rr(c, (x0 + x1) / 2 - gw / 2, yb - wallH * 0.78, gw, wallH * 0.78, gw * 0.5);
     c.fill();
@@ -418,13 +475,13 @@ window.PV = window.PV || {};
           else if (f.kind === 'castle') {
             castle(c, cam, f, game.dist);
             if (i >= game.at) {
-              crowd(c, cam, f.n, 0, Math.max(1.5, d - 2), 1.2, game.tick, THEIRS, THEIRS_DARK, 7 + i);
+              crowd(c, cam, f.n, 0, Math.max(1.5, d - 2), 1.2, game.tick, RED, 7 + i);
               tally(c, cam, f.n, 0, Math.max(1.5, d - 2), '#FECDD3');
             }
           } else if (f.kind === 'rivals') {
             if (i < game.at) continue;                  // already fought
             crowd(c, cam, f.n, 0, d, Math.min(1.4, PV.CrowdRush.widthOf(f.n)),
-              game.tick, THEIRS, THEIRS_DARK, 31 + i);
+              game.tick, RED, 31 + i);
             tally(c, cam, f.n, 0, d, '#FECDD3');
           } else hazard(c, cam, f, game.dist, game.tick);
         }
@@ -434,7 +491,7 @@ window.PV = window.PV || {};
           const f = list[game.at - 1];
           const d = Math.max(1.2, (f ? f.at : game.dist + 2.5) - game.dist);
           crowd(c, cam, game.clash.n, 0, d,
-            Math.min(1.4, PV.CrowdRush.widthOf(game.clash.n)), game.tick, THEIRS, THEIRS_DARK, 5);
+            Math.min(1.4, PV.CrowdRush.widthOf(game.clash.n)), game.tick, RED, 5);
           tally(c, cam, game.clash.n, 0, d, '#FECDD3');
           const y = cam.y(d * 0.5);
           c.fillStyle = 'rgba(255,226,170,' + (0.25 + 0.2 * Math.sin(game.tick * 0.4)).toFixed(3) + ')';
@@ -443,29 +500,43 @@ window.PV = window.PV || {};
           c.fill();
         }
 
-        crowd(c, cam, game.n, game.x, 0, game.width, game.tick, MINE, MINE_DARK, 1);
+        crowd(c, cam, game.n, game.x, 0, game.width, game.tick, BLUE, 1);
         tally(c, cam, game.n, game.x, 0, '#DBEAFE');
 
         for (const p of game.pops) {
           const k = 1 - p.life / 48;
           c.globalAlpha = Math.max(0, 1 - k * 1.1);
-          const size = Math.max(12, cam.h * 0.045);
+          const size = Math.max(12, cam.h * 0.046);
           c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
           c.textAlign = 'center';
-          c.fillStyle = p.tone === 'bad' ? '#FCA5A5' : (p.tone === 'win' ? '#FDE68A' : '#86EFAC');
-          c.fillText(p.text, cam.x(p.x, 0), cam.yBase - cam.h * (0.20 + k * 0.16));
+          const px = cam.x(p.x, 0), py = cam.yBase - cam.h * (0.24 + k * 0.16);
+          c.lineWidth = size * 0.30;
+          c.lineJoin = 'round';
+          c.strokeStyle = 'rgba(255,255,255,.92)';        // a halo, for a white road
+          c.strokeText(p.text, px, py);
+          c.fillStyle = p.tone === 'bad' ? '#DC2626' : (p.tone === 'win' ? '#B45309' : '#15A34A');
+          c.fillText(p.text, px, py);
           c.globalAlpha = 1;
         }
 
         // How far along the course you are, with the keep at the end of it.
-        const bw = cam.w * 0.62, bx = (cam.w - bw) / 2, by = cam.h * 0.045, bh = Math.max(5, cam.h * 0.016);
-        c.fillStyle = 'rgba(8,11,16,.55)';
+        const bw = cam.w * 0.62, bx = (cam.w - bw) / 2, by = cam.h * 0.045, bh = Math.max(6, cam.h * 0.018);
+        c.fillStyle = 'rgba(255,255,255,.55)';
+        rr(c, bx - 2, by - 2, bw + 4, bh + 4, (bh + 4) / 2); c.fill();
+        c.fillStyle = 'rgba(31,58,84,.28)';
         rr(c, bx, by, bw, bh, bh / 2); c.fill();
         c.fillStyle = '#F6B32B';
         rr(c, bx, by, Math.max(bh, bw * Math.min(1, game.dist / game.course.length)), bh, bh / 2);
         c.fill();
-        c.fillStyle = '#C8D2DE';
-        c.fillRect(bx + bw, by - bh * 0.6, Math.max(2, bh * 0.4), bh * 2.2);
+        // The keep, at the end of the bar.
+        c.fillStyle = '#2C3440';
+        c.fillRect(bx + bw - bh * 0.1, by - bh * 0.7, Math.max(2, bh * 0.28), bh * 2.4);
+        c.fillStyle = '#EF4444';
+        c.beginPath();
+        c.moveTo(bx + bw + bh * 0.16, by - bh * 0.7);
+        c.lineTo(bx + bw + bh * 1.1, by - bh * 0.25);
+        c.lineTo(bx + bw + bh * 0.16, by + bh * 0.2);
+        c.closePath(); c.fill();
       },
 
       outcome(game) {
