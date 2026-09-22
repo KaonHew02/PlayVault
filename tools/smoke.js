@@ -695,7 +695,7 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
     }
     return s;
   }
-  const fatal = selfBite('deadly'), trimmed = selfBite('trim');
+  const fatal = selfBite('deadly'), trimmed = selfBite('trim'), through = selfBite('pass');
   ok(fatal.isOver() && fatal.overReason === 'self', 'a self-bite was survivable with the fatal rule');
   ok(!trimmed.isOver(), 'the trim rule still killed the snake');
   ok(trimmed.cuts === 1, 'the trim rule did not record the cut, got ' + trimmed.cuts);
@@ -703,10 +703,20 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
     'the cut left the snake at ' + trimmed.body.length + ' segments');
   ok(!trimmed.tailCut === false, 'the option did not reach the engine');
 
-  // Two runs of the trim rule from one seed still match, cuts and all.
+  // Pass-through: the head goes over its own body and nothing is lost.
+  ok(!through.isOver(), 'the pass rule still killed the snake');
+  ok(through.passes >= 1, 'the pass was not counted, got ' + through.passes);
+  ok(through.cuts === 0, 'the pass rule cut the tail as well');
+  ok(through.body.length === 12, 'passing through changed the length to ' + through.body.length);
+  ok(through.tailPass === true && through.tailCut === false, 'the pass option did not reach the engine');
+
+  // Two runs of each rule from one seed still match, cuts and passes and all.
   const r1 = selfBite('trim'), r2 = selfBite('trim');
   ok(r1.body.length === r2.body.length && r1.cuts === r2.cuts && r1.score === r2.score,
     'the trim rule is not deterministic');
+  const p1 = selfBite('pass'), p2 = selfBite('pass');
+  ok(p1.passes === p2.passes && p1.body.length === p2.body.length && p1.score === p2.score,
+    'the pass rule is not deterministic');
 });
 
 /* -------------------------------------------------------------- worm arena */

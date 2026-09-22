@@ -110,9 +110,11 @@ window.PV = window.PV || {};
           PV.el('span', { class: 'k' }, t('common.score')), scoreEl,
           PV.el('span', { class: 'k' }, t('snake.length')), lenEl,
           PV.el('span', { class: 'k' }, t('common.level')), lvlEl);
-        // Only a run that can be cut counts cuts.
-        if (opts.tail === 'trim') {
-          stats.appendChild(PV.el('span', { class: 'k' }, t('snake.cuts')));
+        // Only a run that can be cut counts cuts; only one that can pass
+        // through itself counts passes.
+        if (opts.tail === 'trim' || opts.tail === 'pass') {
+          stats.appendChild(PV.el('span', { class: 'k' },
+            t(opts.tail === 'pass' ? 'snake.passes' : 'snake.cuts')));
           stats.appendChild(cutsEl);
         }
         api.side.appendChild(stats);
@@ -123,7 +125,7 @@ window.PV = window.PV || {};
         scoreEl.textContent = PV.fmtNum(game.score);
         lenEl.textContent = String(game.body.length);
         lvlEl.textContent = String(game.level);
-        cutsEl.textContent = String(game.cuts);
+        cutsEl.textContent = String(game.tailPass ? game.passes : game.cuts);
       },
 
       draw(c, game, geom) {
@@ -221,6 +223,16 @@ window.PV = window.PV || {};
           c.arc(p.x, p.y, cell * (0.45 + (1 - k) * 0.85), 0, Math.PI * 2);
           c.stroke();
         }
+
+        // ...and where it went straight through: a soft blue bloom, so a
+        // crossing reads as the rule working rather than a missed collision.
+        if (game.ghost > 0 && game.cutAt) {
+          const p = pt(game.cutAt), k = game.ghost / 12;
+          c.fillStyle = 'rgba(147,197,253,' + (0.42 * k).toFixed(3) + ')';
+          c.beginPath();
+          c.arc(p.x, p.y, cell * (0.35 + (1 - k) * 0.5), 0, Math.PI * 2);
+          c.fill();
+        }
       },
 
       outcome(game, st) {
@@ -233,7 +245,8 @@ window.PV = window.PV || {};
           lines: [
             t('common.score') + ': ' + PV.fmtNum(game.score),
             t('snake.length') + ': ' + game.body.length + ' · ' + t('common.time') + ': ' + PV.fmtTime(st.timeMs),
-            game.tailCut ? t('snake.cuts') + ': ' + game.cuts : null,
+            game.tailCut ? t('snake.cuts') + ': ' + game.cuts
+              : (game.tailPass ? t('snake.passes') + ': ' + game.passes : null),
             '@best'
           ]
         };

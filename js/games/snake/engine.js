@@ -12,11 +12,15 @@
    - The illegal reverse is judged against the direction the snake is ACTUALLY
      travelling, not against the last key pressed.
 
-   Biting yourself is fatal or it is a haircut, and the option says which. In
-   `trim` the snake loses everything from the segment it bit — the head takes
-   that square and carries on — so a long snake is a risk you can survive and
-   the run ends only at a wall. The cut is what it costs: length is score's
-   companion here, and you just gave a lap of it back. */
+   Biting yourself is fatal, a haircut, or nothing at all, and the option says
+   which. In `trim` the snake loses everything from the segment it bit — the
+   head takes that square and carries on — so a long snake is a risk you can
+   survive, and the cut is what it costs: length is score's companion here and
+   you just gave a lap of it back. In `pass` the head goes straight through
+   its own body and nothing happens but the count. With walls that leaves the
+   wall as the only way to lose; with wrap it leaves none, and the run ends
+   when the board is full or when the player stops — which is the mode's whole
+   point, and why neither is treated as a bug. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';
@@ -35,10 +39,13 @@ window.PV = window.PV || {};
       this.rows = o.rows || 20;
       this.walls = o.walls !== false;              // false == wrap around
       this.tailCut = o.tail === 'trim';            // biting yourself trims it
+      this.tailPass = o.tail === 'pass';           // ...or does nothing at all
       this.baseSpeed = SPEEDS[o.speed] || SPEEDS.normal;
       this.cuts = 0;
+      this.passes = 0;
       this.cutAt = null;
       this.cutFlash = 0;
+      this.ghost = 0;                              // ticks of pass-through glow
       this.dir = DIRS.right;
       this.pending = [];
       this.grow = 2;
@@ -69,6 +76,7 @@ window.PV = window.PV || {};
 
     step() {
       if (this.cutFlash > 0) this.cutFlash--;
+      if (this.ghost > 0) this.ghost--;
       for (const a of this.takeInputs()) {
         if (DIRS[a]) this.pending.push(DIRS[a]);
         if (this.pending.length > 2) this.pending.shift();
@@ -98,6 +106,14 @@ window.PV = window.PV || {};
       const growing = this.grow > 0 || (this.food && nx === this.food.x && ny === this.food.y);
       for (let i = 0; i < this.body.length - (growing ? 0 : 1); i++) {
         if (this.body[i].x !== nx || this.body[i].y !== ny) continue;
+        if (this.tailPass) {
+          // Straight through: the head takes the square its own body is on
+          // and both stay where they are. Only worth counting.
+          this.passes++;
+          this.cutAt = { x: nx, y: ny };
+          this.ghost = 12;
+          break;
+        }
         if (!this.tailCut) { this.finish('self'); return; }
         // A bite drops the bitten segment and everything behind it; the head
         // then takes that square below. Never below a head and a neck, or the

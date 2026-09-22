@@ -35,7 +35,8 @@
         key: 'tail', labelKey: 'snake.tail', def: 'deadly',
         choices: [
           { value: 'deadly', labelKey: 'snake.tailDeadly' },
-          { value: 'trim', labelKey: 'snake.tailTrim' }
+          { value: 'trim', labelKey: 'snake.tailTrim' },
+          { value: 'pass', labelKey: 'snake.tailPass' }
         ]
       }
     ],

@@ -227,7 +227,9 @@ window.PV = window.PV || {};
       'snake.tail': 'Own tail',
       'snake.tailDeadly': 'Fatal',
       'snake.tailTrim': 'Cut it off',
+      'snake.tailPass': 'Pass through',
       'snake.cuts': 'Cuts',
+      'snake.passes': 'Passes',
       'snake.controls': 'Arrows or WASD to turn.',
       'snake.perfect': 'Perfect game',
 
@@ -521,7 +523,9 @@ window.PV = window.PV || {};
       'snake.tail': '咬到自己',
       'snake.tailDeadly': '死亡',
       'snake.tailTrim': '只断尾',
+      'snake.tailPass': '穿过自己',
       'snake.cuts': '断尾',
+      'snake.passes': '穿身',
       'snake.controls': '方向键或 WASD 转向。',
       'snake.perfect': '完美通关',
 

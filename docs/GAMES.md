@@ -74,6 +74,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **10** | Kart Racing removed | **2026-09-22** — the user asked for it to go. `js/games/racing/` and its strings, tests and script tags are gone; the phase 5, 6 and 7 notes above are kept as the record of what was learnt building it. A circuit racer to the crazygames *Circuit Racing* reference is the replacement, and is not built yet |
 | **11** | The option sheet grows cards, and the worm dash eats the tail | **2026-09-22** — see below |
 | **12** | Crowd Rush repainted to its reference | **2026-09-22** — see below |
+| **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
 
 ### Phase 11 — the map picker, and what a dash costs
 
