@@ -6,6 +6,10 @@ Started 2026-09-07. Vanilla HTML/CSS/JS, classic `<script>` tags into one `PV`
 namespace, no build step, no dependencies — the same shape as CardVerse and
 MiniShoppingMall.
 
+See [SECURITY.md](SECURITY.md) for what a static site can and cannot defend —
+including the short answer to "can you hide the JavaScript?" (no, and here is
+what to do instead).
+
 ```
 node tools/serve.js 8099     # then open http://localhost:8099/
 node tools/smoke.js          # headless engine tests; [scale] for a longer run

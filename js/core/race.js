@@ -128,22 +128,30 @@ window.PV = window.PV || {};
       room.post({ k: 'p', pct: pct / 100, score: score });
     }
 
+    /* A line on the scoreboard is a claim from another person's browser, and
+       on a shared seed there is nothing to check it against — that is the
+       cost of having no server, and it is written down in SECURITY.md rather
+       than pretended away. What IS checked is the shape: a number that is not
+       a number, or one with three hundred digits, would break the board for
+       everyone including the honest players. */
+    const RESULTS = ['win', 'lose', 'draw', 'solved', 'over'];
+
     function onMsg(from, p) {
       if (!p || ended) return;
       const row = seatRow(from);
       if (p.k === 'p') {
         if (row.done) return;                       // a finished row never moves back
-        row.pct = p.pct || 0;
-        row.score = p.score || 0;
+        row.pct = PV.Safe.num(p.pct, 0, 1, 0);
+        row.score = PV.Safe.int(p.score, -1e12, 1e12, 0);
         paint();
         return;
       }
       if (p.k === 'f') {
         row.done = true;
-        row.result = p.result || 'over';
-        row.score = p.score || 0;
-        row.timeMs = p.timeMs || 0;
-        row.pct = WON[row.result] ? 1 : (p.pct || row.pct);
+        row.result = PV.Safe.pick(p.result, RESULTS, 'over');
+        row.score = PV.Safe.int(p.score, -1e12, 1e12, 0);
+        row.timeMs = PV.Safe.int(p.timeMs, 0, 1e10, 0);
+        row.pct = WON[row.result] ? 1 : PV.Safe.num(p.pct, 0, 1, row.pct);
         paint();
         checkAllDone();
       }

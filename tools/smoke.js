@@ -45,7 +45,7 @@ global.document = {
 };
 
 const FILES = [
-  'js/core/util.js', 'js/core/rng.js', 'js/core/store.js', 'js/core/profile.js',
+  'js/core/safe.js', 'js/core/util.js', 'js/core/rng.js', 'js/core/store.js', 'js/core/profile.js',
   'js/core/registry.js', 'js/core/board.js', 'js/core/puzzle.js', 'js/core/loop.js',
   'js/core/cards.js',
   'js/games/gomoku/engine.js', 'js/games/gomoku/ai.js',
@@ -1092,6 +1092,151 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
   const idle = play('keep', 'hard', 777, false);
   ok(idle.overReason !== 'stormed' || idle.n < idle.peak,
     'standing still won the hardest course outright');
+});
+
+/* --------------------------------------------------------------- security */
+
+section('security — hostile input cannot break the app', () => {
+  const S = PV.Safe;
+
+  // Strings: never an object, never unbounded, never invisible characters.
+  ok(S.str({ toString: () => 'x'.repeat(9999) }, 24, 'fb') === 'fb', 'an object passed as a name');
+  ok(S.str('a'.repeat(500), 24).length === 24, 'a long name was not capped');
+  ok(S.str('ok\u0000\u202Eevil', 64) === 'okevil', 'control and bidi characters survived');
+  ok(S.str(null, 24, 'fb') === 'fb' && S.str('   ', 24, 'fb') === 'fb', 'blank did not fall back');
+
+  // Numbers: finite and clamped, whatever arrives.
+  ok(S.num('abc', 0, 10, 3) === 3, 'a non-number was not refused');
+  ok(S.num(Infinity, 0, 10, 3) === 3 && S.num(NaN, 0, 10, 3) === 3, 'infinity or NaN got through');
+  ok(S.num(1e308, 0, 10, 0) === 10 && S.num(-1e308, 0, 10, 0) === 0, 'a huge number was not clamped');
+  ok(S.int(2.6, 0, 10, 0) === 3, 'int did not round');
+  ok(S.pick('nope', ['a', 'b'], 'a') === 'a' && S.pick('b', ['a', 'b']) === 'b', 'pick let a stranger in');
+
+  // plain(): rebuilt, so nothing inherited and nothing banned survives.
+  const nasty = JSON.parse('{"__proto__":{"pwned":1},"a":1,"deep":{"b":{"c":{"d":{"e":{"f":{"g":2}}}}}}}');
+  const cleaned = S.plain(nasty);
+  ok(cleaned.a === 1, 'plain dropped a good key');
+  ok(!Object.prototype.hasOwnProperty.call(cleaned, '__proto__'), '__proto__ survived plain()');
+  ok(({}).pwned === undefined, 'Object.prototype was polluted');
+  ok(S.plain({ f: function () {} }).f === undefined, 'a function survived plain()');
+  ok(S.plain({ n: Infinity }).n === undefined, 'a non-finite number survived plain()');
+  const wide = {};
+  for (let i = 0; i < 1000; i++) wide['k' + i] = i;
+  ok(Object.keys(S.plain(wide, { keys: 10 })).length === 10, 'the key cap did not hold');
+  ok(S.plain({ s: 'x'.repeat(9000) }, { string: 100 }).s.length === 100, 'the string cap did not hold');
+  const cyclic = { a: 1 }; cyclic.self = cyclic;
+  let threw = false;
+  try { S.plain(cyclic); } catch (e) { threw = true; }
+  ok(!threw, 'a cycle threw instead of running out of budget');
+
+  // own(): a poisoned prototype is not a property.
+  const poisoned = Object.create({ inherited: 'yes' });
+  ok(S.own(poisoned, 'inherited') === false, 'own() accepted an inherited key');
+
+  // The profile store: every field rebuilt, every number clamped.
+  const clean = PV.Store.clean('profile', {
+    name: 'a'.repeat(400), xp: 1e308, created: {}, extra: 'dropped'
+  });
+  ok(clean.name.length === 24, 'a 400-character name was stored, got ' + clean.name.length);
+  ok(clean.xp <= 5e8 && isFinite(clean.xp), 'xp was not clamped, got ' + clean.xp);
+  ok(clean.extra === undefined, 'an unknown profile field was kept');
+  ok(PV.Store.clean('profile', 'not an object') === undefined, 'a string passed as a profile');
+  ok(PV.Store.clean('profile', [1, 2]) === undefined, 'an array passed as a profile');
+
+  // The bug this actually fixes: a hand-edited xp used to walk one level at a
+  // time, for ever. Bounded, it answers immediately and stays sane.
+  const started = Date.now();
+  const lvl = PV.Profile.level.call(null) && true;
+  void lvl;
+  PV.Store.set('profile', { name: 'x', xp: 1e308, created: '' });
+  const big = PV.Profile.level();
+  ok(Date.now() - started < 2000, 'levelling from a huge xp took ' + (Date.now() - started) + 'ms');
+  ok(big.level > 1 && big.level <= 5000 && isFinite(big.total), 'a huge xp gave level ' + big.level);
+  PV.Store.set('profile', { name: '', xp: 0, created: '' });
+
+  // Stats: unknown shapes rebuilt, key count bounded, records clamped.
+  const stats = PV.Store.clean('stats', {
+    games: { chess: { played: 1e308, bestScore: 'lots', junk: 1 }, '__proto__': { x: 1 } }
+  });
+  ok(stats.games.chess.played <= 1e9 && isFinite(stats.games.chess.played), 'played was not clamped');
+  ok(stats.games.chess.bestScore === 0, 'a string best score was kept');
+  ok(stats.games.chess.junk === undefined, 'an unknown stats field was kept');
+  ok(!Object.prototype.hasOwnProperty.call(stats.games, '__proto__'), '__proto__ became a game');
+  ok(PV.Store.clean('stats', { games: 'nope' }).games && true, 'a bad games map was not replaced');
+
+  // Import: another app's file, a hostile file, and a good one.
+  ok(PV.Store.importAll(null).ok === false, 'null imported');
+  ok(PV.Store.importAll({ format: 'somethingelse', data: {} }).ok === false, "another app's backup imported");
+  ok(PV.Store.importAll('{}').ok === false, 'a string imported');
+  const hostile = JSON.parse('{"format":"playvault.backup","version":1,"data":{"profile":{"name":"ok","xp":1e308},"__proto__":{"x":1},"evil":{"a":1}}}');
+  const res = PV.Store.importAll(hostile);
+  ok(res.ok === true && res.restored === 1, 'the hostile backup restored ' + res.restored + ' stores');
+  ok(({}).x === undefined, 'importing polluted Object.prototype');
+  ok(PV.Store.get('profile', null).xp <= 5e8, 'the imported xp was not clamped');
+  const round = PV.Store.importAll(PV.Store.exportAll());
+  ok(round.ok === true, 'a backup this app wrote did not import');
+  PV.Store.set('profile', { name: '', xp: 0, created: '' });
+  PV.Store.set('stats', { games: {} });
+});
+
+
+section('security — a hostile peer in a friends room', () => {
+  const quiet = { send() {}, sendTo() {}, broadcast() {}, close() {} };
+  const guest = new PV.Room({
+    link: Object.assign({ isHost: false }, quiet),
+    code: '123456', seat: 1, gameCode: 'chess',
+    members: [PV.Room.member(0, 'Host', 3, true)]
+  });
+
+  // A roster of a thousand members with five-kilobyte names, from the "host".
+  const monster = [];
+  for (let i = 0; i < 1000; i++) {
+    monster.push({ seat: 1e9, name: 'x'.repeat(5000), level: Infinity, host: 'yes' });
+  }
+  guest.receive(0, {
+    t: 'roster', members: monster,
+    game: 'z'.repeat(900), opts: { a: 'y'.repeat(900) }
+  });
+  ok(guest.members.length <= 16, 'the roster took ' + guest.members.length + ' members');
+  ok(guest.members.every(m => m.name.length <= 24), 'a member name was not capped');
+  ok(guest.members.every(m => m.seat >= 0 && m.seat <= 15), 'a seat was out of range');
+  ok(guest.members.every(m => isFinite(m.level) && m.level <= 9999), 'a level was not clamped');
+  ok(guest.gameCode.length <= 24, 'the game code was not capped, got ' + guest.gameCode.length);
+  ok(String(guest.opts.a).length <= 32, 'an option value was not capped');
+
+  // Nothing on the wire may reach a prototype.
+  guest.receive(0, {
+    t: 'roster', members: [{ seat: 0, name: 'ok' }],
+    opts: JSON.parse('{"__proto__":{"pwned":1}}')
+  });
+  ok(({}).pwned === undefined, 'a room message polluted Object.prototype');
+
+  // Rubbish is ignored rather than adopted.
+  const before = guest.members.length;
+  const wasCode = guest.gameCode;
+  guest.receive(0, { t: 'roster', members: 'not a list' });
+  ok(guest.members.length === before, 'a non-list roster replaced the real one');
+  guest.receive(0, { t: 'begin', game: '', opts: null, seed: 'abc', round: 1e308, members: null });
+  ok(guest.seed >= 0 && isFinite(guest.seed), 'a bogus seed got through, got ' + guest.seed);
+  ok(guest.round >= 0 && guest.round <= 9999, 'a bogus round got through, got ' + guest.round);
+  ok(guest.members.length === before, 'a null roster wiped the real one');
+  ok(guest.gameCode === wasCode, 'an empty game code wiped the one already agreed');
+
+  // A guest cannot tell a host what to do: the host path takes ask and post,
+  // and nothing else, whatever a patched client sends.
+  const host = new PV.Room({
+    link: Object.assign({ isHost: true }, quiet),
+    code: '123456', seat: 0, gameCode: 'chess',
+    members: [PV.Room.member(0, 'Host', 3, true)]
+  });
+  host.receive(1, { t: 'roster', members: [{ seat: 0, name: 'usurper' }] });
+  host.receive(1, { t: 'begin', seed: 9, game: 'gomoku' });
+  host.receive(1, { t: 'end' });
+  host.receive(1, { t: 'bye', reason: 'x'.repeat(400) });
+  ok(host.members.length === 1 && host.members[0].name === 'Host', 'a guest rewrote the host roster');
+  ok(host.phase === 'lobby', 'a guest moved the host to phase ' + host.phase);
+  ok(host.gameCode === 'chess', 'a guest changed the game');
+  ok(!host.dead, 'a guest closed the host room');
 });
 
 /* ------------------------------------------------------------------- core */

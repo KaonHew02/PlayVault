@@ -362,6 +362,10 @@ main {
 .sheet-body { margin: 14px 0 18px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* The no-JavaScript notice. In the stylesheet rather than a style attribute,
+   so the page's Content-Security-Policy can refuse inline styles outright. */
+.noscript { padding: 24px; }
+
 /* --------------------------------------------------------------- responsive */
 
 @media (max-width: 759px) {

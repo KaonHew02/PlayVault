@@ -6,6 +6,24 @@
 <title>PlayVault — One Hub. Endless Games.</title>
 <meta name="description" content="PlayVault — one hub, endless games. Board, puzzle and arcade games that run entirely in your browser.">
 <meta name="theme-color" content="#0B0F14">
+<meta name="referrer" content="no-referrer">
+<!-- The page's own limits. Everything this app runs is its own file; the one
+     exception is the PeerJS broker client, which is named here and pinned by
+     hash below. No inline script, no eval, nowhere to post a form to, and
+     nothing loadable as a plugin. `frame-ancestors` is deliberately absent:
+     browsers ignore it in a meta tag, and a static host cannot send headers,
+     so that one is honestly out of reach rather than quietly listed. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' https://cdnjs.cloudflare.com;
+  style-src 'self';
+  img-src 'self' data:;
+  font-src 'self';
+  connect-src 'self' https://0.peerjs.com wss://0.peerjs.com;
+  media-src 'none';
+  object-src 'none';
+  base-uri 'none';
+  form-action 'none'">
 <link rel="icon" href="assets/logo/favicon.svg">
 <link rel="apple-touch-icon" href="assets/logo/icon.svg">
 <link rel="stylesheet" href="css/app.css">
@@ -29,14 +47,24 @@
 
 <main id="app"></main>
 
-<noscript><p style="padding:24px">PlayVault needs JavaScript.</p></noscript>
+<noscript><p class="noscript">PlayVault needs JavaScript.</p></noscript>
 
 <!-- PeerJS, for playing with friends and nothing else. Loaded async: if it never
      arrives, PV.Net.available() is false, the friends screen says so, and every
-     other part of PlayVault carries on working offline. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" async defer></script>
+     other part of PlayVault carries on working offline.
+
+     PINNED BY HASH. This is the only third-party code in the app, and without
+     `integrity` a bad day at the CDN is arbitrary code running on this page
+     with full access to every save in it. If the file ever fails to match,
+     the browser refuses to run it and playing with friends stops working —
+     which is the correct outcome, and the reason the rest of the app is
+     built to carry on without it. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"
+        integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR"
+        crossorigin="anonymous" referrerpolicy="no-referrer" async defer></script>
 
 <!-- core -->
+<script src="js/core/safe.js"></script>
 <script src="js/core/util.js"></script>
 <script src="js/core/rng.js"></script>
 <script src="js/core/store.js"></script>

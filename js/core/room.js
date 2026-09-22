@@ -29,11 +29,69 @@ window.PV = window.PV || {};
   /** A room is at most this many players, whatever the game asks for. */
   const MAX_SEATS = 6;
 
+  /* Everything below arrives from ANOTHER PERSON'S BROWSER. The host is
+     trusted to run the room — a guest holding a different opinion about whose
+     turn it is would be a worse game, not a safer one — but "trusted to run
+     the room" is not "trusted to send well-formed anything", so every field
+     is rebuilt to a known shape and a known size before it is kept. */
+  const MAX_MEMBERS = 16;
+  const MAX_SEAT = 15;
+
+  function cleanMember(m) {
+    const src = PV.Safe.obj(m);
+    if (!src) return null;
+    return {
+      seat: PV.Safe.int(src.seat, 0, MAX_SEAT, 0),
+      name: PV.Safe.str(src.name, 24, t('profile.player')),
+      level: PV.Safe.int(src.level, 1, 9999, 1),
+      host: PV.Safe.bool(src.host),
+      ready: PV.Safe.bool(src.ready)
+    };
+  }
+
+  function cleanRoster(list) {
+    if (!Array.isArray(list)) return null;
+    const out = [];
+    for (const m of list.slice(0, MAX_MEMBERS)) {
+      const c = cleanMember(m);
+      if (c) out.push(c);
+    }
+    return out;
+  }
+
+  /* A game code is a short string and nothing else. It is deliberately NOT
+     checked against the registry here: a room whose host runs a build with a
+     game this one has not got should say so on the screen — which it does,
+     because every reader of gameCode already falls back when the lookup comes
+     back empty — rather than silently pretend the host never named a game. */
+  function cleanCode(code) { return PV.Safe.str(code, 24, ''); }
+
+  /** Option sheets are flat: a handful of short scalar choices. */
+  function cleanOpts(o) {
+    const src = PV.Safe.obj(o);
+    if (!src) return null;
+    const out = {};
+    let n = 0;
+    for (const k of Object.keys(src)) {
+      if (PV.Safe.BANNED.indexOf(k) >= 0) continue;
+      if (++n > 16) break;
+      const key = PV.Safe.str(k, 24, '');
+      const v = src[k];
+      if (!key) continue;
+      if (typeof v === 'boolean' || typeof v === 'number') out[key] = v;
+      else out[key] = PV.Safe.str(v, 32, '');
+    }
+    return out;
+  }
+
+  /* The host builds this one for a guest who has just handed over a name and
+     a level in its handshake, so it is clamped here rather than at the two
+     call sites — a roster the host then broadcasts to everybody else. */
   function member(seat, name, level, host) {
     return {
-      seat: seat,
-      name: name || t('profile.player'),
-      level: Math.max(1, level | 0),
+      seat: PV.Safe.int(seat, 0, MAX_SEAT, 0),
+      name: PV.Safe.str(name, 24, t('profile.player')),
+      level: PV.Safe.int(level, 1, 9999, 1),
       host: !!host,
       alive: true
     };
@@ -154,26 +212,35 @@ window.PV = window.PV || {};
         return;
       }
 
-      if (msg.t === 'msg') { this.fire('msg', msg.from | 0, msg.p); return; }
+      if (msg.t === 'msg') {
+        this.fire('msg', PV.Safe.int(msg.from, 0, MAX_SEAT, 0), msg.p);
+        return;
+      }
       if (msg.t === 'roster') {
-        this.members = msg.members || [];
-        if (msg.game) this.gameCode = msg.game;
-        if (msg.opts) this.opts = msg.opts;
+        const roster = cleanRoster(msg.members);
+        const code = cleanCode(msg.game);
+        const opts = cleanOpts(msg.opts);
+        if (roster) this.members = roster;
+        if (code) this.gameCode = code;
+        if (opts) this.opts = opts;
         this.fire('roster', this.members);
         return;
       }
       if (msg.t === 'begin') {
-        this.gameCode = msg.game || this.gameCode;
-        this.opts = msg.opts || this.opts;
+        const roster = cleanRoster(msg.members);
+        const code = cleanCode(msg.game);
+        const opts = cleanOpts(msg.opts);
+        this.gameCode = code || this.gameCode;
+        this.opts = opts || this.opts;
         this.seed = msg.seed >>> 0;
-        this.round = msg.round | 0;
-        this.members = msg.members || this.members;
+        this.round = PV.Safe.int(msg.round, 0, 9999, 0);
+        this.members = roster || this.members;
         this.phase = 'playing';
         this.fire('begin', msg);
         return;
       }
       if (msg.t === 'end') { this.phase = 'over'; this.fire('end', msg); return; }
-      if (msg.t === 'bye') this.shut(msg.reason || 'closed');
+      if (msg.t === 'bye') this.shut(PV.Safe.str(msg.reason, 24, 'closed'));
     }
 
     /* ------------------------------------------------------------ close */
