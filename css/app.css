@@ -333,8 +333,14 @@ main {
 /* Many choices, or choices with a picture: a grid of cards, full width under
    its own label. Every cell is the same size at every count, which a wrapped
    segmented control can never be. */
-.opt-row.stack { flex-direction: column; align-items: stretch; gap: 9px; margin-bottom: 16px; }
+/* `nowrap` matters: .opt-row wraps, and a WRAPPING column is measured at a
+   narrower width than it is drawn at. Map thumbnails grow with their width, so
+   the grid came out 30px short and the next row sat on its bottom cards. */
+.opt-row.stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 9px; margin-bottom: 16px; }
 .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(106px, 1fr)); gap: 8px; }
+/* Exactly three is always one row. On a phone auto-fit makes it two and one,
+   which is the same hole this grid exists to avoid. */
+.choice-grid:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .choice {
   appearance: none; cursor: pointer; font: inherit; text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 4px;

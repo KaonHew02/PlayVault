@@ -160,6 +160,13 @@ window.PV = window.PV || {};
    * `solo` options (vs computer / pass-and-play) are skipped in a room: the
    * opponent is a person on another device, which is the whole point.
    */
+  /* Two, three short choices are a segmented control. More than that — or any
+     choice with a picture or a tag — wraps badly in one ("The Long Keep ★★★"
+     alone on a second line, a hole beside it) and becomes a grid of cards
+     instead: every cell the same size, every row full. */
+  const asCards = o => !!o.grid || o.choices.length > 3
+    || o.choices.some(c => c.preview || c.tag);
+
   function optionsBody(g, chosen, onChange, inRoom) {
     const body = el('div', { class: 'sheet-body' });
     function paint() {
@@ -167,26 +174,23 @@ window.PV = window.PV || {};
       (g.options || []).forEach(o => {
         if (inRoom && o.solo) return;
         if (o.showIf && !o.showIf(chosen)) return;
-        // Two, three choices are a segmented control. More than that — or any
-        // choice with a picture to show — wraps badly in one and becomes a
-        // grid of cards instead: every cell the same size, every row full.
-        const asGrid = !!o.grid || o.choices.length > 3 || o.choices.some(c => c.preview);
+        const asGrid = asCards(o);
         const row = el('div', { class: 'opt-row' + (asGrid ? ' stack' : '') },
           el('span', { class: 'k' }, t(o.labelKey)));
         const box = el('div', { class: asGrid ? 'choice-grid' : 'seg' });
         o.choices.forEach(c => {
           const pick = () => { chosen[o.key] = c.value; paint(); if (onChange) onChange(chosen); };
           const on = chosen[o.key] === c.value;
-          // `tag` is a language-neutral decoration on a choice — difficulty
-          // stars, today. The label itself still goes through i18n.
           if (!asGrid) {
             box.appendChild(el('button', {
               class: 'seg-btn' + (on ? ' on' : ''), onclick: pick
-            }, t(c.labelKey) + (c.tag ? ' ' + c.tag : '')));
+            }, t(c.labelKey)));
             return;
           }
           // `preview` is the game's own business: it hands back a node (a map
           // thumbnail, today) and the shell only finds it a place to sit.
+          // `tag` is a language-neutral decoration — difficulty stars, today —
+          // on its own line under the label, which still goes through i18n.
           let art = null;
           try { art = c.preview ? c.preview(c.value) : null; } catch (e) { art = null; }
           box.appendChild(el('button', { class: 'choice' + (on ? ' on' : ''), onclick: pick },
@@ -206,8 +210,7 @@ window.PV = window.PV || {};
     const chosen = defaultsFor(g);
     const body = optionsBody(g, chosen, null, false);
     // A sheet with a card grid in it needs the room to lay three across.
-    const wide = (g.options || []).some(o =>
-      o.grid || o.choices.length > 3 || o.choices.some(c => c.preview));
+    const wide = (g.options || []).some(asCards);
 
     const modal = el('div', { class: 'modal', onclick: e => { if (e.target === modal) modal.remove(); } },
       el('div', { class: 'sheet' + (wide ? ' wide' : '') },
