@@ -119,13 +119,18 @@ Two rules in `js/core/room.js` that are easy to get wrong:
 - **A seat is taken from the connection, never from the message.** That single
   rule is all of "you cannot move for me".
 
-Two more that cost a browser session each to find:
+Three more that cost a browser session each to find:
 
 - **PeerJS is `async defer`, so the friends screen can render before it lands.**
   `PV.Net.ready()` waits for it; saying "online play is not available" on a cold
   load and never repainting is simply wrong.
 - **`location.hash = <the hash it already has>` fires nothing.** A rematch
   begins the game already on screen, so `room.on('begin')` re-routes by hand.
+- **Two tabs on one machine prove nothing about two networks.** They always
+  find a direct path; a friend on mobile data often cannot, and then only a TURN
+  relay gets through. PeerJS's built-in relay no longer resolves, so `RELAYS` in
+  `js/core/net.js` is where a relay's credentials go. An attempt also holds no
+  chair until it opens — one that never got through used to fill a room of two.
 
 ### Testing
 

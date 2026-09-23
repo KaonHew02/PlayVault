@@ -30,6 +30,45 @@ window.PV = window.PV || {};
 
   const OPEN_TIMEOUT = 20000;
   const CONNECT_TIMEOUT = 20000;
+  /* How long the host lets an attempt try to get through before giving up on
+     it. A little past the guest's own limit, so the guest always says so
+     first. */
+  const PENDING_TIMEOUT = CONNECT_TIMEOUT + 5000;
+
+  /* How two browsers find a way to each other.
+
+     STUN tells a browser its own public address, and for most home
+     connections that is enough to go direct. It is not enough behind
+     carrier-grade NAT — most mobile data, some fibre, a lot of office and
+     school Wi-Fi — and there the only way through is a TURN relay that
+     carries the traffic for both of them.
+
+     PeerJS brings a relay of its own and uses it by default. Its names
+     (eu-0 and us-0.turn.peerjs.com) stopped resolving: checked on 2026-09-23,
+     neither has an address. So on the defaults a friend on another network
+     got in only when both routers happened to allow a direct path — which
+     every test on one machine does, and a friend on 4G often does not.
+
+     No free relay that needs no account is left (Metered's shared
+     "openrelayproject" login is refused too). RELAYS takes the credentials
+     from one that does — a free Metered or ExpressTURN account gives a
+     username and password for entries like the example below. They are
+     readable by anyone who opens devtools; that is how every browser-only
+     app uses TURN, and the worst it costs is the free plan's monthly quota.
+
+       { urls: ['turn:global.relay.metered.ca:80',
+                'turn:global.relay.metered.ca:443?transport=tcp'],
+         username: '…', credential: '…' }
+
+     Empty, play still works wherever a direct path exists, and a guest who
+     cannot get one is told that in words rather than to check the digits. */
+  const RELAYS = [];
+  const ICE = {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      { urls: 'stun:stun.cloudflare.com:3478' }
+    ].concat(RELAYS)
+  };
 
   const available = () => typeof window.Peer === 'function';
 
@@ -70,6 +109,8 @@ window.PV = window.PV || {};
     if (type === 'network') return new Error(t('net.errBroker'));
     if (type === 'browser-incompatible') return new Error(t('net.errBrowser'));
     if (type === 'webrtc') return new Error(t('net.errWebrtc'));
+    // The host answered but no route between the two networks worked.
+    if (type === 'negotiation-failed') return new Error(t('net.errNoRoute'));
     return new Error((err && err.message) || t('net.errGeneric'));
   }
 
@@ -91,7 +132,7 @@ window.PV = window.PV || {};
     if (!available()) return Promise.reject(new Error(t('net.errNoLib')));
     return new Promise((resolve, reject) => {
       let done = false;
-      const peer = new window.Peer(id, { debug: 0 });
+      const peer = new window.Peer(id, { debug: 0, config: ICE });
       const timer = setTimeout(() => {
         if (done) return;
         done = true;
@@ -150,11 +191,21 @@ window.PV = window.PV || {};
       super();
       this.code = null;
       this.peer = null;
-      this.conns = new Map();       // peerId -> { conn, seat, name, level, alive }
+      this.conns = new Map();       // peerId -> { conn, seat, name, level, alive, joined }
       this.closed = false;
-      this.seatsTaken = 1;          // seat 0 is the host
       this.maxPlayers = 2;
       this.locked = false;          // set once the game starts: no late joins
+    }
+
+    /* The lowest chair nobody connected is holding; 0 is the host's. Reusing
+       one is safe because it only happens before the game starts — once it
+       has, the room is locked and nobody new gets a chair at all. */
+    freeSeat() {
+      const held = new Set([0]);
+      for (const e of this.conns.values()) held.add(e.seat);
+      let seat = 1;
+      while (held.has(seat)) seat++;
+      return seat;
     }
 
     /** Claim a code. Retries on collision, which is why it loops. */
@@ -181,28 +232,39 @@ window.PV = window.PV || {};
       return this.code;
     }
 
+    /* A connection is handed a chair when it OPENS, not when it is offered.
+       An offer is only an attempt, and an attempt that never gets through —
+       no route between two networks, a friend who gave up and typed the code
+       again — used to keep its chair for good. In a room of two that was the
+       only chair, so every try after the first was told the room was full. */
     accept(conn) {
-      if (this.closed) return conn.close();
-      const refuse = this.locked ? 'started'
-        : (this.seatsTaken >= this.maxPlayers ? 'full' : null);
-      if (refuse) {
-        conn.on('open', () => {
-          try { conn.send({ t: 'full', why: refuse }); } catch (e) { /* going anyway */ }
-          setTimeout(() => { try { conn.close(); } catch (err) { /* fine */ } }, 300);
-        });
-        return;
-      }
-      const seat = this.seatsTaken++;
-      const entry = { conn: conn, seat: seat, name: '', level: 1, alive: true };
-      this.conns.set(conn.peer, entry);
+      if (this.closed) { try { conn.close(); } catch (e) { /* fine */ } return; }
+
+      // One that never opens is let go. PeerJS reports nothing for a
+      // connection that closes before it opened, so this is the only word on it.
+      const giveUp = setTimeout(() => {
+        if (!conn.open) { try { conn.close(); } catch (e) { /* fine */ } }
+      }, PENDING_TIMEOUT);
 
       conn.on('open', () => {
+        clearTimeout(giveUp);
+        if (this.closed) { try { conn.close(); } catch (e) { /* fine */ } return; }
+        const refuse = this.locked ? 'started'
+          : (1 + this.conns.size >= this.maxPlayers ? 'full' : null);
+        if (refuse) {
+          try { conn.send({ t: 'full', why: refuse }); } catch (e) { /* going anyway */ }
+          setTimeout(() => { try { conn.close(); } catch (err) { /* fine */ } }, 300);
+          return;
+        }
+        const seat = this.freeSeat();
+        const entry = { conn: conn, seat: seat, name: '', level: 1, alive: true, joined: false };
+        this.conns.set(conn.peer, entry);
+        conn.on('data', msg => this.receive(entry, msg));
+        conn.on('close', () => this.drop(entry, 'left'));
+        conn.on('error', () => this.drop(entry, 'lost'));
         try { conn.send({ t: 'welcome', seat: seat, code: this.code }); }
         catch (e) { /* dropping */ }
       });
-      conn.on('data', msg => this.receive(entry, msg));
-      conn.on('close', () => this.drop(entry, 'left'));
-      conn.on('error', () => this.drop(entry, 'lost'));
     }
 
     receive(entry, msg) {
@@ -210,6 +272,7 @@ window.PV = window.PV || {};
       if (msg.t === 'hello') {
         entry.name = String(msg.name || '').slice(0, 20);
         entry.level = Math.max(1, msg.level | 0);
+        entry.joined = true;
         this.fire('join', entry);
         return;
       }
@@ -221,9 +284,8 @@ window.PV = window.PV || {};
       if (!this.conns.has(entry.conn.peer)) return;
       entry.alive = false;
       this.conns.delete(entry.conn.peer);
-      // A seat is never reused. A rejoin under an old seat would inherit that
-      // seat's half-played game, and a fresh chair is the simplest correct thing.
-      this.fire('leave', entry, why);
+      // Somebody who never said hello was never on the roster to leave it.
+      if (entry.joined) this.fire('leave', entry, why);
     }
 
     send(seat, msg) {
@@ -271,13 +333,30 @@ window.PV = window.PV || {};
 
       return new Promise((resolve, reject) => {
         let settled = false;
-        const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); fn(v); } };
+        const finish = (fn, v) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          // A try that failed is closed for good. Left half-open it could
+          // still get through after the guest had been told it failed, and
+          // turn up in the host's room holding a chair nobody is sitting in.
+          if (fn === reject) this.close();
+          fn(v);
+        };
 
         const conn = this.peer.connect(idFor(this.code), { reliable: true });
         this.conn = conn;
 
-        const timer = setTimeout(
-          () => finish(reject, new Error(t('net.errNoAnswer'))), CONNECT_TIMEOUT);
+        /* A wrong code is refused by the broker in well under a second, so
+           reaching the limit means the room is real. What is left to say is
+           which half failed: the host's page never answered (a phone that
+           switched to another app to share the code stops answering), or it
+           did and no route between the two networks worked. */
+        const timer = setTimeout(() => {
+          const pc = conn.peerConnection;
+          const answered = !!(pc && pc.remoteDescription);
+          finish(reject, new Error(t(answered ? 'net.errNoRoute' : 'net.errNoAnswer')));
+        }, CONNECT_TIMEOUT);
 
         conn.on('open', () => {
           try { conn.send(Object.assign({ t: 'hello' }, hello || {})); }

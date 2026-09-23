@@ -1432,6 +1432,68 @@ section('room — routing, roster and who is allowed to decide', () => {
     'a dropped player was removed rather than marked');
 });
 
+/* The host's door, with the WebRTC taken out: a connection is an emitter that
+   opens when told to, and timers are caught rather than waited for. A friend
+   whose first try did not get through used to find every later try refused as
+   "full", because the try had been handed the only chair and never gave it
+   back. */
+section('net — a chair goes to whoever got through, and comes back', () => {
+  const timers = [];
+  const realSet = global.setTimeout;
+  global.setTimeout = fn => { timers.push(fn); return 0; };
+  try {
+    const conn = id => {
+      const c = new PV.Net.Emitter();
+      c.peer = id; c.open = false; c.sent = [];
+      c.send = m => c.sent.push(m);
+      c.close = () => { if (c.open) { c.open = false; c.fire('close'); } };
+      c.opens = () => { c.open = true; c.fire('open'); };
+      return c;
+    };
+    const host = new PV.Net.Host();
+    host.code = '123456';
+    const joins = [], leaves = [];
+    host.on('join', e => joins.push(e.seat));
+    host.on('leave', e => leaves.push(e.seat));
+
+    const stuck = conn('stuck');
+    host.accept(stuck);
+    ok(host.conns.size === 0, 'an attempt that never opened took a chair');
+    timers.splice(0).forEach(fn => fn());
+
+    const a = conn('a');
+    host.accept(a); a.opens();
+    ok(a.sent[0] && a.sent[0].t === 'welcome' && a.sent[0].seat === 1,
+      'the first guest through was not welcomed to seat 1 after a stuck attempt');
+    a.fire('data', { t: 'hello', name: 'A', level: 2 });
+    ok(joins.join() === '1', 'the guest\'s hello did not announce a join');
+
+    const b = conn('b');
+    host.accept(b); b.opens();
+    ok(b.sent[0] && b.sent[0].t === 'full' && b.sent[0].why === 'full',
+      'a third person was let into a room of two');
+
+    a.close();
+    ok(leaves.join() === '1' && host.conns.size === 0, 'a guest leaving did not free the chair');
+    const c = conn('c');
+    host.accept(c); c.opens();
+    ok(c.sent[0] && c.sent[0].t === 'welcome' && c.sent[0].seat === 1,
+      'a chair given back in the lobby could not be sat in again');
+
+    /* Nobody on the roster, nobody to announce leaving. */
+    c.close();
+    ok(leaves.join() === '1', 'somebody who never said hello was reported as leaving');
+
+    host.locked = true;
+    const late = conn('late');
+    host.accept(late); late.opens();
+    ok(late.sent[0] && late.sent[0].t === 'full' && late.sent[0].why === 'started',
+      'somebody got a chair after the game started');
+  } finally {
+    global.setTimeout = realSet;
+  }
+});
+
 /* One end of an online board: a real engine, a real PV.boardNet over it. */
 function boardEnd(room, make) {
   const end = { engine: make(), renders: 0, gone: '' };

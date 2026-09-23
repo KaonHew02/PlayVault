@@ -291,10 +291,15 @@ window.PV = window.PV || {};
     room.net = net;
 
     net.on('join', entry => {
+      // A chair somebody left in the lobby can be handed to the next person,
+      // so whoever sat in it before comes off the roster rather than doubling up.
+      room.members = room.members.filter(m => m.seat !== entry.seat);
       room.members.push(member(entry.seat, entry.name, entry.level, false));
       room.pushRoster();
       room.fire('joined', entry.seat);
     });
+    // Nobody new sits down once the game has started.
+    room.on('begin', () => { net.locked = true; });
     net.on('leave', entry => {
       const m = room.memberAt(entry.seat);
       if (m) m.alive = false;
