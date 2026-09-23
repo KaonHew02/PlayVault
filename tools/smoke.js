@@ -1018,8 +1018,9 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
     return PV.CrowdRush.hazardX(f, g.tick) > 0 ? -0.8 : 0.8;
   }
 
-  function play(course, difficulty, seed, smart) {
-    const g = new PV.CrowdRush({ seed: seed, course: course, difficulty: difficulty });
+  function play(course, difficulty, seed, smart, boost) {
+    const g = new PV.CrowdRush({ seed: seed, course: course, difficulty: difficulty, boost: boost });
+    g.input('go');                           // off the start line
     let ticks = 0;
     while (!g.isOver() && ticks < 60 * 60 * 6) {
       if (smart) g.input({ lane: aimFor(g) });
@@ -1104,6 +1105,71 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
   const idle = play('keep', 'hard', 777, false);
   ok(idle.overReason !== 'stormed' || idle.n < idle.peak,
     'standing still won the hardest course outright');
+
+  /* The start line: nothing moves until the player says go, and the shop's
+     upgrades change the player, never the course. */
+  const wait = new PV.CrowdRush({ seed: 5, course: 'fields', difficulty: 'normal' });
+  for (let k = 0; k < 120; k++) wait.advance();
+  ok(wait.ready && wait.dist === 0 && !wait.isOver(), 'the crowd set off before anyone tapped');
+  wait.input({ lane: 0.5 });
+  wait.advance();
+  ok(wait.ready, 'hovering the mouse over the canvas started the run');
+  wait.input('go');
+  wait.advance();
+  ok(!wait.ready && wait.dist > 0, 'go did not start the run');
+  ok(wait.setBoost({ start: 5 }) === false && wait.n === PV.CrowdRush.DIFFS.normal.start,
+    'an upgrade landed after the run had started');
+  ok(new PV.CrowdRush({ seed: 5, course: 'fields', difficulty: 'normal', autostart: true }).phase === 'run',
+    'a race start still waited at the line');
+
+  const plain = new PV.CrowdRush({ seed: 8, course: 'dunes', difficulty: 'normal' });
+  const boosted = new PV.CrowdRush({ seed: 8, course: 'dunes', difficulty: 'normal', boost: { start: 4, gate: 5 } });
+  ok(boosted.n === plain.n + 4 * PV.CrowdRush.BOOSTS.start.per,
+    'the starting-crowd upgrade did not add its runners');
+  ok(JSON.stringify(boosted.course) === JSON.stringify(plain.course),
+    'an upgrade changed the course it was bought to beat');
+  ok(new PV.CrowdRush({ seed: 8, course: 'dunes', difficulty: 'normal', boost: { start: 1e9, gate: -3 } }).boost.start
+    === PV.CrowdRush.BOOSTS.start.max, 'a boost level was not clamped');
+  ok(PV.CrowdRush.boostCost('start', 3) > PV.CrowdRush.boostCost('start', 2), 'a higher level did not cost more');
+
+  // The gate bonus is a share more of what a GREEN gate gave, and nothing on red.
+  const gb = new PV.CrowdRush({ seed: 9, course: 'fields', difficulty: 'normal', boost: { gate: 5 } });
+  gb.n = 100; gb.x = -gb.reach;
+  gb.runGates(pair);
+  ok(gb.n === Math.round(200 + 100 * 5 * PV.CrowdRush.BOOSTS.gate.per),
+    'the gate bonus did not add its share of a green gate, got ' + gb.n);
+  gb.n = 100; gb.x = gb.reach;
+  gb.runGates(pair);
+  ok(gb.n === 0, 'the gate bonus softened a red gate');
+
+  /* The king: a longer fight than a rival, and when he falls the crowd walks
+     in for a moment before the run is over — still a win, still one payout. */
+  function kingFight(mine, his) {
+    const c = new PV.CrowdRush({ seed: 1, course: 'fields', difficulty: 'normal', autostart: true });
+    c.n = mine;
+    c.startClash({ kind: 'castle', at: 0, n: his });
+    let ticks = 0;
+    while (!c.isOver() && ticks++ < 20000) c.advance();
+    return { c: c, ticks: ticks };
+  }
+  const k = kingFight(300, 120);
+  ok(k.c.overReason === 'stormed' && k.c.n === 180, 'beating the king was not a win by the difference');
+  ok(k.ticks > PV.CrowdRush.VICTORY, 'the run ended the moment the king fell');
+  ok(k.c.coins > 0, 'a win paid nothing');
+  ok(clash(300, 120).n === 180, 'a rival fight stopped trading one for one');
+  const kLost = kingFight(50, 400);
+  ok(kLost.c.overReason === 'held' && kLost.c.n === 0, 'a crowd smaller than the king took the keep');
+  ok(kLost.c.coins > 0, 'a lost run paid nothing for the way it got');
+  const winPay = play('fields', 'easy', 31000, true);
+  const losePay = play('keep', 'hard', 777, false);
+  ok(winPay.overReason !== 'stormed' || winPay.coins > losePay.coins,
+    'storming the keep paid less than being routed');
+
+  // Upgrades help: the same player with a bigger start does at least as well.
+  const lean = play('keep', 'hard', 31500, true);
+  const rich = play('keep', 'hard', 31500, true, { start: 40, gate: 25 });
+  ok(rich.overReason === 'stormed' || lean.overReason !== 'stormed',
+    'a fully upgraded crowd lost a run the plain one won');
 });
 
 /* --------------------------------------------------------------- security */

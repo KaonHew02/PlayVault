@@ -12,8 +12,10 @@
    stops growing and the figure above their heads carries it; a thousand
    stickmen at sixty frames a second buys nothing you can see.
 
-   Formation offsets come from a hash of the unit's index, so a crowd keeps
-   its shape from frame to frame instead of reshuffling itself every tick. */
+   A crowd packs into a round blob on a sunflower spiral, and each runner
+   keeps its place in it by index, so a crowd keeps its shape from frame to
+   frame and grows from the outside. The king at the keep is drawn here too:
+   the same runner, five times the size, with a crown and a face. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';
@@ -135,53 +137,89 @@ window.PV = window.PV || {};
     c.fill();
   }
 
+  /** How deep a crowd `width` track units across stands on the ground, in
+      metres. The track is two units and about six metres wide, so a ROUND
+      crowd is three times its width deep. */
+  const depthOf = width => Math.max(0.8, width * 3);
+
   /**
-   * A crowd of `n`, centred on `xt` at distance `d`, `width` track units
-   * across. Drawn back to front so the near rank overlaps the far one.
+   * A crowd of `n`, its near edge at distance `d`, centred on `xt`, `width`
+   * track units across. Runners pack into a round blob on a sunflower
+   * spiral — the shape a crowd runner's mob has, where a random scatter reads
+   * as a queue. Runner i keeps its angle whatever the count, so a gate that
+   * adds people grows the blob from the outside instead of reshuffling it.
+   *
+   * `pace` is how fast legs swing: 0 standing, 1 running, more charging.
+   * Runners further away than `cut` are not drawn — they have gone in
+   * through the castle gate.
    */
-  function crowd(c, cam, n, xt, d, width, tick, skin, salt) {
+  const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+  function crowd(c, cam, n, xt, d, width, tick, skin, salt, pace, cut) {
     const shown = Math.min(CAP, Math.max(1, n));
     const lod = shown <= 70;                 // limbs only while you can see them
-    // A crowd needs DEPTH to read as a crowd. Packed into one rank they merge
-    // into a single blue slab; spread back over a few metres they overlap the
-    // way a running mob does, and the ones at the back are visibly smaller.
-    const deep = Math.min(5, 0.9 + width * 2.4);
-    const rows = [];
+    const rx = width / 2, rd = depthOf(width) / 2;
+    // A little jitter, a fraction of the spacing, so the packing does not
+    // read as a pattern.
+    const gap = 1 / Math.sqrt(shown);
+    const units = [];
     for (let i = 0; i < shown; i++) {
-      const rx = (hash(i, salt) - 0.5) * width;
-      // Spread AWAY from the camera. Behind the crowd's own line the camera
-      // clamps everything to the same y and scale, so a crowd spread backward
-      // is a crowd with no depth at all — which is exactly how it looked.
-      const rd = d + hash(i, salt + 99) * deep;
-      rows.push({ x: xt + rx, d: rd, i: i });
+      const r = Math.sqrt((i + 0.5) / shown);
+      const a = i * GOLDEN + salt;
+      const jx = (hash(i, salt) - 0.5) * gap * 0.7;
+      const jd = (hash(i, salt + 5) - 0.5) * gap * 0.7;
+      // Spread AWAY from the camera, never toward it: behind the camera's
+      // line everything clamps to one y and one scale and the depth is lost.
+      const ud = d + rd + (Math.sin(a) * r + jd) * rd;
+      if (cut != null && ud > cut) continue;
+      units.push({ x: xt + (Math.cos(a) * r + jx) * rx, d: Math.max(d, ud), i: i });
     }
-    rows.sort((a, b) => b.d - a.d);
+    units.sort((p, q) => q.d - p.d);
     // One pass of soft shadows under the whole crowd, then the crowd: drawn
     // per figure they stack into a dark smear where the ranks overlap.
     c.fillStyle = 'rgba(20,40,60,.16)';
-    for (const u of rows) {
+    for (const u of units) {
       const s = cam.s(u.d), hp = cam.h * 0.052 * s;
       c.beginPath();
       c.ellipse(cam.x(u.x, u.d), cam.y(u.d), hp * 0.34, hp * 0.13, 0, 0, TAU);
       c.fill();
     }
-    for (const u of rows) {
+    for (const u of units) {
       const s = cam.s(u.d);
-      runner(c, cam.x(u.x, u.d), cam.y(u.d), cam.h * 0.052 * s,
-        tick * 0.34 + u.i * 0.9, skin, lod);
+      // Standing still, a runner only breathes; running, its legs swing.
+      const bob = pace ? 0 : Math.sin(tick * 0.08 + u.i) * cam.h * 0.002 * s;
+      runner(c, cam.x(u.x, u.d), cam.y(u.d) + bob, cam.h * 0.052 * s,
+        tick * 0.34 * pace + u.i * 0.9, skin, lod && pace > 0);
     }
+  }
+
+  /* A crowd waiting on the course stands still until you are close, then
+     runs at you. `dd` is the engine's distance to it, which reaches MEET the
+     tick the fight starts; `rest` is where it stands while it waits; `meet`
+     is just past the front of your crowd, where the fight is drawn. The
+     charge lands exactly on `meet` at MEET, so the fight starts where the
+     charge ends and nothing jumps. */
+  const MEET = 2.6, RUSH = 9;
+  function approach(dd, rest, meet) {
+    const u = (dd - MEET) / RUSH;
+    if (u >= 1) return { d: rest, pace: 0 };
+    const k = Math.max(0, u);
+    return { d: meet + (rest - meet) * k * k, pace: 1.7 };
   }
 
   /** The number over a crowd's heads — the thing the game is actually about. */
   function tally(c, cam, n, xt, d, colour) {
-    // Just over the heads of the front rank. Anchoring it to the back of the
-    // crowd instead pushes it up into whatever gate is coming.
-    const s = cam.s(d), y = cam.y(d) - cam.h * 0.16 * s;
-    const size = Math.max(13, cam.h * 0.072 * s);
+    // Just over the heads of the rank at `d`. Yours is anchored to its near
+    // rank — anchored to the back it climbs into whatever gate is coming. A
+    // rival's goes over its FAR rank, or the two numbers stack when they meet.
+    const s = cam.s(d);
+    tallyAt(c, cam.x(xt, d), cam.y(d) - cam.h * 0.13 * s, Math.max(13, cam.h * 0.072 * s), n, colour);
+  }
+
+  /** A count in the house style — heavy, with a dark outline — at a point. */
+  function tallyAt(c, x, y, size, n, colour) {
     c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    const x = cam.x(xt, d);
     c.lineWidth = size * 0.28;
     c.lineJoin = 'round';
     c.strokeStyle = 'rgba(8,11,16,.85)';
@@ -361,9 +399,115 @@ window.PV = window.PV || {};
     }
   }
 
-  /** The keep at the end of the course, with the king's banner over the gate. */
-  function castle(c, cam, f, dist) {
-    const d = f.at - dist;
+  /**
+   * The king who holds the keep: our own runner, five times the
+   * size, in red, with a cape, a plain gold crown and a scowl — he is the one
+   * figure on the course with a face, because he is the one who looks at you.
+   * His health is the number of runners it takes to bring him down.
+   *
+   * `fallen` counts ticks since he fell (or -1): he topples, then fades.
+   */
+  function king(c, cam, d, hp, full, tick, fighting, fallen) {
+    const s = cam.s(d), y = cam.y(d);
+    const H = cam.h * 0.052 * s * 5;
+    let x = cam.cx;
+    if (fighting) x += Math.sin(tick * 1.9) * H * 0.025;     // taking hits
+    const bw = H * 0.46, head = H * 0.27;
+    const hipY = -H * 0.30, topY = -H * 0.64;
+
+    c.save();
+    c.translate(x, y);
+    c.fillStyle = 'rgba(20,40,60,.22)';
+    c.beginPath(); c.ellipse(0, 0, H * 0.34, H * 0.08, 0, 0, TAU); c.fill();
+    if (fallen >= 0) {
+      c.rotate(Math.min(1, fallen / 22) * Math.PI * 0.48);
+      c.globalAlpha = Math.max(0, 1 - Math.max(0, fallen - 34) / 26);
+    }
+    // Cape first, so the body stands in front of it.
+    c.fillStyle = '#7F1D2A';
+    c.beginPath();
+    c.moveTo(-bw * 0.46, topY + H * 0.02);
+    c.lineTo(bw * 0.46, topY + H * 0.02);
+    c.lineTo(bw * 0.72, -H * 0.04);
+    c.lineTo(-bw * 0.72, -H * 0.04);
+    c.closePath(); c.fill();
+    // Legs, planted.
+    c.fillStyle = THEIRS_DARK;
+    for (const side of [-1, 1]) {
+      rr(c, side * bw * 0.24 - H * 0.07, hipY - H * 0.02, H * 0.14, H * 0.32, H * 0.06);
+      c.fill();
+    }
+    // Arms: raised and swinging while he fights, down while he waits.
+    for (const side of [-1, 1]) {
+      const swing = fighting ? Math.sin(tick * 0.5 + side) * 0.6 - 0.9 : 0.15;
+      c.save();
+      c.translate(side * bw * 0.5, topY + H * 0.08);
+      c.rotate(side * swing);
+      c.fillStyle = THEIRS;
+      rr(c, -H * 0.06, 0, H * 0.12, H * 0.30, H * 0.06); c.fill();
+      c.restore();
+    }
+    c.fillStyle = THEIRS;
+    rr(c, -bw / 2, topY, bw, hipY - topY + H * 0.06, bw * 0.40); c.fill();
+    // A belt with a gold buckle.
+    c.fillStyle = '#5B1620';
+    c.fillRect(-bw / 2, hipY - H * 0.06, bw, H * 0.06);
+    c.fillStyle = '#F6B32B';
+    c.fillRect(-H * 0.035, hipY - H * 0.065, H * 0.07, H * 0.07);
+    // Head, gloss and face.
+    const hy = topY - head * 0.72;
+    c.fillStyle = THEIRS;
+    c.beginPath(); c.arc(0, hy, head, 0, TAU); c.fill();
+    c.fillStyle = THEIRS_LIT;
+    c.beginPath(); c.ellipse(-head * 0.34, hy - head * 0.38, head * 0.30, head * 0.20, -0.5, 0, TAU); c.fill();
+    for (const side of [-1, 1]) {
+      c.fillStyle = '#FFFFFF';
+      c.beginPath(); c.ellipse(side * head * 0.36, hy + head * 0.06, head * 0.19, head * 0.22, 0, 0, TAU); c.fill();
+      c.fillStyle = '#1F2430';
+      c.beginPath(); c.arc(side * head * 0.32, hy + head * 0.12, head * 0.10, 0, TAU); c.fill();
+      // The scowl: each brow slopes down toward the nose.
+      c.strokeStyle = '#3A0E14';
+      c.lineWidth = Math.max(1.5, head * 0.10);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(side * head * 0.58, hy - head * 0.26);
+      c.lineTo(side * head * 0.14, hy - head * 0.12);
+      c.stroke();
+    }
+    // A plain crown: a band and three points, gold, with a red stone.
+    const cy = hy - head * 0.80, cw = head * 1.2, ch = head * 0.58;
+    c.fillStyle = '#F6B32B';
+    c.beginPath();
+    c.moveTo(-cw / 2, cy);
+    c.lineTo(-cw / 2, cy - ch);
+    c.lineTo(-cw / 4, cy - ch * 0.5);
+    c.lineTo(0, cy - ch * 1.1);
+    c.lineTo(cw / 4, cy - ch * 0.5);
+    c.lineTo(cw / 2, cy - ch);
+    c.lineTo(cw / 2, cy);
+    c.closePath(); c.fill();
+    c.fillStyle = '#D9901A';
+    c.fillRect(-cw / 2, cy - ch * 0.22, cw, ch * 0.22);
+    c.fillStyle = '#EF4444';
+    c.beginPath(); c.arc(0, cy - ch * 0.46, ch * 0.13, 0, TAU); c.fill();
+    c.restore();
+
+    if (fallen >= 0) return;
+    // His health, over the crown: a bar that empties and the number left.
+    const barW = H * 0.9, barH = Math.max(4, H * 0.055);
+    const by = y - H * 1.46, bx = x - barW / 2;
+    c.fillStyle = 'rgba(255,255,255,.9)';
+    rr(c, bx - 2, by - 2, barW + 4, barH + 4, (barH + 4) / 2); c.fill();
+    c.fillStyle = 'rgba(60,20,26,.35)';
+    rr(c, bx, by, barW, barH, barH / 2); c.fill();
+    c.fillStyle = BAD_FACE;
+    rr(c, bx, by, Math.max(barH, barW * Math.max(0, hp) / Math.max(1, full)), barH, barH / 2); c.fill();
+    tallyAt(c, x, by - barH * 1.4, Math.max(13, cam.h * 0.06 * s), hp, '#FECDD3');
+  }
+
+  /** The keep at the end of the course. Its flags are the king's until he
+      falls, and yours after. */
+  function castle(c, cam, d, ours) {
     const s = cam.s(d), yb = cam.y(d);
     const x0 = cam.x(-1.25, d), x1 = cam.x(1.25, d);
     const wallH = cam.h * 0.34 * s;
@@ -378,7 +522,7 @@ window.PV = window.PV || {};
       const tx = cam.x(side * 1.05, d);
       c.fillStyle = '#76818F';
       c.fillRect(tx - wallH * 0.16, yb - wallH * 1.35, wallH * 0.32, wallH * 1.35);
-      c.fillStyle = '#F43F5E';
+      c.fillStyle = ours ? MINE : '#F43F5E';
       c.beginPath();
       c.moveTo(tx, yb - wallH * 1.7);
       c.lineTo(tx + wallH * 0.3, yb - wallH * 1.58);
@@ -393,6 +537,52 @@ window.PV = window.PV || {};
     c.fill();
   }
 
+  /** Confetti over a taken keep, placed by hash and moved by the tick, so it
+      is the same shower every time and needs no state. */
+  const CONFETTI = ['#3F8EF7', '#F6B32B', '#2DC44E', '#EF4444', '#FFFFFF', '#A78BFA'];
+  function confetti(c, cam, tick) {
+    for (let i = 0; i < 60; i++) {
+      const x = hash(i, 11) * cam.w + Math.sin(tick * 0.07 + i) * cam.w * 0.02;
+      const fall = cam.h * (0.25 + hash(i, 12) * 0.6);
+      const y = -cam.h * 0.1 + ((tick * (2 + hash(i, 13) * 2.5) + hash(i, 14) * cam.h) % (fall + cam.h * 0.1));
+      const sz = Math.max(3, cam.h * 0.012);
+      c.save();
+      c.translate(x, y);
+      c.rotate(tick * 0.1 + i);
+      c.fillStyle = CONFETTI[i % CONFETTI.length];
+      c.fillRect(-sz / 2, -sz / 4, sz, sz / 2);
+      c.restore();
+    }
+  }
+
+  /* ------------------------------------------------------ coins and shop */
+
+  /* What a player has saved and bought, kept between runs. Sealed like the
+     profile, so a number typed into devtools is dropped on the next read, and
+     rebuilt on every read like every other store. */
+  const META = 'crowd.meta';
+  const MAX_COINS = 1e9;
+  PV.Store.validate(META, v => {
+    const m = PV.Safe.obj(v);
+    if (!m) return undefined;
+    return {
+      coins: PV.Safe.int(m.coins, 0, MAX_COINS, 0),
+      start: PV.Safe.int(m.start, 0, PV.CrowdRush.BOOSTS.start.max, 0),
+      gate: PV.Safe.int(m.gate, 0, PV.CrowdRush.BOOSTS.gate.max, 0)
+    };
+  });
+  const loadMeta = () => PV.Store.get(META, null) || { coins: 0, start: 0, gate: 0 };
+
+  /** A gold coin, for the canvas. */
+  function coin(c, x, y, r) {
+    c.fillStyle = '#C98A0B';
+    c.beginPath(); c.arc(x, y + r * 0.12, r, 0, TAU); c.fill();
+    c.fillStyle = '#F6B32B';
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+    c.fillStyle = '#FFE58A';
+    c.beginPath(); c.arc(x - r * 0.28, y - r * 0.28, r * 0.34, 0, TAU); c.fill();
+  }
+
   /* ------------------------------------------------------------ the view */
 
   PV.CrowdRushView = function (ctx) {
@@ -400,8 +590,17 @@ window.PV = window.PV || {};
     const courseKey = PV.CrowdCourse.COURSES[opts.course] ? opts.course : 'fields';
     const def = PV.CrowdCourse.COURSES[courseKey];
     const diffKey = PV.CrowdRush.DIFFS[opts.difficulty] ? opts.difficulty : 'normal';
+    // A race is the same course for everyone: nobody brings upgrades to it,
+    // and nobody waits at the line while the others run.
+    const racing = !!ctx.race;
+    const meta = loadMeta();
 
-    let ui = null, countEl, beatEl, goneEl, whereEl;
+    let ui = null, countEl, beatEl, goneEl, whereEl, shopEl = null;
+    let shopOpen = null;             // the state the shop was last painted in
+
+    /* Puffs where two crowds meet, one per runner lost, drawn and aged per
+       frame: they are decoration, and the engine never hears of them. */
+    let puffs = [], foe = null, foeN = 0, puffSeq = 0;
 
     function onMove(e) {
       if (!ui) return;
@@ -410,12 +609,67 @@ window.PV = window.PV || {};
       const lane = ((e.clientX - rect.left) - rect.width / 2) / (rect.width * 0.44);
       ui.input({ lane: Math.max(-1, Math.min(1, lane)) });
     }
+    // A press both steers and, at the start line, starts the run.
+    function onDown(e) { onMove(e); if (ui) ui.input('go'); }
+
+    function saveMeta() { PV.Store.set(META, meta); }
+
+    function buy(kind) {
+      const game = ui && ui.game;
+      if (!game || !game.ready) return;
+      const level = meta[kind], cost = PV.CrowdRush.boostCost(kind, level);
+      if (level >= PV.CrowdRush.BOOSTS[kind].max || meta.coins < cost) return;
+      meta.coins -= cost;
+      meta[kind] = level + 1;
+      saveMeta();
+      game.setBoost(meta);
+      paintShop();
+      ui.draw();
+    }
+
+    /** The upgrades, in the side panel: open at the start line only. */
+    function paintShop() {
+      if (!shopEl) return;
+      const game = ui && ui.game;
+      shopOpen = !!(game && game.ready);
+      PV.clear(shopEl);
+      shopEl.appendChild(PV.el('div', { class: 'shop-head' },
+        PV.el('span', { class: 'k' }, t('crowd.shop')),
+        PV.el('b', {}, PV.el('span', { class: 'coin' }), PV.fmtNum(meta.coins))));
+      [['start', 'crowd.upStart', 'crowd.upStartFx', l => l * PV.CrowdRush.BOOSTS.start.per],
+        ['gate', 'crowd.upGate', 'crowd.upGateFx', l => Math.round(l * PV.CrowdRush.BOOSTS.gate.per * 100)]]
+        .forEach(([kind, name, fx, amount]) => {
+          const level = meta[kind];
+          const top = level >= PV.CrowdRush.BOOSTS[kind].max;
+          const cost = PV.CrowdRush.boostCost(kind, level);
+          shopEl.appendChild(PV.el('div', { class: 'up-row' },
+            PV.el('span', { class: 'nm' }, t(name) + ' · ' + t('crowd.lv', { n: level })),
+            PV.el('button', {
+              class: 'btn primary small-btn',
+              disabled: !shopOpen || top || meta.coins < cost,
+              onclick: () => buy(kind)
+            }, top ? t('crowd.max') : PV.el('span', {}, PV.el('span', { class: 'coin' }), PV.fmtNum(cost))),
+            // What the NEXT level would make it; at the top, what it is.
+            PV.el('span', { class: 'fx' }, t(fx, { n: amount(top ? level : level + 1) }))));
+        });
+      if (!shopOpen) shopEl.appendChild(PV.el('p', { class: 'fx' }, t('crowd.shopLater')));
+    }
+
+    /** Coins for a finished run, paid once however often the outcome is read. */
+    function pay(game) {
+      if (game.paid != null) return game.paid;
+      game.paid = game.coins;
+      meta.coins = Math.min(MAX_COINS, meta.coins + game.paid);
+      saveMeta();
+      paintShop();
+      return game.paid;
+    }
 
     return PV.loopHost(ctx, {
       hz: 60,
       keymap: {
         ArrowLeft: 'left', ArrowRight: 'right', a: 'left', d: 'right',
-        A: 'left', D: 'right'
+        A: 'left', D: 'right', ' ': 'go', Enter: 'go'
       },
       sustained: ['left', 'right'],
       pad: [{ label: '\u25C0', action: 'left' }, { label: '\u25B6', action: 'right' }],
@@ -423,8 +677,11 @@ window.PV = window.PV || {};
       pct: game => Math.min(1, game.dist / game.course.length),
 
       create: () => new PV.CrowdRush({
-        seed: ctx.seed(), course: courseKey, difficulty: diffKey
+        seed: ctx.seed(), course: courseKey, difficulty: diffKey,
+        autostart: racing, boost: racing ? null : meta
       }),
+
+      onReset() { puffs = []; foe = null; shopOpen = null; },
 
       fit(availW, availH) {
         let w = Math.max(280, Math.min(availW, 760));
@@ -444,21 +701,29 @@ window.PV = window.PV || {};
         whereEl = PV.el('div', { class: 'muted small td-where' },
           t('crowd.' + courseKey) + ' ' + '\u2605'.repeat(def.tier) + ' \u00B7 ' + t('diff.' + diffKey));
         api.side.appendChild(whereEl);
+        if (!racing) {
+          shopEl = PV.el('div', { class: 'panel-mini crowd-shop' });
+          api.side.appendChild(shopEl);
+        }
         api.below.appendChild(PV.el('p', { class: 'muted small' }, t('crowd.hint')));
         api.canvas.addEventListener('pointermove', onMove);
-        api.canvas.addEventListener('pointerdown', onMove);
+        api.canvas.addEventListener('pointerdown', onDown);
       },
 
       onDestroy() {
         if (!ui) return;
         ui.canvas.removeEventListener('pointermove', onMove);
-        ui.canvas.removeEventListener('pointerdown', onMove);
+        ui.canvas.removeEventListener('pointerdown', onDown);
       },
+
+      onRelabel() { paintShop(); },
 
       onFrame(game) {
         countEl.textContent = PV.fmtNum(game.n);
         beatEl.textContent = PV.fmtNum(game.beaten);
         goneEl.textContent = Math.round(Math.min(1, game.dist / game.course.length) * 100) + '%';
+        // The shop opens and closes with the start line.
+        if (shopEl && shopOpen !== game.ready) paintShop();
       },
 
       draw(c, game, geom) {
@@ -466,42 +731,79 @@ window.PV = window.PV || {};
         const th = THEMES[courseKey] || THEMES.fields;
         ground(c, cam, th, game.dist);
 
+        // A fight is drawn just past the front of YOUR crowd, wherever that
+        // is: a big crowd is deep, and a rival drawn at a fixed distance
+        // would stand inside it.
+        const meet = depthOf(game.width) + 0.35;
+        const fightingKing = !!(game.clash && game.clash.kind === 'castle');
+        const won = game.phase === 'won';
+        const walk = won ? game.victory / PV.CrowdRush.VICTORY : 0;
+        let gateLine = null;
+
         const list = game.course.features;
         for (let i = list.length - 1; i >= 0; i--) {
           const f = list[i];
           const d = f.at - game.dist;
+          if (f.kind === 'castle') {
+            // The keep stands back from where the king meets you, and he
+            // walks out of its gate to do it.
+            const wall = d + 6;
+            if (wall > FAR + 6) continue;
+            castle(c, cam, wall, won);
+            gateLine = wall - 0.2;
+            const at = approach(d, d + 4.5, meet);
+            const kd = (fightingKing || won) ? meet + (won ? walk * 2 : 0) : at.d;
+            const hp = fightingKing ? game.clash.n : (won ? 0 : f.n);
+            king(c, cam, kd, hp, f.n, game.tick, fightingKing, won ? game.victory : -1);
+            continue;
+          }
           if (d > FAR || d < -2) continue;
           if (f.kind === 'gates') gateWall(c, cam, f, game.dist);
-          else if (f.kind === 'castle') {
-            castle(c, cam, f, game.dist);
-            if (i >= game.at) {
-              crowd(c, cam, f.n, 0, Math.max(1.5, d - 2), 1.2, game.tick, RED, 7 + i);
-              tally(c, cam, f.n, 0, Math.max(1.5, d - 2), '#FECDD3');
-            }
-          } else if (f.kind === 'rivals') {
-            if (i < game.at) continue;                  // already fought
-            crowd(c, cam, f.n, 0, d, Math.min(1.4, PV.CrowdRush.widthOf(f.n)),
-              game.tick, RED, 31 + i);
-            tally(c, cam, f.n, 0, d, '#FECDD3');
+          else if (f.kind === 'rivals') {
+            if (i < game.at) continue;       // met already: the fight is drawn below
+            const at = approach(d, d, meet);
+            const rw = Math.min(1.4, PV.CrowdRush.widthOf(f.n));
+            crowd(c, cam, f.n, 0, at.d, rw, game.tick, RED, 31 + i, at.pace);
+            tally(c, cam, f.n, 0, at.d + depthOf(rw), '#FECDD3');
           } else hazard(c, cam, f, game.dist, game.tick);
         }
 
         // The crowd being fought right now, pressed up against yours.
-        if (game.clash) {
-          const f = list[game.at - 1];
-          const d = Math.max(1.2, (f ? f.at : game.dist + 2.5) - game.dist);
-          crowd(c, cam, game.clash.n, 0, d,
-            Math.min(1.4, PV.CrowdRush.widthOf(game.clash.n)), game.tick, RED, 5);
-          tally(c, cam, game.clash.n, 0, d, '#FECDD3');
-          const y = cam.y(d * 0.5);
-          c.fillStyle = 'rgba(255,226,170,' + (0.25 + 0.2 * Math.sin(game.tick * 0.4)).toFixed(3) + ')';
-          c.beginPath();
-          c.ellipse(cam.cx, y, cam.w * 0.16, cam.h * 0.03, 0, 0, TAU);
-          c.fill();
+        if (game.clash && !fightingKing) {
+          const rw = Math.min(1.4, PV.CrowdRush.widthOf(game.clash.n));
+          crowd(c, cam, game.clash.n, 0, meet, rw, game.tick, RED, 5, 1.2);
+          tally(c, cam, game.clash.n, 0, meet + depthOf(rw), '#FECDD3');
         }
 
-        crowd(c, cam, game.n, game.x, 0, game.width, game.tick, BLUE, 1);
-        tally(c, cam, game.n, game.x, 0, '#DBEAFE');
+        // Every runner lost in a fight goes up in a puff where the sides meet.
+        if (game.clash) {
+          if (foe === game.clash && game.clash.n < foeN) {
+            const span = Math.min(game.width, PV.CrowdRush.widthOf(game.clash.n)) / 2;
+            for (let k = Math.min(6, foeN - game.clash.n); k > 0; k--) {
+              puffSeq++;
+              puffs.push({
+                x: (fightingKing ? 0 : game.x * 0.5) + (hash(puffSeq, 3) - 0.5) * 2 * span,
+                d: meet - 0.2 + hash(puffSeq, 4) * 0.4, life: 18
+              });
+            }
+          }
+          foe = game.clash; foeN = game.clash.n;
+        } else foe = null;
+        for (let k = puffs.length - 1; k >= 0; k--) {
+          const p = puffs[k];
+          const age = 1 - p.life / 18, r = cam.h * 0.022 * cam.s(p.d) * (0.6 + age * 1.4);
+          c.fillStyle = 'rgba(255,255,255,' + (0.85 * (1 - age)).toFixed(3) + ')';
+          c.beginPath(); c.arc(cam.x(p.x, p.d), cam.y(p.d) - r, r, 0, TAU); c.fill();
+          if (--p.life <= 0) puffs.splice(k, 1);
+        }
+
+        // Your crowd. After the king falls it closes up and pours in through
+        // the gate: anyone past the gate line is inside, and not drawn.
+        const pace = game.ready ? 0 : 1;
+        crowd(c, cam, game.n, game.x, won ? walk * Math.max(0, (gateLine || 6) - 1) : 0,
+          game.width, game.tick, BLUE, 1, pace, won ? gateLine : null);
+        if (!won) tally(c, cam, game.n, game.x, 0, '#DBEAFE');
+        if (won) confetti(c, cam, game.victory);
 
         for (const p of game.pops) {
           const k = 1 - p.life / 48;
@@ -531,16 +833,43 @@ window.PV = window.PV || {};
         // The keep, at the end of the bar.
         c.fillStyle = '#2C3440';
         c.fillRect(bx + bw - bh * 0.1, by - bh * 0.7, Math.max(2, bh * 0.28), bh * 2.4);
-        c.fillStyle = '#EF4444';
+        c.fillStyle = won ? MINE : '#EF4444';
         c.beginPath();
         c.moveTo(bx + bw + bh * 0.16, by - bh * 0.7);
         c.lineTo(bx + bw + bh * 1.1, by - bh * 0.25);
         c.lineTo(bx + bw + bh * 0.16, by + bh * 0.2);
         c.closePath(); c.fill();
+
+        // Coins in hand, top right under the bar. Not in a race: nothing
+        // bought with them comes along.
+        if (!racing) {
+          const cs = Math.max(13, cam.h * 0.042), label = PV.fmtNum(meta.coins);
+          c.font = '800 ' + cs.toFixed(1) + 'px system-ui, sans-serif';
+          const tw = c.measureText(label).width;
+          const pw = tw + cs * 2.1, ph = cs * 1.55;
+          const px = cam.w - pw - cam.w * 0.03, py = by + bh + cam.h * 0.03;
+          c.fillStyle = 'rgba(12,20,32,.45)';
+          rr(c, px, py, pw, ph, ph / 2); c.fill();
+          coin(c, px + ph / 2, py + ph / 2, cs * 0.46);
+          c.textAlign = 'left';
+          c.textBaseline = 'middle';
+          c.fillStyle = '#FFFFFF';
+          c.fillText(label, px + ph * 0.95, py + ph / 2 + 1);
+        }
+
+        // At the start line: the crowd stands, and the screen says how to go.
+        if (game.ready) {
+          const pulse = 1 + Math.sin(game.tick * 0.12) * 0.05;
+          tallyAt(c, cam.cx, cam.h * 0.47, Math.max(20, cam.h * 0.075) * pulse,
+            t('crowd.tapToRun'), '#FFFFFF');
+          tallyAt(c, cam.cx, cam.h * 0.55, Math.max(12, cam.h * 0.036),
+            '◀  ' + t('crowd.drag') + '  ▶', '#FFFFFF');
+        }
       },
 
       outcome(game) {
         const won = game.overReason === 'stormed';
+        const coins = pay(game);
         return {
           result: won ? 'win' : 'lose',
           score: game.score,
@@ -551,6 +880,7 @@ window.PV = window.PV || {};
             t('crowd.' + game.courseKey) + ' \u00B7 ' + t('diff.' + game.diff.key),
             t('crowd.count') + ': ' + PV.fmtNum(game.n) + ' \u00B7 ' + t('crowd.peak') + ': ' + PV.fmtNum(game.peak),
             t('crowd.beaten') + ': ' + PV.fmtNum(game.beaten) + ' \u00B7 ' + t('crowd.lost') + ': ' + PV.fmtNum(game.lost),
+            t('crowd.earned', { n: PV.fmtNum(coins) }),
             '@best'
           ]
         };

@@ -29,10 +29,25 @@ window.PV = window.PV || {};
   const HAZARD_BITE = 0.045;         // of the crowd, per tick, fully overlapped
 
   const DIFFS = {
-    easy: { key: 'easy', start: 22, rival: 0.42, king: 0.62, badBias: 0.55, hazard: 0.18, speed: 0.92, xp: 0.7 },
-    normal: { key: 'normal', start: 16, rival: 0.58, king: 0.80, badBias: 0.75, hazard: 0.26, speed: 1.00, xp: 1.0 },
-    hard: { key: 'hard', start: 12, rival: 0.72, king: 0.95, badBias: 0.90, hazard: 0.34, speed: 1.08, xp: 1.5 }
+    easy: { key: 'easy', start: 22, rival: 0.42, king: 0.62, badBias: 0.55, hazard: 0.18, speed: 0.92, xp: 0.7, coins: 0.8 },
+    normal: { key: 'normal', start: 16, rival: 0.58, king: 0.80, badBias: 0.75, hazard: 0.26, speed: 1.00, xp: 1.0, coins: 1.0 },
+    hard: { key: 'hard', start: 12, rival: 0.72, king: 0.95, badBias: 0.90, hazard: 0.34, speed: 1.08, xp: 1.5, coins: 1.4 }
   };
+
+  /* Upgrades bought with coins between runs: more runners at the start line,
+     and more out of every green gate. The course is still sized from the
+     difficulty's own starting crowd — the shadow run never sees a boost — so
+     what a player buys is a real edge, which is the point of saving up. */
+  const BOOSTS = {
+    start: { per: 3, max: 40, base: 30, grow: 1.28 },     // runners per level
+    gate: { per: 0.06, max: 25, base: 45, grow: 1.32 }     // share of a green gate's gain
+  };
+  const boostCost = (kind, level) =>
+    Math.round(BOOSTS[kind].base * Math.pow(BOOSTS[kind].grow, Math.max(0, level)));
+
+  const FIGHT = 0.055;               // a rival fight: about a third of a second
+  const KING_FIGHT = 0.02;           // the king is a longer fight, on purpose
+  const VICTORY = 72;                // ticks between the king falling and the end
 
   /* The crowd's width lives in course.js, because the course generator has to
      price it when it decides how big the king is. One formula, not two. */
@@ -62,7 +77,13 @@ window.PV = window.PV || {};
       this.diff = DIFFS[o.difficulty] || DIFFS.normal;
       this.courseKey = PV.CrowdCourse.COURSES[o.course] ? o.course : 'fields';
       this.course = PV.CrowdCourse.build(this.courseKey, this.diff, this.rng);
+      // 'ready' waits at the start line for a tap, with the shop open;
+      // 'run' is the course; 'won' is the king down and the crowd walking in.
+      this.phase = o.autostart ? 'run' : 'ready';
+      this.boost = { start: 0, gate: 0 };
       this.n = this.diff.start;
+      this.setBoost(o.boost);
+      this.victory = 0;
       this.peak = this.n;
       this.x = 0;
       this.aim = 0;                  // where the mouse or a finger wants us
@@ -86,6 +107,32 @@ window.PV = window.PV || {};
     get right() { return this.x + this.width / 2; }
     get feature() { return this.course.features[this.at] || null; }
     get fighting() { return !!this.clash; }
+    get ready() { return this.phase === 'ready'; }
+
+    /** Levels bought in the shop. Only before the run starts: a boost that
+        could land mid-course would be a different run from the same seed. */
+    setBoost(b) {
+      if (this.phase !== 'ready' && this.tick > 0) return false;
+      const src = b || {};
+      this.boost = {
+        start: Math.max(0, Math.min(BOOSTS.start.max, src.start | 0)),
+        gate: Math.max(0, Math.min(BOOSTS.gate.max, src.gate | 0))
+      };
+      this.n = this.diff.start + this.boost.start * BOOSTS.start.per;
+      this.peak = this.n;
+      return true;
+    }
+
+    /** What a run pays out. Storming the keep pays for the people who got
+        there; falling short still pays for the way you got. */
+    get coins() {
+      const won = this.overReason === 'stormed';
+      const along = Math.min(1, this.dist / this.course.length);
+      const base = won
+        ? 40 + Math.sqrt(this.n) * 6 + Math.sqrt(this.beaten) * 2
+        : 6 + along * 30 + Math.sqrt(this.beaten) * 1.5;
+      return Math.round(base * this.diff.coins * (1 + (this.course.tier - 1) * 0.25));
+    }
 
     /** A label that floats up from the crowd — gates, bites, wins. */
     pop(text, tone) {
@@ -102,7 +149,11 @@ window.PV = window.PV || {};
         const frac = overlap(this.left, this.right, g.x0, g.x1);
         if (frac <= 0) continue;
         claimed += frac;
-        total += PV.CrowdCourse.apply(g.op, g.val, this.n * frac);
+        const part = this.n * frac;
+        let out = PV.CrowdCourse.apply(g.op, g.val, part);
+        // The gate bonus: a share more of whatever a GREEN gate gave.
+        if (out > part) out += (out - part) * this.boost.gate * BOOSTS.gate.per;
+        total += out;
         if (frac > bw) { bw = frac; best = g; }
       }
       if (!best) return;                       // squeezed past the edge of both
@@ -127,8 +178,10 @@ window.PV = window.PV || {};
     fight() {
       const c = this.clash;
       // The rate follows the smaller side, so a fight is about as long
-      // whatever the numbers are.
-      this.clashAcc += Math.max(0.4, Math.min(this.n, c.n) * 0.055);
+      // whatever the numbers are. The king holds out longer: he is the end
+      // of the course, and a boss that folds in a third of a second is not one.
+      const rate = c.kind === 'castle' ? KING_FIGHT : FIGHT;
+      this.clashAcc += Math.max(0.4, Math.min(this.n, c.n) * rate);
       const hit = Math.floor(this.clashAcc);
       if (hit > 0) {
         this.clashAcc -= hit;
@@ -144,24 +197,41 @@ window.PV = window.PV || {};
       this.pop('\u2694 ' + c.was, 'win');
       const castle = c.kind === 'castle';
       this.clash = null;
-      if (castle) { this.score += this.n * 10; this.finish('stormed'); }
+      // The king falls and the crowd walks in under the flags before the
+      // result comes up. The score is settled now; the walk is only a walk.
+      if (castle) { this.score += this.n * 10; this.phase = 'won'; this.victory = 0; }
     }
 
     /* -------------------------------------------------------------- tick */
 
     step() {
       for (const a of this.takeInputs()) {
+        // Anything that means "go" starts the run: a tap, space, or a steer.
+        // Hovering the mouse over the canvas is not one of them.
+        if (this.phase === 'ready' && (a === 'go' || a === 'left' || a === 'right')) this.phase = 'run';
         if (a && typeof a === 'object' && a.lane != null) this.aim = Math.max(-1, Math.min(1, a.lane));
         else if (a === 'left') this.aim = Math.max(-1, this.x - STEER * 2);
         else if (a === 'right') this.aim = Math.min(1, this.x + STEER * 2);
       }
-      const d = this.aim - this.x;
-      this.x += Math.max(-STEER, Math.min(STEER, d));
-      this.clampX();
 
       for (let i = this.pops.length - 1; i >= 0; i--) {
         if (--this.pops[i].life <= 0) this.pops.splice(i, 1);
       }
+
+      // Standing at the start line: the saws already turn, nobody moves.
+      if (this.phase === 'ready') return;
+
+      // The king is down: the crowd closes on the middle and walks in.
+      if (this.phase === 'won') {
+        this.x += Math.max(-STEER, Math.min(STEER, -this.x));
+        this.dist += this.speed * 0.6;
+        if (++this.victory >= VICTORY) this.finish('stormed');
+        return;
+      }
+
+      const d = this.aim - this.x;
+      this.x += Math.max(-STEER, Math.min(STEER, d));
+      this.clampX();
 
       if (this.clash) { this.fight(); return; }
 
@@ -210,6 +280,9 @@ window.PV = window.PV || {};
   };
 
   PV.CrowdRush.DIFFS = DIFFS;
+  PV.CrowdRush.BOOSTS = BOOSTS;
+  PV.CrowdRush.boostCost = boostCost;
+  PV.CrowdRush.VICTORY = VICTORY;
   PV.CrowdRush.widthOf = widthOf;
   PV.CrowdRush.hazardX = hazardX;
   PV.CrowdRush.hazardLive = hazardLive;

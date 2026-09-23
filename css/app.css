@@ -457,6 +457,19 @@ main {
 .td-buy canvas, .td-lv canvas { display: block; }
 .td-buy.poor { opacity: .55; }
 .td-where { text-align: center; width: 100%; }
+
+/* Crowd Rush's upgrade shop, in the side panel. */
+.crowd-shop { display: grid; gap: 9px; text-align: left; min-width: 170px; }
+.crowd-shop .shop-head { display: flex; justify-content: space-between; align-items: center; }
+.crowd-shop .shop-head .k { margin-bottom: 0; }
+.crowd-shop .fx { font-size: 11.5px; color: var(--dim); margin: 0; }
+.up-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: center; }
+.up-row .nm { font-weight: 600; font-size: 13px; }
+.up-row .btn { grid-row: span 2; white-space: nowrap; }
+.coin {
+  display: inline-block; width: .8em; height: .8em; margin-right: 4px; vertical-align: -.08em;
+  border-radius: 50%; background: radial-gradient(circle at 35% 35%, #FFE58A, #F6B32B 55%, #C98A0B);
+}
 .td-boss {
   width: 100%; justify-content: center; font-weight: 600;
   color: var(--bad); border-color: var(--bad); background: transparent;

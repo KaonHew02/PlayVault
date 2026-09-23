@@ -74,6 +74,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **10** | Kart Racing removed | **2026-09-22** — the user asked for it to go. `js/games/racing/` and its strings, tests and script tags are gone; the phase 5, 6 and 7 notes above are kept as the record of what was learnt building it. A circuit racer to the crazygames *Circuit Racing* reference is the replacement, and is not built yet |
 | **11** | The option sheet grows cards, and the worm dash eats the tail | **2026-09-22** — see below |
 | **12** | Crowd Rush repainted to its reference | **2026-09-22** — see below |
+| **16** | Crowd Rush plays like its reference | **2026-09-23** — the crazygames link again, with "just copy it". The game's own art, name and code are FreePlay's and are not copied; what its page lists as the game — a start line, coins and upgrades between runs, crowds that charge, a king to knock down — is built here, drawn in this game's own style. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -357,3 +358,38 @@ job: Count Masters is **bright**, and what had been built was dark.
   white road reads as a hole in it.
 - The crowd's own count sits above the heads of the FRONT rank. Anchored to
   the back of the crowd it climbs into whatever gate is coming.
+
+### Phase 16 — Crowd Rush, played like its reference
+
+"Just copy it" cannot mean the reference's art, characters or code — those
+belong to FreePlay. It can mean the game its own page describes, and that is
+what was missing: this played as one long level with nothing between runs.
+
+- **A start line.** A run waits with the crowd standing until a tap, Space or
+  a steer. Hovering the mouse over the canvas is not a start. A race skips it
+  (`autostart`), because nobody should be waiting at the line while the
+  others run.
+- **Coins and two upgrades.** A run pays coins — storming the keep pays for
+  the people who got there, falling short still pays for the way you got —
+  and the shop at the start line sells **starting crowd** (+3 runners a
+  level) and **gate bonus** (+6% of whatever a GREEN gate gave, never
+  softening a red one). The course is still sized from the difficulty's own
+  starting crowd; the shadow run never sees a boost, so what you buy is a
+  real edge. Upgrades are refused once the run has started, and a race uses
+  none. The record is `crowd.meta`, sealed and validated like the profile,
+  and in the backup.
+- **A round crowd.** Runners pack on a sunflower spiral into a blob, not a
+  random scatter. Runner i keeps its angle whatever the count, so a gate
+  grows the blob from the outside instead of reshuffling it.
+- **Crowds that charge.** A rival stands still until you are nine metres
+  off, then runs at you. The charge is drawn to land exactly where the
+  engine starts the fight, just past the front of YOUR crowd, which moves
+  with its size — a rival drawn at a fixed distance stood inside big crowds.
+  Its count sits over its far rank, or the two numbers stack when they meet.
+  Every runner lost in a fight goes up in a puff.
+- **A king.** The keep is held by one figure: our own runner five times the
+  size, in red, with a cape, a plain crown and the course's only face. His
+  health bar is the runners it takes. The fight is slower than a rival's on
+  purpose, and when he falls the flags turn blue and the crowd walks in
+  under confetti for a moment (`VICTORY` ticks) before the result. The
+  score is settled when he falls; the walk is only a walk.
