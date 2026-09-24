@@ -23,10 +23,13 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const RUN = 0.108;                 // metres per tick — about 6.5 m/s
-  const STEER = 0.030;               // track-widths per tick
+  const RUN = 0.135;                 // metres per tick — about 8 m/s
+  const STEER = 0.05;                // track-widths per tick: across in ~0.7 s
   const HAZARD_WINDOW = 0.9;         // metres of contact either side
-  const HAZARD_BITE = 0.045;         // of the crowd, per tick, fully overlapped
+  // Of the crowd, per METRE run while fully overlapped. Per metre, not per
+  // tick: a faster course spends fewer ticks inside a saw, and a bite per tick
+  // would make every hazard gentler the faster the level.
+  const HAZARD_BITE = 0.045 / 0.108;
 
   const DIFFS = {
     easy: { key: 'easy', start: 22, rival: 0.42, king: 0.62, badBias: 0.55, hazard: 0.18, speed: 0.92, xp: 0.7, coins: 0.8 },
@@ -99,6 +102,10 @@ window.PV = window.PV || {};
       this.x = 0;
       this.aim = 0;                  // where the mouse or a finger wants us
       this.dist = 0;
+      // Where the crowd was at the start of this tick, for a view that draws
+      // between ticks. Never read by the rules.
+      this.lastDist = 0;
+      this.lastX = 0;
       this.speed = RUN * this.diff.speed;
       this.at = 0;                   // the next feature that has not fired
       this.clash = null;
@@ -219,6 +226,8 @@ window.PV = window.PV || {};
     /* -------------------------------------------------------------- tick */
 
     step() {
+      this.lastDist = this.dist;
+      this.lastX = this.x;
       for (const a of this.takeInputs()) {
         // Anything that means "go" starts the run: a tap, space, or a steer.
         // Hovering the mouse over the canvas is not one of them.
@@ -262,7 +271,7 @@ window.PV = window.PV || {};
         const hx = hazardX(f, this.tick);
         const frac = overlap(this.left, this.right, hx - f.w / 2, hx + f.w / 2);
         if (frac <= 0) continue;
-        const bite = Math.max(1, Math.round(this.n * frac * HAZARD_BITE));
+        const bite = Math.max(1, Math.round(this.n * frac * HAZARD_BITE * this.speed));
         this.n = Math.max(0, this.n - bite);
         this.lost += bite;
         if (this.tick % 6 === 0) this.pop('-' + bite, 'bad');

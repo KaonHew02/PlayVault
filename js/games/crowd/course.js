@@ -66,7 +66,7 @@ window.PV = window.PV || {};
     king: [0.14, 0.97],
     badBias: [0.30, 0.90],
     hazard: [0.10, 0.34],
-    speed: [0.90, 1.08],
+    speed: [0.95, 1.25],
     length: [200, 520],
     gapLo: [34, 22],
     gapHi: [44, 32],
@@ -108,7 +108,8 @@ window.PV = window.PV || {};
         hazard: at('hazard'),
         graze: GRAZE,
         mercy: lv <= MERCY_UNTIL ? MERCY : 0,
-        speed: at('speed'),
+        // Faster every level, and still a little faster past 25, to a cap.
+        speed: Math.min(1.45, at('speed') + past * 0.01),
         xp: at('xp'),
         coins: at('coins') + Math.min(1, past * 0.01)
       }

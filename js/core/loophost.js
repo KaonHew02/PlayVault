@@ -234,12 +234,18 @@ window.PV = window.PV || {};
       draw();
     }
 
-    function draw() {
+    /* `alpha` is how far the clock is past the last tick, 0 to 1, when the
+       ticker calls; anything else draws the latest tick as it stands. A game
+       that scrolls uses it to draw between its last two ticks, because a
+       screen that does not refresh at exactly sixty gets two ticks on one
+       frame and none on the next, and a world moved only by whole ticks
+       lurches every time it does. */
+    function draw(alpha) {
       if (!game) return;
       const dpr = window.devicePixelRatio || 1;
       const c = canvas.getContext('2d');
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      spec.draw(c, game, geom, api);
+      spec.draw(c, game, geom, api, typeof alpha === 'number' ? alpha : 1);
       if (paused) {
         c.fillStyle = 'rgba(11,15,20,.78)';
         c.fillRect(0, 0, geom.w, geom.h);

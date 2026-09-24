@@ -88,7 +88,17 @@ window.PV = window.PV || {};
       depth(d) { const t = Math.max(0, d) / (Math.max(0, d) + 15); return t; },
       y(d) { return yBase - this.depth(d) * (yBase - yHor); },
       s(d) { return 1 - this.depth(d) * 0.80; },
-      x(xt, d) { return this.cx + xt * halfW * this.s(d); }
+      x(xt, d) { return this.cx + xt * halfW * this.s(d); },
+
+      /* The same projection with no clamp, for the GROUND only. Nothing
+         stands behind the crowd's line, but the road does run on toward the
+         camera: drawn with the clamped one it stopped four fifths of the way
+         down and left a flat green band under it. `near` is a little past the
+         bottom edge (y(-4.29) is the bottom, whatever the canvas size). */
+      near: -4.6,
+      gy(d) { return yBase - (d / (d + 15)) * (yBase - yHor); },
+      gs(d) { return 1 - (d / (d + 15)) * 0.80; },
+      gx(xt, d) { return this.cx + xt * halfW * this.gs(d); }
     };
   }
 
@@ -240,44 +250,43 @@ window.PV = window.PV || {};
     c.fillStyle = th.ground;
     c.fillRect(0, cam.yHor, cam.w, cam.h - cam.yHor);
 
-    // Bands of ground, spaced in metres, so the world scrolls under you.
+    // Bands of ground, spaced in metres, so the world scrolls under you — all
+    // the way down past the bottom edge, not just to the crowd's line.
+    const near = cam.near;
     c.fillStyle = th.ground2;
     const band = 10;
-    for (let k = Math.floor(dist / band) * band; k < dist + FAR; k += band) {
-      const d0 = k - dist, d1 = d0 + band / 2;
-      if (d1 < 0) continue;
-      const y0 = cam.y(Math.max(0, d1)), y1 = cam.y(Math.max(0, d0));
+    for (let k = Math.floor((dist + near) / band) * band; k < dist + FAR; k += band) {
+      const d0 = Math.max(near, k - dist), d1 = k - dist + band / 2;
+      if (d1 <= near) continue;
+      const y0 = cam.gy(d1), y1 = cam.gy(d0);
       c.fillRect(0, y0, cam.w, Math.max(1, y1 - y0));
     }
 
-    // The track itself: one trapezoid from the far clip to the camera.
-    const yFar = cam.y(FAR), sFar = cam.s(FAR);
-    c.fillStyle = th.edge;
-    c.beginPath();
-    c.moveTo(cam.x(-1.16, FAR), yFar); c.lineTo(cam.x(1.16, FAR), yFar);
-    c.lineTo(cam.x(1.16, 0), cam.yBase); c.lineTo(cam.x(-1.16, 0), cam.yBase);
-    c.closePath(); c.fill();
-    c.fillStyle = th.road;
-    c.beginPath();
-    c.moveTo(cam.x(-1, FAR), yFar); c.lineTo(cam.x(1, FAR), yFar);
-    c.lineTo(cam.x(1, 0), cam.yBase); c.lineTo(cam.x(-1, 0), cam.yBase);
-    c.closePath(); c.fill();
+    // The track itself: one trapezoid from the far clip to past the bottom.
+    const yFar = cam.gy(FAR), yNear = cam.gy(near);
+    for (const [half, colour] of [[1.16, th.edge], [1, th.road]]) {
+      c.fillStyle = colour;
+      c.beginPath();
+      c.moveTo(cam.gx(-half, FAR), yFar); c.lineTo(cam.gx(half, FAR), yFar);
+      c.lineTo(cam.gx(half, near), yNear); c.lineTo(cam.gx(-half, near), yNear);
+      c.closePath(); c.fill();
+    }
 
     // Centre dashes and roadside posts, both pinned to whole metres.
     c.fillStyle = th.dash;
-    for (let k = Math.ceil(dist / 6) * 6; k < dist + FAR; k += 6) {
+    c.globalAlpha = 0.55;
+    for (let k = Math.ceil((dist + near) / 6) * 6; k < dist + FAR; k += 6) {
       const d0 = k - dist, d1 = d0 + 2.2;
-      const y0 = cam.y(d1), y1 = cam.y(d0), s = cam.s(d0);
-      c.globalAlpha = 0.55;
+      const y0 = cam.gy(d1), y1 = cam.gy(d0), s = cam.gs(d0);
       c.fillRect(cam.cx - cam.halfW * 0.012 * s * 2, y0,
         Math.max(1, cam.halfW * 0.024 * s * 2), Math.max(1, y1 - y0));
-      c.globalAlpha = 1;
     }
+    c.globalAlpha = 1;
     c.fillStyle = th.prop;
-    for (let k = Math.ceil(dist / 9) * 9; k < dist + FAR; k += 9) {
-      const d0 = k - dist, s = cam.s(d0), y = cam.y(d0), hp = cam.h * 0.06 * s;
+    for (let k = Math.ceil((dist + near) / 9) * 9; k < dist + FAR; k += 9) {
+      const d0 = k - dist, s = cam.gs(d0), y = cam.gy(d0), hp = cam.h * 0.06 * s;
       for (const side of [-1, 1]) {
-        const x = cam.x(side * 1.3, d0);
+        const x = cam.gx(side * 1.3, d0);
         c.fillRect(x - hp * 0.12, y - hp, Math.max(1, hp * 0.24), hp);
       }
     }
@@ -287,7 +296,6 @@ window.PV = window.PV || {};
     haze.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = haze;
     c.fillRect(0, yFar - cam.h * 0.06, cam.w, cam.h * 0.16);
-    void sFar;
   }
 
   /** A gate pair: two solid slabs on dark posts, the way the reference has
@@ -751,18 +759,28 @@ window.PV = window.PV || {};
       onRelabel() { paintShop(); },
 
       onFrame(game) {
-        countEl.textContent = PV.fmtNum(game.n);
-        beatEl.textContent = PV.fmtNum(game.beaten);
-        goneEl.textContent = Math.round(Math.min(1, game.dist / game.course.length) * 100) + '%';
+        // Only what changed: a text node rewritten sixty times a second is a
+        // layout sixty times a second, for numbers that mostly sit still.
+        const put = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+        put(countEl, PV.fmtNum(game.n));
+        put(beatEl, PV.fmtNum(game.beaten));
+        put(goneEl, Math.round(Math.min(1, game.dist / game.course.length) * 100) + '%');
         // The shop opens and closes with the start line.
         if (shopEl && shopOpen !== game.ready) paintShop();
       },
 
-      draw(c, game, geom) {
+      draw(c, game, geom, api, alpha) {
         const cam = camera(geom);
+        // Drawn between the last two ticks, `alpha` of the way from one to the
+        // other, so the road glides instead of stepping. The rules never see
+        // this: it is where things are drawn, not where they are.
+        const a = alpha == null ? 1 : Math.max(0, Math.min(1, alpha));
+        const dist = game.lastDist + (game.dist - game.lastDist) * a;
+        const px = game.lastX + (game.x - game.lastX) * a;
+        const tick = Math.max(0, game.tick - 1 + a);
         // The game's own course: a level picks its scenery from its number.
         const th = THEMES[game.courseKey] || THEMES.fields;
-        ground(c, cam, th, game.dist);
+        ground(c, cam, th, dist);
 
         // A fight is drawn just past the front of YOUR crowd, wherever that
         // is: a big crowd is deep, and a rival drawn at a fixed distance
@@ -770,13 +788,14 @@ window.PV = window.PV || {};
         const meet = depthOf(game.width) + 0.35;
         const fightingKing = !!(game.clash && game.clash.kind === 'castle');
         const won = game.phase === 'won';
-        const walk = won ? game.victory / PV.CrowdRush.VICTORY : 0;
+        const vic = won ? Math.max(0, game.victory - 1 + a) : 0;
+        const walk = vic / PV.CrowdRush.VICTORY;
         let gateLine = null;
 
         const list = game.course.features;
         for (let i = list.length - 1; i >= 0; i--) {
           const f = list[i];
-          const d = f.at - game.dist;
+          const d = f.at - dist;
           if (f.kind === 'castle') {
             // The keep stands back from where the king meets you, and he
             // walks out of its gate to do it.
@@ -787,24 +806,24 @@ window.PV = window.PV || {};
             const at = approach(d, d + 4.5, meet);
             const kd = (fightingKing || won) ? meet + (won ? walk * 2 : 0) : at.d;
             const hp = fightingKing ? game.clash.n : (won ? 0 : f.n);
-            king(c, cam, kd, hp, f.n, game.tick, fightingKing, won ? game.victory : -1);
+            king(c, cam, kd, hp, f.n, tick, fightingKing, won ? vic : -1);
             continue;
           }
           if (d > FAR || d < -2) continue;
-          if (f.kind === 'gates') gateWall(c, cam, f, game.dist);
+          if (f.kind === 'gates') gateWall(c, cam, f, dist);
           else if (f.kind === 'rivals') {
             if (i < game.at) continue;       // met already: the fight is drawn below
             const at = approach(d, d, meet);
             const rw = Math.min(1.4, PV.CrowdRush.widthOf(f.n));
-            crowd(c, cam, f.n, 0, at.d, rw, game.tick, RED, 31 + i, at.pace);
+            crowd(c, cam, f.n, 0, at.d, rw, tick, RED, 31 + i, at.pace);
             tally(c, cam, f.n, 0, at.d + depthOf(rw), '#FECDD3');
-          } else hazard(c, cam, f, game.dist, game.tick);
+          } else hazard(c, cam, f, dist, tick);
         }
 
         // The crowd being fought right now, pressed up against yours.
         if (game.clash && !fightingKing) {
           const rw = Math.min(1.4, PV.CrowdRush.widthOf(game.clash.n));
-          crowd(c, cam, game.clash.n, 0, meet, rw, game.tick, RED, 5, 1.2);
+          crowd(c, cam, game.clash.n, 0, meet, rw, tick, RED, 5, 1.2);
           tally(c, cam, game.clash.n, 0, meet + depthOf(rw), '#FECDD3');
         }
 
@@ -815,7 +834,7 @@ window.PV = window.PV || {};
             for (let k = Math.min(6, foeN - game.clash.n); k > 0; k--) {
               puffSeq++;
               puffs.push({
-                x: (fightingKing ? 0 : game.x * 0.5) + (hash(puffSeq, 3) - 0.5) * 2 * span,
+                x: (fightingKing ? 0 : px * 0.5) + (hash(puffSeq, 3) - 0.5) * 2 * span,
                 d: meet - 0.2 + hash(puffSeq, 4) * 0.4, life: 18
               });
             }
@@ -833,10 +852,10 @@ window.PV = window.PV || {};
         // Your crowd. After the king falls it closes up and pours in through
         // the gate: anyone past the gate line is inside, and not drawn.
         const pace = game.ready ? 0 : 1;
-        crowd(c, cam, game.n, game.x, won ? walk * Math.max(0, (gateLine || 6) - 1) : 0,
-          game.width, game.tick, BLUE, 1, pace, won ? gateLine : null);
-        if (!won) tally(c, cam, game.n, game.x, 0, '#DBEAFE');
-        if (won) confetti(c, cam, game.victory);
+        crowd(c, cam, game.n, px, won ? walk * Math.max(0, (gateLine || 6) - 1) : 0,
+          game.width, tick, BLUE, 1, pace, won ? gateLine : null);
+        if (!won) tally(c, cam, game.n, px, 0, '#DBEAFE');
+        if (won) confetti(c, cam, vic);
 
         for (const p of game.pops) {
           const k = 1 - p.life / 48;
@@ -861,7 +880,7 @@ window.PV = window.PV || {};
         c.fillStyle = 'rgba(31,58,84,.28)';
         rr(c, bx, by, bw, bh, bh / 2); c.fill();
         c.fillStyle = '#F6B32B';
-        rr(c, bx, by, Math.max(bh, bw * Math.min(1, game.dist / game.course.length)), bh, bh / 2);
+        rr(c, bx, by, Math.max(bh, bw * Math.min(1, dist / game.course.length)), bh, bh / 2);
         c.fill();
         if (game.level) {
           // On a level, the bar runs from this level's number to the next's.
@@ -905,7 +924,7 @@ window.PV = window.PV || {};
             tallyAt(c, cam.cx, cam.h * 0.19, Math.max(16, cam.h * 0.06),
               t('crowd.level', { n: game.level }), '#FFE58A');
           }
-          const pulse = 1 + Math.sin(game.tick * 0.12) * 0.05;
+          const pulse = 1 + Math.sin(tick * 0.12) * 0.05;
           tallyAt(c, cam.cx, cam.h * 0.47, Math.max(20, cam.h * 0.075) * pulse,
             t('crowd.tapToRun'), '#FFFFFF');
           tallyAt(c, cam.cx, cam.h * 0.55, Math.max(12, cam.h * 0.036),

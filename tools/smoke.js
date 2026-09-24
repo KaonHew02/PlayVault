@@ -1269,7 +1269,8 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
   for (let n = 1; n < 40; n++) {
     const a = L.level(n), b = L.level(n + 1);
     ok(b.diff.rival >= a.diff.rival && b.diff.king >= a.diff.king && b.diff.hazard >= a.diff.hazard
-      && b.diff.badBias >= a.diff.badBias && b.def.length >= a.def.length && b.diff.start <= a.diff.start,
+      && b.diff.badBias >= a.diff.badBias && b.def.length >= a.def.length && b.diff.start <= a.diff.start
+      && b.diff.speed >= a.diff.speed,
       'level ' + (n + 1) + ' is easier than level ' + n + ' somewhere');
     ok(L.seedFor(n) !== 0 && L.seedFor(n) === L.seedFor(n) && L.seedFor(n) !== L.seedFor(n + 1),
       'level ' + n + ' has no seed of its own');
@@ -1290,6 +1291,31 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
     ok(!pair || pair.lanes.every(ln => ln.op !== 'sub' || ln.val < g.n),
       'level ' + n + ' opens on a gate that wipes the whole crowd');
   }
+  // Later levels run visibly faster, not a few per cent faster.
+  ok(L.level(25).diff.speed >= L.level(1).diff.speed * 1.25, 'level 25 does not run noticeably faster than level 1');
+
+  /* A hazard costs the same share of the crowd however fast the course runs:
+     its bite is per metre. Per tick, a faster level spent fewer ticks in the
+     saw and every hazard got gentler as the levels went up. */
+  const bitten = faster => {
+    const h = new PV.CrowdRush({ seed: 3, course: 'fields', difficulty: 'normal', autostart: true });
+    h.speed *= faster;
+    h.course = { length: 1000, king: 1, features: [{ kind: 'spikes', at: 6, x: 0, w: 2, phase: 0 }] };
+    h.n = 1000;
+    while (h.dist < 8 && !h.isOver()) h.advance();
+    return 1 - h.n / 1000;
+  };
+  const slowBite = bitten(1), fastBite = bitten(1.4);
+  ok(slowBite > 0.05 && Math.abs(fastBite - slowBite) / slowBite < 0.25,
+    'a hazard bit ' + (slowBite * 100).toFixed(0) + '% slow and ' + (fastBite * 100).toFixed(0) + '% fast');
+
+  // The view draws between ticks, so the engine keeps where it was.
+  const lg = new PV.CrowdRush({ seed: 3, course: 'fields', difficulty: 'normal', autostart: true });
+  lg.advance();
+  const was = lg.dist;
+  lg.advance();
+  ok(lg.lastDist === was && lg.dist > was, 'the last position was not kept for drawing between ticks');
+
   // A good player clears the first ten levels without buying anything.
   for (let n = 1; n <= 10; n++) {
     const g = new PV.CrowdRush({ seed: L.seedFor(n), level: n });

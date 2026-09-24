@@ -77,6 +77,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **16** | Crowd Rush plays like its reference | **2026-09-23** — the crazygames link again, with "just copy it". The game's own art, name and code are FreePlay's and are not copied; what its page lists as the game — a start line, coins and upgrades between runs, crowds that charge, a king to knock down — is built here, drawn in this game's own style. See below |
 | **17** | Tower Defense: normal is no longer easy | **2026-09-24** — "normal mode need increase the enemy power, i test play like ez mode". Measured with a bot before changing anything; see below |
 | **18** | Crowd Rush, level by level | **2026-09-24** — "count master is level by level, can make it level by level?" Levels are the default mode now; free run keeps the course and difficulty picker, and races use it. Measured with bots before shipping; see below |
+| **19** | Crowd Rush: smooth, faster, and a road to the bottom edge | **2026-09-24** — "not smooth", "why down side got the green color", "move not fast… more level will increase the speed right?" See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -473,3 +474,25 @@ misses one hazard in five), each with and without buying upgrades.
   next, each level is one course, level 1 is gentler than a free run on
   easy, no level of the first fifteen opens on a gate that wipes the crowd,
   and a good player clears levels 1-10 with nothing bought.
+
+### Phase 19 — Crowd Rush: smooth, faster, and the road to the bottom
+
+- **Drawn between ticks.** The loop is a fixed sixty ticks a second and the
+  screen draws once per refresh; the view drew only whole ticks. A screen
+  that does not refresh at exactly sixty — every 120/144 Hz laptop, and a
+  60 Hz one whenever its timing drifts — gets two ticks on one frame and
+  none on the next, and a world that scrolls lurches every time. The harness
+  now hands `spec.draw` the fraction past the last tick, the engine keeps
+  where the crowd was (`lastDist`, `lastX`, never read by the rules), and
+  the view draws in between. Measured first: a frame costs about a
+  millisecond to draw, so it was never the machine.
+- **The road runs to the bottom edge.** The camera puts the crowd's line four
+  fifths of the way down and clamped everything behind it, so the road
+  stopped there over a flat green band. The ground uses the same projection
+  unclamped; nothing else does, because nothing else stands behind the line.
+- **Faster, and faster by level.** Running 0.108 → 0.135 m a tick, steering
+  0.03 → 0.05 track-widths a tick (across in about 0.7 s), and the level ramp
+  0.95 → 1.25 by level 25, climbing to 1.45: 7.7 m/s at level 1 (it was 5.8)
+  to 11.7 m/s. A hazard now bites per METRE rather than per tick, or every
+  faster level would have made every saw gentler. The level curve measured
+  the same afterwards: quicker steering pays for quicker running.
