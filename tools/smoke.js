@@ -935,6 +935,97 @@ section('tower defense — ' + (2 * scale) + ' runs per map', () => {
   ok(easy.enemies[0].speed < hard.enemies[0].speed, 'the same grunt is not faster on hard');
   ok(easy.waves === hard.waves, 'difficulty changed the number of waves');
 
+  // Each difficulty up sends more health down the road in the same wave.
+  const heft = diff => {
+    const w = new PV.TowerDef({ seed: 5, map: 'meadow', difficulty: diff });
+    w.wave = 10;
+    for (const k of w.waveComposition(10)) w.spawn(k);
+    return w.enemies.reduce((sum, e) => sum + e.maxHp, 0);
+  };
+  ok(heft('easy') < heft('normal') && heft('normal') < heft('hard'),
+    'a wave does not get heavier from easy to normal to hard');
+
+  /* Balance, checked the way it was set. A player who buys the most damage
+     per gold against the armour in front of it — a new tower on the square
+     that sees the most road for its type, or an upgrade — plays while
+     throwing away part of its income. Normal used to be cleared on 60% of
+     it, which is easy by another name; hard must still be beatable by a
+     player who plays well. */
+  function competent(map, difficulty, seed, income) {
+    const cg = new PV.TowerDef({ seed: seed, map: map, difficulty: difficulty });
+    const T = PV.TowerDef.TOWERS;
+    const rangeAt = (type, level) => T[type].range * (1 + (level - 1) * 0.12);
+    const cover = (x, y, r) => {
+      let n = 0;
+      for (const lane of cg.map.lanes) for (const p of lane.points) if (Math.hypot(p.x - x - 0.5, p.y - y - 0.5) <= r) n++;
+      return n;
+    };
+    const free = [];
+    for (let y = 0; y < cg.map.rows; y++) {
+      for (let x = 0; x < cg.map.cols; x++) {
+        if (!cg.canBuild(x, y)) continue;
+        const c = {};
+        for (const type of ['gun', 'frost', 'cannon']) c[type] = [0, 1, 2, 3].map(l => (l ? cover(x, y, rangeAt(type, l)) : 0));
+        free.push({ x: x, y: y, c: c });
+      }
+    }
+    const spotOf = new Map();
+    const eff = (type, level, A) => {
+      const s = T[type], k = level - 1;
+      const v = Math.max(1, s.dmg * (1 + k * 0.55) - A) / Math.round(s.rate * (1 - k * 0.12));
+      return s.splash ? v * 1.8 : v;
+    };
+    cg.money = Math.floor(cg.money * income);
+    let last = cg.money;
+    while (!cg.isOver() && cg.tick < 60 * 60 * 30) {
+      if (cg.tick % 12 === 0) {
+        for (let k = 0; k < 6; k++) {
+          const w = cg.wave + 1;
+          const A = 2 * (cg.rankFor(w) - 1) + (w >= 8 ? 1.5 : 0) + (cg.isBossWave(w) ? 1 : 0);
+          const opts = [];
+          for (const type of ['gun', 'cannon']) {
+            let best = null;
+            for (const s of free) if (!best || s.c[type][1] > best.c[type][1]) best = s;
+            if (best) opts.push({ type: type, spot: best, cost: T[type].cost, value: eff(type, 1, A) * best.c[type][1] / T[type].cost });
+          }
+          const frosts = cg.towers.filter(t => t.type === 'frost').length;
+          if (cg.towers.length >= 4 && frosts < Math.min(3, Math.floor(cg.towers.length / 5) + 1)) {
+            let best = null;
+            for (const s of free) if (!best || s.c.frost[1] > best.c.frost[1]) best = s;
+            if (best) opts.push({ type: 'frost', spot: best, cost: T.frost.cost, value: 1e9 });
+          }
+          for (const t of cg.towers) {
+            if (t.level >= PV.TowerDef.MAX_LEVEL || t.type === 'frost') continue;
+            const c = spotOf.get(t).c[t.type], cost = cg.upgradeCost(t);
+            opts.push({ tower: t, cost: cost, value: (eff(t.type, t.level + 1, A) * c[t.level + 1] - eff(t.type, t.level, A) * c[t.level]) / cost });
+          }
+          if (!opts.length) break;
+          opts.sort((a, b) => b.value - a.value);
+          const pick = cg.money >= opts[0].cost ? opts[0]
+            : opts.find(o => cg.money >= o.cost && o.value >= opts[0].value * 0.75);
+          if (!pick) break;
+          if (pick.tower) { if (!cg.upgrade(pick.tower)) break; continue; }
+          if (!cg.build(pick.spot.x, pick.spot.y, pick.type)) break;
+          spotOf.set(cg.towerAt(pick.spot.x, pick.spot.y), pick.spot);
+          free.splice(free.indexOf(pick.spot), 1);
+        }
+      }
+      cg.advance();
+      if (cg.money > last) cg.money -= Math.floor((cg.money - last) * (1 - income));
+      last = cg.money;
+    }
+    return cg;
+  }
+  for (const map of ['meadow', 'canyon']) {
+    ok(competent(map, 'easy', 101, 0.6).overReason === 'cleared',
+      map + ': easy is no longer cleared on 60% of the gold');
+    ok(competent(map, 'normal', 101, 0.6).overReason !== 'cleared',
+      map + ': normal still plays like easy — cleared on 60% of the gold');
+  }
+  ok(competent('meadow', 'normal', 101, 1).overReason === 'cleared', 'a good player cannot clear normal');
+  ok(competent('crossroads', 'hard', 202, 1).overReason === 'cleared',
+    'a good player cannot clear hard on its hardest map');
+
   // Armour is taken off every hit, and a hit always does something.
   const ag = new PV.TowerDef({ seed: 2, map: 'meadow' });
   ag.wave = 1;

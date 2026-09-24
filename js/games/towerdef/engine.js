@@ -52,10 +52,25 @@ window.PV = window.PV || {};
     }
   };
 
+  /* Measured, not guessed. A bot that buys the most damage per gold against
+     the armour in front of it was run on every map while throwing away part
+     of its income, and the least share it can still clear on is how much
+     slack a difficulty leaves: easy about 27%, normal 78%, hard 88%.
+
+     Normal used to need 54% and lose no life on any map, which to anyone who
+     plays decently is the same game as easy. Its enemies now carry 30% more
+     health and put it on faster wave by wave, so a good player loses lives
+     on four maps of six and still clears all of them.
+
+     Hard's enemies are each a touch lighter than normal's (1.25 against
+     1.30, on the same ramp). There are 15% more of them, 10% faster, into
+     less gold and fewer lives, and giving them normal's health as well puts
+     a wall at wave 8 — where they rank up and armour arrives — that the bot
+     cannot get past on two maps. */
   const DIFFS = {
     easy: { key: 'easy', lives: 25, money: 300, hp: 0.78, ramp: 0.25, speed: 0.92, bounty: 1.3, count: 0.85, rest: 360, xp: 0.7, score: 0.8 },
-    normal: { key: 'normal', lives: 20, money: 220, hp: 1.00, ramp: 0.30, speed: 1.00, bounty: 1.0, count: 1.00, rest: 300, xp: 1.0, score: 1.0 },
-    hard: { key: 'hard', lives: 12, money: 190, hp: 1.25, ramp: 0.30, speed: 1.10, bounty: 0.95, count: 1.15, rest: 240, xp: 1.5, score: 1.4 }
+    normal: { key: 'normal', lives: 20, money: 220, hp: 1.30, ramp: 0.36, speed: 1.00, bounty: 1.0, count: 1.00, rest: 300, xp: 1.0, score: 1.0 },
+    hard: { key: 'hard', lives: 12, money: 190, hp: 1.25, ramp: 0.36, speed: 1.10, bounty: 0.95, count: 1.15, rest: 240, xp: 1.5, score: 1.4 }
   };
 
   const WAVES = 20;

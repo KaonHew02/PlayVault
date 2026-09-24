@@ -75,6 +75,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **11** | The option sheet grows cards, and the worm dash eats the tail | **2026-09-22** — see below |
 | **12** | Crowd Rush repainted to its reference | **2026-09-22** — see below |
 | **16** | Crowd Rush plays like its reference | **2026-09-23** — the crazygames link again, with "just copy it". The game's own art, name and code are FreePlay's and are not copied; what its page lists as the game — a start line, coins and upgrades between runs, crowds that charge, a king to knock down — is built here, drawn in this game's own style. See below |
+| **17** | Tower Defense: normal is no longer easy | **2026-09-24** — "normal mode need increase the enemy power, i test play like ez mode". Measured with a bot before changing anything; see below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -393,3 +394,40 @@ what was missing: this played as one long level with nothing between runs.
   purpose, and when he falls the flags turn blue and the crowd walks in
   under confetti for a moment (`VICTORY` ticks) before the result. The
   score is settled when he falls; the walk is only a walk.
+
+### Phase 17 — Tower Defense, normal made harder by measurement
+
+"Normal plays like easy" was checked before anything was changed. A bot that
+buys the most damage per gold against the armour in front of it — a new tower
+on the square that sees the most road for its type, or an upgrade — played
+every map while throwing away part of its income. The least share it can
+still clear on is how much slack a difficulty leaves.
+
+| | before | after |
+| --- | --- | --- |
+| easy | 27% | 27% (unchanged) |
+| normal | 54%, no life lost on any map | 78%, lives lost on four maps of six |
+| hard | 79% | 88%, close to losing on three maps |
+
+Normal needing 54% and never losing a life is the same game as easy to
+anyone who plays decently. Its enemies now carry **30% more health** and put
+it on **faster wave by wave** (ramp 0.30 → 0.36). A weaker bot — fixed build
+order, towers placed well — also still clears every map on normal, losing up
+to half its lives on the meadow.
+
+Hard had to move too, or normal would have landed on top of it. It keeps its
+health and takes normal's ramp. Its enemies are each a touch lighter than
+normal's (1.25 against 1.30) on purpose: there are 15% more of them, 10%
+faster, into less gold and fewer lives, and giving them normal's health as
+well puts a **wall at wave 8** — where enemies rank up and armour arrives —
+that the bot cannot get past on two maps. Starting gold does not move that
+wall; only the late-game ramp can add difficulty without it.
+
+- The first measurements used a bot with a fixed build order, and it made
+  the meadow — the one-star map — look like the hardest one, which almost
+  earned it a gold bonus. A bot that upgrades by value found the meadow
+  mid-pack. Calibrate on the better player; a weak one measures itself.
+- `smoke.js` now holds the result: sixty per cent of the gold still clears
+  easy and no longer clears normal on two maps, a good player clears normal
+  and the hardest map on hard, and a wave gets heavier from easy to normal to
+  hard.
