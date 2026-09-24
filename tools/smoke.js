@@ -2050,14 +2050,30 @@ section('race — ranking a table', () => {
     'an unfinished board ranked below a given-up one');
   ok(puzzle[0].rank === 1 && puzzle[3].rank === 4, 'ranks were not numbered from one');
 
-  /* An arcade run: highest score, and a tie goes to whoever was quicker. */
+  /* An arcade run: highest score, finished or not. A race the host calls
+     early is settled on what everybody has — ranking finished runs first let
+     a host who crashed early call it and take the medal from a player still
+     going on more. */
   const arcade = rank([
     { seat: 0, done: true, result: 'over', score: 4200, timeMs: 300000 },
     { seat: 1, done: true, result: 'over', score: 9100, timeMs: 400000 },
     { seat: 2, done: false, score: 12000, pct: 0.2 }
   ], 'score');
-  ok(arcade[0].seat === 1, 'an arcade race was not ranked by score');
-  ok(arcade[2].seat === 2, 'a player still going outranked one who had finished');
+  ok(arcade[0].seat === 2 && arcade[1].seat === 1 && arcade[2].seat === 0,
+    'an arcade race was not ranked by score, finished or not');
+  ok(arcade[0].rank === 1 && arcade[2].rank === 3, 'arcade ranks were not numbered from one');
+  const behind = rank([
+    { seat: 0, done: false, score: 3000, pct: 0 },
+    { seat: 1, done: true, result: 'over', score: 5000, timeMs: 90000 }
+  ], 'score');
+  ok(behind[0].seat === 1 && behind[1].rank === 2, 'a run still going but behind was ranked first');
+  // Level on score: they share the medal, and the finished run is listed first.
+  const level = rank([
+    { seat: 0, done: false, score: 700, pct: 0 },
+    { seat: 1, done: true, result: 'over', score: 700, timeMs: 5000 }
+  ], 'score');
+  ok(level[0].seat === 1 && level[0].rank === 1 && level[1].rank === 1,
+    'a finished run and one still going, level on score, did not share first');
 
   /* Equal results share a rank and the next one skips it. */
   const tied = rank([

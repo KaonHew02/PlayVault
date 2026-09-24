@@ -82,7 +82,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **21** | Worm Arena rebuilt to its reference | **2026-09-24** — the crazygames *Worms Zone* link, with "fully copy this link, FULLY, bcz current one too shit". A new engine, view and wardrobe rather than a patch; the reference's art, names and code are not copied. See below |
 | **22** | Crowd Rush rebuilt in 3D to its reference | **2026-09-24** — "and then the count master oso fully copy it, FULLY bcz current one too shit", with the crazygames *Count Masters* link. Studied from the reference's trailer and a thirty-level playthrough of its web version, frame by frame. A new engine, a WebGL scene and a new view; FreePlay's art, name and code are not copied. See below |
 | **23** | Worm Arena redrawn | **2026-09-24** — "the worm look some ugly, redesign it and then the map i cant see the food clearly", with a screenshot. A new worm painter, and snacks that stand off the floor. No rule changed but how big the snacks are and how many. See below |
-| **24** | Four fixes to playing with friends | **2026-09-24** — found by walking every game through a room, asked for as "fix all four": Back froze or restarted a match, the board rematch card reset one board, a Snake race could never end, and Worm Arena's room opened with no mode picked. See below |
+| **24** | Five fixes to playing with friends | **2026-09-24** — found by walking every game through a room, asked for as "fix all four": Back froze or restarted a match, the board rematch card reset one board, a Snake race could never end, and Worm Arena's room opened with no mode picked. Then "fix the call it ranking too": a host who crashed first could call a race and take the medal. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -763,3 +763,16 @@ end, before anything was changed.
   a board game's `mode` to pass-and-play, and it did that to any option
   called `mode` — the arena's Infinity/Time/Treasure too, where 'hotseat'
   matches no choice. It only touches the board family now.
+- **Call it handed the medal to whoever had stopped.** An arcade race
+  ranked finished runs above every run still going, whatever the scores, and
+  only the host can call a race — so a host who topped out on 5,000 could
+  call it against a friend still playing on 20,000 and come first. `rank()`
+  had a test asserting exactly that. A called race is settled on what
+  everybody has when it is called now: highest score first, finished or
+  not, with a finished run listed first on a tie, and the table shows the
+  score of a run still going ("20,000 · still going", where it used to say
+  "still going — 0%" for any game with no finish line). Four of the five
+  arcade scores only go up, so a run still going has at least what it
+  shows; the worm's is its mass, as a finished worm's is its mass when it
+  died. Puzzles are unchanged — an unsolved board still ranks below every
+  solver.

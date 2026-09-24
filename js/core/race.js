@@ -33,11 +33,19 @@ window.PV = window.PV || {};
    *
    *   'time'   a puzzle. Whoever solved it goes first, soonest first; then
    *            everyone who did not, by how far they got.
-   *   'score'  an arcade run. Highest score, and a tie is broken by who got
-   *            there in less time.
+   *   'score'  an arcade run. Highest score, whether the run is over or not:
+   *            a race the host calls early is settled on what everybody has
+   *            when it is called. Finished runs used to come first, which
+   *            let a host who crashed early call it and take the medal from
+   *            somebody still playing on three times the score. Every arcade
+   *            score but the worm's only goes up, so a run still going has
+   *            at least what it shows; the worm's is its mass, as a finished
+   *            one's is its mass when it died. On equal scores a finished
+   *            run is listed first, then the quicker one.
    *
-   * Somebody who never finished still ranks — bottom of their group, ordered
-   * by progress — because dropping them off the table reads as a bug.
+   * Somebody who never finished still ranks, because dropping them off the
+   * table reads as a bug — a puzzle below everyone who solved it, an arcade
+   * run on its score.
    */
   function rank(entries, metric) {
     const rows = (entries || []).slice();
@@ -47,8 +55,8 @@ window.PV = window.PV || {};
         if (won(a) !== won(b)) return won(b) - won(a);
         if (won(a)) return (a.timeMs || 0) - (b.timeMs || 0);
       } else {
-        if (a.done !== b.done) return (b.done ? 1 : 0) - (a.done ? 1 : 0);
         if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+        if (a.done !== b.done) return (b.done ? 1 : 0) - (a.done ? 1 : 0);
         if (a.done && b.done) return (a.timeMs || 0) - (b.timeMs || 0);
       }
       if ((b.pct || 0) !== (a.pct || 0)) return (b.pct || 0) - (a.pct || 0);
@@ -59,7 +67,7 @@ window.PV = window.PV || {};
     rows.forEach((row, i) => {
       const key = metric === 'time'
         ? won(row) + ':' + (won(row) ? (row.timeMs || 0) : (row.pct || 0))
-        : (row.done ? 1 : 0) + ':' + (row.score || 0);
+        : String(row.score || 0);
       row.rank = (key === lastKey) ? lastRank : (i + 1);
       lastKey = key; lastRank = row.rank;
     });
@@ -207,11 +215,11 @@ window.PV = window.PV || {};
     }
 
     function valueOf(r) {
+      // An arcade run is ranked on its score, finished or not, so the score
+      // is what its line shows — "still going, 0%" hid why it came first.
+      if (metric === 'score') return PV.fmtNum(r.score) + (r.done ? '' : ' · ' + t('race.stillGoing'));
       if (!r.done) return t('race.unfinished', { n: Math.round((r.pct || 0) * 100) });
-      if (metric === 'time') {
-        return WON[r.result] ? PV.fmtTime(r.timeMs) : t('race.gaveUp');
-      }
-      return PV.fmtNum(r.score);
+      return WON[r.result] ? PV.fmtTime(r.timeMs) : t('race.gaveUp');
     }
 
     function paint() {

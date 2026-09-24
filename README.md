@@ -109,7 +109,9 @@ apply it, above it we ask for the move list and rebuild.
 A race sends **a progress line about once a second and a finishing line**, and
 nothing else. Sixty frames a second of somebody's Tetris well over a public
 broker does not hold up; a seed does. Only the host ranks, so the same table
-appears on every screen.
+appears on every screen. A race the host calls early is settled on what
+everybody has when it is called: an arcade run still going ranks on its score,
+not below every run that has already ended.
 
 Two rules in `js/core/room.js` that are easy to get wrong:
 
