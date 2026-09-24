@@ -568,10 +568,12 @@ window.PV = window.PV || {};
     return {
       coins: PV.Safe.int(m.coins, 0, MAX_COINS, 0),
       start: PV.Safe.int(m.start, 0, PV.CrowdRush.BOOSTS.start.max, 0),
-      gate: PV.Safe.int(m.gate, 0, PV.CrowdRush.BOOSTS.gate.max, 0)
+      gate: PV.Safe.int(m.gate, 0, PV.CrowdRush.BOOSTS.gate.max, 0),
+      // The level you are on. A record from before levels has none: level 1.
+      level: PV.Safe.int(m.level, 1, PV.CrowdCourse.MAX_LEVEL, 1)
     };
   });
-  const loadMeta = () => PV.Store.get(META, null) || { coins: 0, start: 0, gate: 0 };
+  const loadMeta = () => PV.Store.get(META, null) || { coins: 0, start: 0, gate: 0, level: 1 };
 
   /** A gold coin, for the canvas. */
   function coin(c, x, y, r) {
@@ -581,6 +583,20 @@ window.PV = window.PV || {};
     c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
     c.fillStyle = '#FFE58A';
     c.beginPath(); c.arc(x - r * 0.28, y - r * 0.28, r * 0.34, 0, TAU); c.fill();
+  }
+
+  /** A level's number in a disc, for the ends of the progress bar. */
+  function badge(c, x, y, r, n, fill, ink) {
+    c.fillStyle = 'rgba(12,20,32,.35)';
+    c.beginPath(); c.arc(x, y + r * 0.12, r, 0, TAU); c.fill();
+    c.fillStyle = fill;
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+    const s = String(n);
+    c.fillStyle = ink;
+    c.font = '800 ' + (r * (s.length > 3 ? 0.62 : (s.length > 2 ? 0.8 : 1.05))).toFixed(1) + 'px system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(s, x, y + r * 0.06);
   }
 
   /* ------------------------------------------------------------ the view */
@@ -594,6 +610,9 @@ window.PV = window.PV || {};
     // and nobody waits at the line while the others run.
     const racing = !!ctx.race;
     const meta = loadMeta();
+    // Levels, unless free run was picked. Never in a race: everyone's level
+    // is their own, and a race needs one course for all of them.
+    const levels = !racing && opts.play !== 'free';
 
     let ui = null, countEl, beatEl, goneEl, whereEl, shopEl = null;
     let shopOpen = null;             // the state the shop was last painted in
@@ -613,6 +632,12 @@ window.PV = window.PV || {};
     function onDown(e) { onMove(e); if (ui) ui.input('go'); }
 
     function saveMeta() { PV.Store.set(META, meta); }
+
+    /** Where this run is: a level and its scenery, or a course and a difficulty. */
+    function whereText(game) {
+      if (game.level) return t('crowd.level', { n: game.level }) + ' · ' + t('crowd.' + game.courseKey);
+      return t('crowd.' + courseKey) + ' ' + '★'.repeat(def.tier) + ' · ' + t('diff.' + diffKey);
+    }
 
     function buy(kind) {
       const game = ui && ui.game;
@@ -637,7 +662,7 @@ window.PV = window.PV || {};
         PV.el('span', { class: 'k' }, t('crowd.shop')),
         PV.el('b', {}, PV.el('span', { class: 'coin' }), PV.fmtNum(meta.coins))));
       [['start', 'crowd.upStart', 'crowd.upStartFx', l => l * PV.CrowdRush.BOOSTS.start.per],
-        ['gate', 'crowd.upGate', 'crowd.upGateFx', l => Math.round(l * PV.CrowdRush.BOOSTS.gate.per * 100)]]
+        ['gate', 'crowd.upGate', 'crowd.upGateFx', l => l * PV.CrowdRush.BOOSTS.gate.per]]
         .forEach(([kind, name, fx, amount]) => {
           const level = meta[kind];
           const top = level >= PV.CrowdRush.BOOSTS[kind].max;
@@ -676,12 +701,20 @@ window.PV = window.PV || {};
       padCols: 2,
       pct: game => Math.min(1, game.dist / game.course.length),
 
-      create: () => new PV.CrowdRush({
-        seed: ctx.seed(), course: courseKey, difficulty: diffKey,
-        autostart: racing, boost: racing ? null : meta
-      }),
+      // A level is always played from its own seed, so a lost level comes
+      // back exactly as it was. Winning moves meta.level on (see outcome), so
+      // the button after a win builds the next one.
+      create: () => (levels
+        ? new PV.CrowdRush({ seed: PV.CrowdCourse.seedFor(meta.level), level: meta.level, boost: meta })
+        : new PV.CrowdRush({
+          seed: ctx.seed(), course: courseKey, difficulty: diffKey,
+          autostart: racing, boost: racing ? null : meta
+        })),
 
-      onReset() { puffs = []; foe = null; shopOpen = null; },
+      onReset(game) {
+        puffs = []; foe = null; shopOpen = null;
+        if (whereEl) whereEl.textContent = whereText(game);
+      },
 
       fit(availW, availH) {
         let w = Math.max(280, Math.min(availW, 760));
@@ -698,8 +731,7 @@ window.PV = window.PV || {};
           PV.el('span', { class: 'k' }, t('crowd.count')), countEl,
           PV.el('span', { class: 'k' }, t('crowd.beaten')), beatEl,
           PV.el('span', { class: 'k' }, t('crowd.run')), goneEl));
-        whereEl = PV.el('div', { class: 'muted small td-where' },
-          t('crowd.' + courseKey) + ' ' + '\u2605'.repeat(def.tier) + ' \u00B7 ' + t('diff.' + diffKey));
+        whereEl = PV.el('div', { class: 'muted small td-where' });
         api.side.appendChild(whereEl);
         if (!racing) {
           shopEl = PV.el('div', { class: 'panel-mini crowd-shop' });
@@ -728,7 +760,8 @@ window.PV = window.PV || {};
 
       draw(c, game, geom) {
         const cam = camera(geom);
-        const th = THEMES[courseKey] || THEMES.fields;
+        // The game's own course: a level picks its scenery from its number.
+        const th = THEMES[game.courseKey] || THEMES.fields;
         ground(c, cam, th, game.dist);
 
         // A fight is drawn just past the front of YOUR crowd, wherever that
@@ -830,15 +863,23 @@ window.PV = window.PV || {};
         c.fillStyle = '#F6B32B';
         rr(c, bx, by, Math.max(bh, bw * Math.min(1, game.dist / game.course.length)), bh, bh / 2);
         c.fill();
-        // The keep, at the end of the bar.
-        c.fillStyle = '#2C3440';
-        c.fillRect(bx + bw - bh * 0.1, by - bh * 0.7, Math.max(2, bh * 0.28), bh * 2.4);
-        c.fillStyle = won ? MINE : '#EF4444';
-        c.beginPath();
-        c.moveTo(bx + bw + bh * 0.16, by - bh * 0.7);
-        c.lineTo(bx + bw + bh * 1.1, by - bh * 0.25);
-        c.lineTo(bx + bw + bh * 0.16, by + bh * 0.2);
-        c.closePath(); c.fill();
+        if (game.level) {
+          // On a level, the bar runs from this level's number to the next's.
+          const r = Math.max(9, bh * 1.35), cy = by + bh / 2;
+          badge(c, bx - r * 0.35, cy, r, game.level, '#F6B32B', '#3A2600');
+          badge(c, bx + bw + r * 0.35, cy, r, game.level + 1,
+            won ? '#F6B32B' : '#FFFFFF', won ? '#3A2600' : '#1F2430');
+        } else {
+          // The keep, at the end of the bar.
+          c.fillStyle = '#2C3440';
+          c.fillRect(bx + bw - bh * 0.1, by - bh * 0.7, Math.max(2, bh * 0.28), bh * 2.4);
+          c.fillStyle = won ? MINE : '#EF4444';
+          c.beginPath();
+          c.moveTo(bx + bw + bh * 0.16, by - bh * 0.7);
+          c.lineTo(bx + bw + bh * 1.1, by - bh * 0.25);
+          c.lineTo(bx + bw + bh * 0.16, by + bh * 0.2);
+          c.closePath(); c.fill();
+        }
 
         // Coins in hand, top right under the bar. Not in a race: nothing
         // bought with them comes along.
@@ -859,6 +900,11 @@ window.PV = window.PV || {};
 
         // At the start line: the crowd stands, and the screen says how to go.
         if (game.ready) {
+          // Up in the sky, clear of the first gate's numbers.
+          if (game.level) {
+            tallyAt(c, cam.cx, cam.h * 0.19, Math.max(16, cam.h * 0.06),
+              t('crowd.level', { n: game.level }), '#FFE58A');
+          }
           const pulse = 1 + Math.sin(game.tick * 0.12) * 0.05;
           tallyAt(c, cam.cx, cam.h * 0.47, Math.max(20, cam.h * 0.075) * pulse,
             t('crowd.tapToRun'), '#FFFFFF');
@@ -870,14 +916,26 @@ window.PV = window.PV || {};
       outcome(game) {
         const won = game.overReason === 'stormed';
         const coins = pay(game);
+        const lv = game.level;
+        // A won level moves you on to the next, once however often this is
+        // read. Lost, you stay, and the same level comes back.
+        if (lv && won && !game.advanced) {
+          game.advanced = true;
+          if (meta.level === lv) {
+            meta.level = Math.min(PV.CrowdCourse.MAX_LEVEL, lv + 1);
+            saveMeta();
+          }
+        }
         return {
           result: won ? 'win' : 'lose',
           score: game.score,
           xp: Math.round((won ? 130 : Math.max(10, Math.round(game.dist / 6))) * game.diff.xp),
           tone: won ? 'good' : 'bad',
-          title: won ? t('crowd.stormed') : t('crowd.routed'),
+          title: lv ? t(won ? 'crowd.levelDone' : 'crowd.levelFailed', { n: lv })
+            : (won ? t('crowd.stormed') : t('crowd.routed')),
+          againLabel: lv ? (won ? t('crowd.nextLevel') : t('common.retry')) : undefined,
           lines: [
-            t('crowd.' + game.courseKey) + ' \u00B7 ' + t('diff.' + game.diff.key),
+            lv ? whereText(game) : t('crowd.' + game.courseKey) + ' \u00B7 ' + t('diff.' + game.diff.key),
             t('crowd.count') + ': ' + PV.fmtNum(game.n) + ' \u00B7 ' + t('crowd.peak') + ': ' + PV.fmtNum(game.peak),
             t('crowd.beaten') + ': ' + PV.fmtNum(game.beaten) + ' \u00B7 ' + t('crowd.lost') + ': ' + PV.fmtNum(game.lost),
             t('crowd.earned', { n: PV.fmtNum(coins) }),

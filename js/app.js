@@ -173,7 +173,9 @@ window.PV = window.PV || {};
       PV.clear(body);
       (g.options || []).forEach(o => {
         if (inRoom && o.solo) return;
-        if (o.showIf && !o.showIf(chosen)) return;
+        // A row may depend on where it is being chosen: some rows only make
+        // sense alone, and a room hides the row that would have switched them.
+        if (o.showIf && !o.showIf(chosen, !!inRoom)) return;
         const asGrid = asCards(o);
         const row = el('div', { class: 'opt-row' + (asGrid ? ' stack' : '') },
           el('span', { class: 'k' }, t(o.labelKey)));

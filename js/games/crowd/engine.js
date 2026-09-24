@@ -40,7 +40,7 @@ window.PV = window.PV || {};
      what a player buys is a real edge, which is the point of saving up. */
   const BOOSTS = {
     start: { per: 3, max: 40, base: 30, grow: 1.28 },     // runners per level
-    gate: { per: 0.06, max: 25, base: 45, grow: 1.32 }     // share of a green gate's gain
+    gate: { per: 2, max: 25, base: 45, grow: 1.32 }        // runners from each green gate
   };
   const boostCost = (kind, level) =>
     Math.round(BOOSTS[kind].base * Math.pow(BOOSTS[kind].grow, Math.max(0, level)));
@@ -74,9 +74,20 @@ window.PV = window.PV || {};
     constructor(opts) {
       super(opts);
       const o = opts || {};
-      this.diff = DIFFS[o.difficulty] || DIFFS.normal;
-      this.courseKey = PV.CrowdCourse.COURSES[o.course] ? o.course : 'fields';
-      this.course = PV.CrowdCourse.build(this.courseKey, this.diff, this.rng);
+      // A level brings its own course and difficulty (course.js works both
+      // out from the number); a free run takes them from the options.
+      if (o.level != null) {
+        const lv = PV.CrowdCourse.level(o.level);
+        this.level = lv.level;
+        this.diff = lv.diff;
+        this.courseKey = lv.def.key;
+        this.course = PV.CrowdCourse.build(lv.def, lv.diff, this.rng);
+      } else {
+        this.level = null;
+        this.diff = DIFFS[o.difficulty] || DIFFS.normal;
+        this.courseKey = PV.CrowdCourse.COURSES[o.course] ? o.course : 'fields';
+        this.course = PV.CrowdCourse.build(this.courseKey, this.diff, this.rng);
+      }
       // 'ready' waits at the start line for a tap, with the shop open;
       // 'run' is the course; 'won' is the king down and the crowd walking in.
       this.phase = o.autostart ? 'run' : 'ready';
@@ -151,8 +162,11 @@ window.PV = window.PV || {};
         claimed += frac;
         const part = this.n * frac;
         let out = PV.CrowdCourse.apply(g.op, g.val, part);
-        // The gate bonus: a share more of whatever a GREEN gate gave.
-        if (out > part) out += (out - part) * this.boost.gate * BOOSTS.gate.per;
+        // The gate bonus: a few more runners out of every GREEN gate, shared by
+        // how much of the crowd went through it. Flat, not a share of the
+        // gain: a share compounds, gate after gate, and at +120% a crowd of
+        // twenty was a hundred thousand by level 45 with a king of seventeen.
+        if (out > part) out += this.boost.gate * BOOSTS.gate.per * frac;
         total += out;
         if (frac > bw) { bw = frac; best = g; }
       }

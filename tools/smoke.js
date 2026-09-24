@@ -1227,8 +1227,8 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
   const gb = new PV.CrowdRush({ seed: 9, course: 'fields', difficulty: 'normal', boost: { gate: 5 } });
   gb.n = 100; gb.x = -gb.reach;
   gb.runGates(pair);
-  ok(gb.n === Math.round(200 + 100 * 5 * PV.CrowdRush.BOOSTS.gate.per),
-    'the gate bonus did not add its share of a green gate, got ' + gb.n);
+  ok(gb.n === 200 + 5 * PV.CrowdRush.BOOSTS.gate.per,
+    'the gate bonus did not add its runners to a green gate, got ' + gb.n);
   gb.n = 100; gb.x = gb.reach;
   gb.runGates(pair);
   ok(gb.n === 0, 'the gate bonus softened a red gate');
@@ -1261,6 +1261,43 @@ section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
   const rich = play('keep', 'hard', 31500, true, { start: 40, gate: 25 });
   ok(rich.overReason === 'stormed' || lean.overReason !== 'stormed',
     'a fully upgraded crowd lost a run the plain one won');
+
+  /* Levels. Level n is worked out from n alone and played from its own seed,
+     so it is the same level every time; each one asks a little more. */
+  const L = PV.CrowdCourse;
+  ok(L.level(0).level === 1 && L.level(1e9).level === L.MAX_LEVEL, 'a level number was not clamped');
+  for (let n = 1; n < 40; n++) {
+    const a = L.level(n), b = L.level(n + 1);
+    ok(b.diff.rival >= a.diff.rival && b.diff.king >= a.diff.king && b.diff.hazard >= a.diff.hazard
+      && b.diff.badBias >= a.diff.badBias && b.def.length >= a.def.length && b.diff.start <= a.diff.start,
+      'level ' + (n + 1) + ' is easier than level ' + n + ' somewhere');
+    ok(L.seedFor(n) !== 0 && L.seedFor(n) === L.seedFor(n) && L.seedFor(n) !== L.seedFor(n + 1),
+      'level ' + n + ' has no seed of its own');
+  }
+  const easyDiff = PV.CrowdRush.DIFFS.easy, first = L.level(1).diff;
+  ok(first.king < easyDiff.king && first.rival < easyDiff.rival && first.hazard < easyDiff.hazard
+    && first.badBias < easyDiff.badBias, 'level 1 is not gentler than a free run on easy');
+  const once = new PV.CrowdRush({ seed: L.seedFor(12), level: 12 });
+  const twice = new PV.CrowdRush({ seed: L.seedFor(12), level: 12 });
+  ok(once.level === 12 && JSON.stringify(once.course) === JSON.stringify(twice.course),
+    'level 12 was not the same course twice');
+  ok(['fields', 'dunes', 'keep'].indexOf(once.courseKey) >= 0, 'a level has no scenery of its own');
+  // On the first levels no red gate can finish a crowd off at the first pair —
+  // level 1 used to open on -30 | +50 at a crowd of twenty.
+  for (let n = 1; n <= 15; n++) {
+    const g = new PV.CrowdRush({ seed: L.seedFor(n), level: n });
+    const pair = g.course.features.find(f => f.kind === 'gates');
+    ok(!pair || pair.lanes.every(ln => ln.op !== 'sub' || ln.val < g.n),
+      'level ' + n + ' opens on a gate that wipes the whole crowd');
+  }
+  // A good player clears the first ten levels without buying anything.
+  for (let n = 1; n <= 10; n++) {
+    const g = new PV.CrowdRush({ seed: L.seedFor(n), level: n });
+    g.input('go');
+    let ticks = 0;
+    while (!g.isOver() && ticks++ < 60 * 60 * 8) { g.input({ lane: aimFor(g) }); g.advance(); }
+    ok(g.overReason === 'stormed', 'a good player lost level ' + n + ' (' + g.overReason + ')');
+  }
 });
 
 /* --------------------------------------------------------------- security */

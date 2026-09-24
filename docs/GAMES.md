@@ -76,6 +76,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **12** | Crowd Rush repainted to its reference | **2026-09-22** — see below |
 | **16** | Crowd Rush plays like its reference | **2026-09-23** — the crazygames link again, with "just copy it". The game's own art, name and code are FreePlay's and are not copied; what its page lists as the game — a start line, coins and upgrades between runs, crowds that charge, a king to knock down — is built here, drawn in this game's own style. See below |
 | **17** | Tower Defense: normal is no longer easy | **2026-09-24** — "normal mode need increase the enemy power, i test play like ez mode". Measured with a bot before changing anything; see below |
+| **18** | Crowd Rush, level by level | **2026-09-24** — "count master is level by level, can make it level by level?" Levels are the default mode now; free run keeps the course and difficulty picker, and races use it. Measured with bots before shipping; see below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -431,3 +432,44 @@ wall; only the late-game ramp can add difficulty without it.
   easy and no longer clears normal on two maps, a good player clears normal
   and the hardest map on hard, and a wave gets heavier from easy to normal to
   hard.
+
+### Phase 18 — Crowd Rush, level by level
+
+Levels are the default; **Free run** keeps the course and difficulty picker,
+and a race always uses it (everyone's level is their own, and a race needs one
+course). Level n is a course and a difficulty worked out from n alone
+(`PV.CrowdCourse.level`), played from a seed worked out from n alone
+(`seedFor`), so a lost level comes back exactly as it was. Win and the level
+number moves on (saved in `crowd.meta`, sealed); the button says "Next
+level". Lose and it says "Try again". The bar runs from this level's number to
+the next, and the scenery takes the three courses in turn.
+
+The curve was measured with bots playing whole careers from level 1: a perfect
+runner, a careless one (wrong gate one time in five, aims at gate middles,
+misses one hazard in five), each with and without buying upgrades.
+
+- **Level 1 was a coin toss.** Its first gate pair was `-30 | +50` at a crowd
+  of twenty, and the king is sized from a perfect run, so at the free run's
+  easy fraction one wrong gate early lost to him. The first fifteen levels
+  now swap any red subtraction bigger than half of what a good player holds
+  for a halving (`mercy`, levels only), and the ramp starts lower and eases
+  in. A careless player now wins levels 1-3 nine or ten times in ten.
+- **The king had stopped mattering.** The shadow run assumed every hazard
+  takes a tenth; a good player steps round most of them, so on long, busy
+  levels the shadow shrank away from the real crowd and sized kings of a
+  dozen against five hundred. Levels assume a hazard takes 3% (`graze`).
+  Free runs keep a tenth — they were balanced on it.
+- **The gate bonus compounded.** As a share of each green gate's gain it
+  multiplied gate after gate: an upgrading player had 148,000 runners by
+  level 55 against a king of 36. It is now flat — two more runners out of
+  every green gate per level — which is a real help to a small crowd and
+  nothing to a big one. The shop says so in runners, not per cent.
+- Where it landed: a careless player who buys upgrades reaches level 61 in
+  about 70 runs, retrying one level in six or seven; the same player who
+  never buys stalls around level 21; a perfect player needs upgrades past
+  about level 24. Upgrading is how you get on — which is what the reference
+  says of itself.
+- `smoke.js` holds it: the ramp never gets easier from one level to the
+  next, each level is one course, level 1 is gentler than a free run on
+  easy, no level of the first fifteen opens on a gate that wipes the crowd,
+  and a good player clears levels 1-10 with nothing bought.

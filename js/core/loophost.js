@@ -271,7 +271,9 @@ window.PV = window.PV || {};
         lines: (res.lines || []).map(line =>
           line === '@best' ? (rec.newBestScore || rec.newBestTime ? t('result.newBest') : null) : line)
           .concat(rec.xp.gained ? ['+' + rec.xp.gained + ' ' + t('profile.xp')] : []),
-        again: reset
+        again: reset,
+        // "Next level" rather than "Play again", when the next run is not a replay.
+        againLabel: res.againLabel
       });
     }
 

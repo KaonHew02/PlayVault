@@ -7,8 +7,8 @@
     family: 'arcade',
     name: 'Crowd Rush',
     nameZh: '人潮冲锋',
-    blurb: 'Run a crowd of stickmen through the gates that double it, and storm the keep.',
-    blurbZh: '带着你的小人潮穿过增益之门，越滚越多，最后攻下城堡。',
+    blurb: 'Level by level: run a crowd through the gates that multiply it, beat the king and storm his keep.',
+    blurbZh: '一关一关地带着人潮穿过倍增之门，打败国王，攻下城堡。',
     accent: '#3B82F6',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
       + '<path d="M6 40h36" stroke="currentColor" stroke-width="2" opacity=".4"/>'
@@ -24,13 +24,25 @@
 
     options: [
       {
+        // Levels, one after another, or a course and a difficulty picked by
+        // hand. Not offered in a room: a race is everyone on one course, and
+        // everyone's level is their own.
+        key: 'play', labelKey: 'crowd.play', def: 'levels', solo: true,
+        choices: [
+          { value: 'levels', labelKey: 'crowd.levels' },
+          { value: 'free', labelKey: 'crowd.free' }
+        ]
+      },
+      {
         key: 'course', labelKey: 'crowd.course', def: 'fields',
+        showIf: (o, inRoom) => inRoom || o.play === 'free',
         choices: PV.CrowdCourse.keys.map(k => ({
           value: k, labelKey: 'crowd.' + k, tag: '\u2605'.repeat(PV.CrowdCourse.tierOf(k))
         }))
       },
       {
         key: 'difficulty', labelKey: 'crowd.diff', def: 'normal',
+        showIf: (o, inRoom) => inRoom || o.play === 'free',
         choices: [
           { value: 'easy', labelKey: 'diff.easy' },
           { value: 'normal', labelKey: 'diff.normal' },
