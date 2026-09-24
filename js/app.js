@@ -13,6 +13,7 @@ window.PV = window.PV || {};
 
   let app = null;
   let live = null;                 // the running game's controller
+  let parked = null;               // an online game put aside while its player looks at the room
   let pendingOpts = null;          // options chosen in the lobby sheet
 
   /* ------------------------------------------------------------------ theme */
@@ -38,21 +39,57 @@ window.PV = window.PV || {};
   }
 
   function route() {
-    if (live) { live.destroy(); live = null; }
     const r = parseRoute();
+    const room = PV.Room.current;
+
+    /* Looking at the room is not leaving the game. The Back on an online game
+       goes to the friends screen — so does a phone's back gesture — and
+       building the game again on the way back dealt a fresh one under a match
+       that was still going: an empty board on the host, whose board is the
+       only true one, a guest's board stuck on the wrong turn, a race run
+       started over on the same deal. So a game that is still being played is
+       put aside instead, still connected — moves keep landing, the race keeps
+       its table — and "Back to the game" puts the same screen back. */
+    if (live && live.room && live.room === room && r.name === 'friends'
+        && room.phase === 'playing') {
+      live.park(true);
+      parked = live;
+    } else if (live) {
+      live.destroy();
+    }
+    live = null;
+
     /* Walking away from an online game is leaving it. A room that outlived the
        screen would keep answering for a player who is no longer at the board. */
     if (r.name !== 'play' && r.name !== 'friends' && PV.Room.current) {
       PV.Room.current.leave('left');
     }
+    // A game put aside is kept only for its own room and round, and only
+    // while its player is on the way back to it.
+    if (parked && !(parked.room === PV.Room.current && parked.round === parked.room.round
+        && (r.name === 'friends' || (r.name === 'play' && r.code === parked.code)))) {
+      parked.destroy();
+      parked = null;
+    }
+
     PV.clear(app);
     PV.$$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === r.name));
-    if (r.name === 'play') screenPlay(r.code);
+    if (r.name === 'play') { if (parked) unpark(); else screenPlay(r.code); }
     else if (r.name === 'friends') PV.Friends.screen(app);
     else if (r.name === 'stats') screenStats();
     else if (r.name === 'settings') screenSettings();
     else screenLobby();
     window.scrollTo(0, 0);
+  }
+
+  function unpark() {
+    live = parked;
+    parked = null;
+    app.appendChild(live.node);
+    live.park(false);
+    // Whatever measured itself while the screen was off the page measured
+    // nothing. Every game sizes itself on a resize, so give it one.
+    window.dispatchEvent(new Event('resize'));
   }
 
   /* ------------------------------------------------------------------ lobby */
@@ -277,7 +314,13 @@ window.PV = window.PV || {};
       /* In a race the game's own end card is held until the table is in, so
          gameOver goes through the race and panel() is the raw one. */
       gameOver: panel => (race ? race.showLocal(panel) : showGameOver(wrap, panel)),
-      panel: panel => showGameOver(wrap, panel)
+      panel: panel => showGameOver(wrap, panel),
+      /* Takes the end card down again: a rematch the other player started
+         begins a new game underneath it. */
+      closePanel: () => {
+        const layer = wrap.querySelector('.over-layer');
+        if (layer) layer.remove();
+      }
     };
 
     /* Board games are host-authority and handle their room inside the board
@@ -290,6 +333,13 @@ window.PV = window.PV || {};
 
     const started = g.start(host, ctx) || { destroy() {} };
     live = {
+      code: code,
+      room: room,
+      round: room ? room.round : 0,
+      node: wrap,
+      /* Put aside while its player looks at the room, and back. A game with
+         a clock of its own (a real-time loop) holds still in between. */
+      park(on) { if (started.park) started.park(on); },
       destroy() {
         if (race) race.destroy();
         started.destroy();
@@ -303,7 +353,8 @@ window.PV = window.PV || {};
     if (old) old.remove();
     const actions = el('div', { class: 'over-actions' });
     // `again: false` — not merely absent — is a game that cannot be replayed
-    // from here: an abandoned room, or a race waiting on the other players.
+    // from here: an abandoned room, a race waiting on the other players, or a
+    // guest waiting on the host's rematch.
     if (panel.again !== false) {
       actions.appendChild(el('button', {
         class: 'btn primary',

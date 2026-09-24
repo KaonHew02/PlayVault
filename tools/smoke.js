@@ -729,6 +729,30 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
   const p1 = selfBite('pass'), p2 = selfBite('pass');
   ok(p1.passes === p2.passes && p1.body.length === p2.body.length && p1.score === p2.score,
     'the pass rule is not deterministic');
+
+  /* On wrap with a forgiving tail nothing on the board can end a run, which
+     left a race on those rules waiting for ever. A race gives such a run a
+     clock: it must end at the bell and nowhere else, say why, and still
+     replay from its seed. */
+  function clocked(tail, seed) {
+    const s = new PV.Snake({ seed: seed, walls: false, speed: 'fast', tail: tail, limit: 600 });
+    const drive = new PV.RNG(seed ^ 0xC10C);
+    while (!s.isOver() && s.tick < 5000) {
+      if (drive.chance(0.10)) s.input(DIRS[drive.int(4)]);
+      s.advance();
+    }
+    return s;
+  }
+  for (const tail of ['trim', 'pass']) {
+    const a = clocked(tail, 31), b = clocked(tail, 31);
+    ok(a.isOver() && a.overReason === 'time', tail + ': a run with a clock did not end on it');
+    ok(a.tick === 600 && a.timeLeft() === 0, tail + ': the bell rang at tick ' + a.tick + ', not 600');
+    ok(a.score === b.score && a.body.length === b.body.length,
+      tail + ': a run with a clock is not deterministic');
+  }
+  const open = new PV.Snake({ seed: 31, walls: false, speed: 'fast', tail: 'pass' });
+  for (let i = 0; i < 5000; i++) open.advance();
+  ok(!open.isOver(), 'wrap with a pass-through tail ended with no clock and nobody steering');
 });
 
 /* -------------------------------------------------------------- worm arena */

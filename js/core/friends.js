@@ -255,7 +255,10 @@ window.PV = window.PV || {};
     const out = {};
     (g.options || []).forEach(o => { out[o.key] = o.def != null ? o.def : o.choices[0].value; });
     // Two people at one board are two people, never one of them and a computer.
-    if (out.mode) out.mode = 'hotseat';
+    // Only a board game's `mode` is that choice. Another family may have a row
+    // called mode that means something else entirely — the arena's Infinity,
+    // Time or Treasure — and 'hotseat' there left it with nothing picked.
+    if (g.family === 'board' && out.mode) out.mode = 'hotseat';
     return out;
   }
 

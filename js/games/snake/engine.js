@@ -20,7 +20,13 @@
    its own body and nothing happens but the count. With walls that leaves the
    wall as the only way to lose; with wrap it leaves none, and the run ends
    when the board is full or when the player stops — which is the mode's whole
-   point, and why neither is treated as a bug. */
+   point, and why neither is treated as a bug. `trim` on wrap is the same:
+   a bite only costs length, so nothing on the board can end the run.
+
+   A race cannot wait for somebody to stop, so a run can be given a clock:
+   `limit` is a number of ticks, and at the bell the run ends with the reason
+   'time'. It counts ticks rather than the wall clock, so a pause holds it,
+   and a clocked run still replays exactly from its seed. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';
@@ -41,6 +47,7 @@ window.PV = window.PV || {};
       this.tailCut = o.tail === 'trim';            // biting yourself trims it
       this.tailPass = o.tail === 'pass';           // ...or does nothing at all
       this.baseSpeed = SPEEDS[o.speed] || SPEEDS.normal;
+      this.limit = o.limit > 0 ? Math.floor(o.limit) : 0;   // ticks to the bell; 0 is no clock
       this.cuts = 0;
       this.passes = 0;
       this.cutAt = null;
@@ -60,6 +67,9 @@ window.PV = window.PV || {};
     /** Ticks between moves. Speeds up every five foods, floored so it stays playable. */
     stepTicks() { return Math.max(2, this.baseSpeed - Math.floor(this.eaten / 5)); }
 
+    /** Ticks until the bell, on a run with a clock; 0 on one without. */
+    timeLeft() { return this.limit ? Math.max(0, this.limit - this.tick) : 0; }
+
     occupied(x, y) {
       for (const s of this.body) if (s.x === x && s.y === y) return true;
       return false;
@@ -75,6 +85,7 @@ window.PV = window.PV || {};
     }
 
     step() {
+      if (this.limit && this.tick >= this.limit) { this.finish('time'); return; }
       if (this.cutFlash > 0) this.cutFlash--;
       if (this.ghost > 0) this.ghost--;
       for (const a of this.takeInputs()) {

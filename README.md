@@ -132,6 +132,22 @@ Three more that cost a browser session each to find:
   `js/core/net.js` is where a relay's credentials go. An attempt also holds no
   chair until it opens — one that never got through used to fill a room of two.
 
+And three that only show once a match is played through to its end and back:
+
+- **Back is not leaving.** The Back on an online game — and a phone's back
+  gesture — lands on the friends screen, and building the game again on the way
+  back dealt a fresh one under a live match: an empty board on the host (whose
+  board is the only true one), a guest stuck on the wrong turn, a race run
+  started over on the same deal. `app.js` puts a game that is still being played
+  aside instead, still connected, and "Back to the game" puts the same screen
+  back. A real-time run holds still while it is aside (`park()` on the harness).
+- **A board rematch is taken by both boards or neither.** The end card's button
+  was a local reset — a new game on one board under a match the other thought
+  was over. It is the host's Rematch now; the guest's card says to wait for it.
+- **A race needs a finish everybody can lose.** Snake on wrap with a tail that
+  cannot kill has no way to end, so nobody finished and the host never got
+  "Call it". A race on those rules runs against a three-minute clock.
+
 ### Testing
 
 `node tools/smoke.js` runs ~185,000 checks in about five seconds. It drives

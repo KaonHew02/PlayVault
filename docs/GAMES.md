@@ -82,6 +82,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **21** | Worm Arena rebuilt to its reference | **2026-09-24** — the crazygames *Worms Zone* link, with "fully copy this link, FULLY, bcz current one too shit". A new engine, view and wardrobe rather than a patch; the reference's art, names and code are not copied. See below |
 | **22** | Crowd Rush rebuilt in 3D to its reference | **2026-09-24** — "and then the count master oso fully copy it, FULLY bcz current one too shit", with the crazygames *Count Masters* link. Studied from the reference's trailer and a thirty-level playthrough of its web version, frame by frame. A new engine, a WebGL scene and a new view; FreePlay's art, name and code are not copied. See below |
 | **23** | Worm Arena redrawn | **2026-09-24** — "the worm look some ugly, redesign it and then the map i cant see the food clearly", with a screenshot. A new worm painter, and snacks that stand off the floor. No rule changed but how big the snacks are and how many. See below |
+| **24** | Four fixes to playing with friends | **2026-09-24** — found by walking every game through a room, asked for as "fix all four": Back froze or restarted a match, the board rematch card reset one board, a Snake race could never end, and Worm Arena's room opened with no mode picked. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -721,3 +722,44 @@ screen.
   pixels drawn come out about where they were. This was settled by counting:
   timings in the preview pane, hidden and software-rendered on a machine busy
   with another build, swung by a factor of a hundred between identical runs.
+
+### Phase 24 — playing with friends, played through
+
+Every game was walked through a room — join, play, finish, rematch, and the
+Back button in the middle — and four things broke. The two board ones were
+reproduced headless first, by pairing two rooms in memory and remounting one
+end, before anything was changed.
+
+- **Back froze or restarted the match.** The Back on an online game (and a
+  phone's back gesture) goes to the friends screen, which offers "Back to the
+  game" — and that rebuilt the game from nothing. A guest that came back on
+  its own turn had a fresh board that said it was the host's turn, the host
+  was waiting for the guest, and neither could ever move again. A host that
+  came back had an empty board, and the host's board is the only true one. A
+  race run started over on the same deal: lost progress, a second attempt,
+  and on the host a scoreboard that had forgotten who had already finished.
+  Now a game still being played is **put aside**, not destroyed (`parked` in
+  `app.js`): its screen comes off the page, its listeners stay on the room —
+  board moves keep landing, the race keeps its table, a card that arrives is
+  there on the way back — and "Back to the game" re-attaches the same screen
+  and sends a resize so each game measures itself again. A real-time run
+  holds still while it is aside, through `park()` on `loopHost` and on the
+  Tetris view: a Back is not a crash, and a pause is allowed in a race
+  anyway. Leaving for any other screen still leaves the room.
+- **The board rematch card reset one board.** Its button was the solo
+  `reset()`: a new game on the host's board under a match the guest's board
+  still thought was over, and the one button that fixed it — Rematch in the
+  bar — sits under the card. Online the card's button is the host's Rematch,
+  the guest's card says only the host can start one, and a rematch takes the
+  card down on both screens (`ctx.closePanel()`).
+- **A Snake race on wrap with a forgiving tail never ended.** Nothing on the
+  board can end that run — `pass` goes through the body, `trim` only costs
+  length, wrap has no wall — so nobody finished, and "Call it" waits for a
+  finisher. A race on those rules gets a clock: three minutes, counted in
+  ticks so a pause holds it and the run still replays from its seed, shown
+  first in the side panel, and the most eaten at the bell takes it. A race
+  with a wall or a fatal tail is unchanged — it can be lost.
+- **Worm Arena's room opened with no mode picked.** The friends screen turns
+  a board game's `mode` to pass-and-play, and it did that to any option
+  called `mode` — the arena's Infinity/Time/Treasure too, where 'hotseat'
+  matches no choice. It only touches the board family now.

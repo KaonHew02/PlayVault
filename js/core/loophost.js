@@ -290,6 +290,14 @@ window.PV = window.PV || {};
     }
 
     return {
+      /* Put aside while its player looks at the room, and back again. The run
+         holds still in between: a Back is not a crash, and a pause is allowed
+         in a race anyway. A pause taken before stays taken. */
+      park(on) {
+        if (on) { releaseAll(); if (ticker) ticker.stop(); return; }
+        if (ticker && !ended) ticker.start();
+      },
+
       destroy() {
         releaseAll();
         if (ticker) ticker.stop();

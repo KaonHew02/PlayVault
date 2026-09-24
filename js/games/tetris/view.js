@@ -362,6 +362,13 @@ window.PV = window.PV || {};
     }
 
     return {
+      /* Put aside while its player looks at the room: the well holds still
+         until they come back, as it would for a pause. */
+      park(on) {
+        if (on) { releaseAll(); if (ticker) ticker.stop(); return; }
+        if (ticker && !ended) ticker.start();
+      },
+
       destroy() {
         releaseAll();
         if (ticker) ticker.stop();

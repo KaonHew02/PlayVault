@@ -20,6 +20,15 @@ window.PV = window.PV || {};
   const BODY_EDGE = '#1B478F';
   const HEAD = '#3C7DF0';
 
+  /* A race needs a finish everybody can lose. Wrap with a forgiving tail has
+     none — nothing on the board can end the run, so nobody would ever finish
+     and the race would wait for ever — so a race on those rules runs against
+     this clock instead, and the most eaten at the bell takes it. */
+  const RACE_TICKS = 3 * 60 * 60;
+
+  /** m:ss from ticks, rounded up so the bell rings at 0:00 and not a second past it. */
+  function clock(ticks) { return PV.fmtTime(Math.ceil(ticks / 60) * 1000); }
+
   /** The food, drawn as an apple: a dot is a pixel, an apple is a target. */
   function apple(c, p, cell) {
     const r = cell * 0.34;
@@ -74,7 +83,9 @@ window.PV = window.PV || {};
 
   PV.SnakeView = function (ctx) {
     const opts = ctx.opts || {};
-    let scoreEl, lenEl, lvlEl, cutsEl;
+    const clocked = !!ctx.race && opts.walls === 'wrap'
+      && (opts.tail === 'trim' || opts.tail === 'pass');
+    let scoreEl, lenEl, lvlEl, cutsEl, clockEl = null;
 
     return PV.loopHost(ctx, {
       hz: 60,
@@ -93,8 +104,11 @@ window.PV = window.PV || {};
         seed: ctx.seed(),
         speed: opts.speed || 'normal',
         walls: opts.walls !== 'wrap',
-        tail: opts.tail || 'deadly'
+        tail: opts.tail || 'deadly',
+        limit: clocked ? RACE_TICKS : 0
       }),
+      // A race against the clock shows how far through it is.
+      pct: game => (game.limit ? 1 - game.timeLeft() / game.limit : 0),
 
       fit(availW, availH) {
         const s = Math.max(200, Math.min(availW, availH, 720));
@@ -117,6 +131,10 @@ window.PV = window.PV || {};
             t(opts.tail === 'pass' ? 'snake.passes' : 'snake.cuts')));
           stats.appendChild(cutsEl);
         }
+        if (clocked) {
+          clockEl = PV.el('b', {}, clock(RACE_TICKS));
+          stats.prepend(PV.el('span', { class: 'k' }, t('snake.timeLeft')), clockEl);
+        }
         api.side.appendChild(stats);
         api.below.appendChild(PV.el('p', { class: 'muted small hide-sm' }, t('snake.controls')));
       },
@@ -126,6 +144,7 @@ window.PV = window.PV || {};
         lenEl.textContent = String(game.body.length);
         lvlEl.textContent = String(game.level);
         cutsEl.textContent = String(game.tailPass ? game.passes : game.cuts);
+        if (clockEl) clockEl.textContent = clock(game.timeLeft());
       },
 
       draw(c, game, geom) {
@@ -236,12 +255,13 @@ window.PV = window.PV || {};
       },
 
       outcome(game, st) {
+        const title = { perfect: 'snake.perfect', time: 'snake.timeUp' }[game.overReason] || 'result.gameOver';
         return {
           result: 'over',
           score: game.score,
           xp: 8 + Math.floor(game.score / 40),
           tone: game.overReason === 'perfect' ? 'good' : 'flat',
-          title: game.overReason === 'perfect' ? t('snake.perfect') : t('result.gameOver'),
+          title: t(title),
           lines: [
             t('common.score') + ': ' + PV.fmtNum(game.score),
             t('snake.length') + ': ' + game.body.length + ' · ' + t('common.time') + ': ' + PV.fmtTime(st.timeMs),

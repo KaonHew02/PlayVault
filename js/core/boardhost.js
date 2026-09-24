@@ -117,6 +117,9 @@ window.PV = window.PV || {};
 
     function reset() {
       clearTimeout(aiTimer);
+      // A new game has no end card — and a rematch the host asked for
+      // arrives on the guest's board with the last game's card still up.
+      ctx.closePanel();
       thinking = false;
       ended = false;
       startedAt = Date.now();
@@ -258,12 +261,20 @@ window.PV = window.PV || {};
         result: res.result, score: res.score, timeMs: timeMs, xp: res.xp,
         lowerTimeIsBetter: !!res.lowerTimeIsBetter
       });
+      /* Online, playing again is a rematch, and both boards take it or
+         neither does. The card's button used to be a plain reset(): a new
+         game on one board, under a match the other board still thought was
+         over, and neither could move until the host found Rematch in the bar
+         — which the card covers. The host asks for it; the guest waits. */
+      const guest = online && !room.isHost;
       ctx.gameOver({
         title: res.title,
         tone: res.tone,
         lines: (res.lines || []).concat(
-          rec.xp.gained ? ['+' + rec.xp.gained + ' ' + t('profile.xp')] : []),
-        again: reset
+          rec.xp.gained ? ['+' + rec.xp.gained + ' ' + t('profile.xp')] : [],
+          guest ? [t('room.rematchByHost')] : []),
+        again: !online ? reset : (guest ? false : () => net.rematch()),
+        againLabel: online ? t('room.rematch') : null
       });
     }
 

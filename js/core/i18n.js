@@ -147,6 +147,7 @@ window.PV = window.PV || {};
       'room.toMove': 'to play',
       'room.finished': 'Finished',
       'room.rematch': 'Rematch',
+      'room.rematchByHost': 'Only the host can start a rematch.',
 
       'race.seed': 'Everyone is on deal {code}',
       'race.waiting': 'Waiting for the others…',
@@ -233,6 +234,8 @@ window.PV = window.PV || {};
       'snake.passes': 'Passes',
       'snake.controls': 'Arrows or WASD to turn.',
       'snake.perfect': 'Perfect game',
+      'snake.timeLeft': 'Time left',
+      'snake.timeUp': 'Time’s up',
 
       'worms.mode': 'Mode',
       'worms.mode.endless': 'Infinity',
@@ -518,6 +521,7 @@ window.PV = window.PV || {};
       'room.toMove': '行棋中',
       'room.finished': '已结束',
       'room.rematch': '再来一局',
+      'room.rematchByHost': '只有房主可以发起再来一局。',
 
       'race.seed': '大家玩的都是 {code} 这一局',
       'race.waiting': '等其他人…',
@@ -604,6 +608,8 @@ window.PV = window.PV || {};
       'snake.passes': '穿身',
       'snake.controls': '方向键或 WASD 转向。',
       'snake.perfect': '完美通关',
+      'snake.timeLeft': '剩余时间',
+      'snake.timeUp': '时间到',
 
       'worms.mode': '模式',
       'worms.mode.endless': '无尽',
