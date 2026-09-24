@@ -99,42 +99,35 @@ window.PV = window.PV || {};
 
   /* ----------------------------------------------------------- sprites */
 
-  /* A body ball: 128 px square, radius 56, so a worm of radius r stamps it
-     at r * BALL wide. Lit from the top left, rimmed a shade darker. */
-  const BALL = 128 / 56;
+  /* A body ball: 128 px square, radius 62, so a worm of radius r stamps it
+     at r * BALL wide — the margin is only what antialiasing needs, because
+     every transparent pixel round a ball is still a pixel stamped, hundreds
+     of times a frame. Lit in the middle and a shade darker at the edge, and
+     with NO rim of its own: a rim on every ball is what made a worm read as
+     a string of beads. The outline is drawn once, round the whole body. */
+  const BALL = 128 / 62;
   const balls = new Map();
   function ballSprite(colour) {
     let s = balls.get(colour);
     if (s) return s;
     s = canvasOf(128, 128);
     const c = s.getContext('2d');
-    const g = c.createRadialGradient(44, 40, 6, 64, 64, 56);
-    g.addColorStop(0, mix(colour, '#FFFFFF', 0.5));
-    g.addColorStop(0.45, colour);
-    g.addColorStop(1, mix(colour, '#000000', 0.34));
+    const g = c.createRadialGradient(64, 57, 4, 64, 64, 63);
+    g.addColorStop(0, mix(colour, '#FFFFFF', 0.3));
+    g.addColorStop(0.6, colour);
+    g.addColorStop(1, mix(colour, '#000000', 0.24));
     c.fillStyle = g;
-    c.beginPath(); c.arc(64, 64, 56, 0, TAU); c.fill();
-    c.globalAlpha = 0.5;
-    c.lineWidth = 4;
-    c.strokeStyle = mix(colour, '#000000', 0.5);
-    c.beginPath(); c.arc(64, 64, 54, 0, TAU); c.stroke();
-    c.globalAlpha = 0.4;
-    c.fillStyle = '#FFFFFF';
-    c.beginPath(); c.ellipse(45, 40, 15, 9, -0.6, 0, TAU); c.fill();
+    c.beginPath(); c.arc(64, 64, 62, 0, TAU); c.fill();
     balls.set(colour, s);
     return s;
   }
 
-  let shadowSprite = null;
-  function shadow() {
-    if (shadowSprite) return shadowSprite;
-    const s = canvasOf(128, 128), c = s.getContext('2d');
-    const g = c.createRadialGradient(64, 64, 24, 64, 64, 64);
-    g.addColorStop(0, 'rgba(20,10,40,0.30)');
-    g.addColorStop(1, 'rgba(20,10,40,0)');
-    c.fillStyle = g;
-    c.fillRect(0, 0, 128, 128);
-    return (shadowSprite = s);
+  /** The dark line round a worm: its own colour, deep and a little purple. */
+  const inks = new Map();
+  function inkOf(colour) {
+    let s = inks.get(colour);
+    if (!s) inks.set(colour, (s = mix(colour, '#1A1030', 0.62)));
+    return s;
   }
 
   /** A soft halo: the turbo, the neon skin, and anything that glows. */
@@ -195,7 +188,7 @@ window.PV = window.PV || {};
   const SWEETS = [
     function donut(c) {
       disc(c, 32, 33, 23, '#D9934A');
-      c.fillStyle = '#FF6FAE';
+      c.fillStyle = '#FF4F9A';
       c.beginPath();
       for (let i = 0; i <= 40; i++) {
         const a = (i / 40) * TAU, r = 19 + Math.sin(i * 1.9) * 1.6;
@@ -247,7 +240,7 @@ window.PV = window.PV || {};
       c.beginPath(); c.moveTo(14, 34); c.lineTo(50, 34); c.lineTo(44, 58); c.lineTo(20, 58); c.closePath(); c.fill();
       c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2;
       for (let x = 20; x <= 44; x += 6) { c.beginPath(); c.moveTo(x, 36); c.lineTo(x + (x < 32 ? 1.5 : -1.5), 57); c.stroke(); }
-      disc(c, 22, 32, 10, '#FFB3D1'); disc(c, 42, 32, 10, '#FFB3D1'); disc(c, 32, 25, 12, '#FFC4DC');
+      disc(c, 22, 32, 10, '#FF7DB8'); disc(c, 42, 32, 10, '#FF7DB8'); disc(c, 32, 25, 12, '#FF93C6');
       disc(c, 33, 12, 5, '#E11D48');
       shine(c, 27, 21, 4.5, 2.2);
     },
@@ -275,8 +268,8 @@ window.PV = window.PV || {};
       for (let i = 0; i < 4; i++) {
         c.beginPath(); c.moveTo(18 + i * 8, 30); c.lineTo(34 + i * 2, 58 - i * 6); c.stroke();
       }
-      disc(c, 32, 24, 17, '#9FF2D5');
-      disc(c, 22, 32, 6, '#9FF2D5'); disc(c, 42, 32, 6, '#9FF2D5');
+      disc(c, 32, 24, 17, '#5FE3B9');
+      disc(c, 22, 32, 6, '#5FE3B9'); disc(c, 42, 32, 6, '#5FE3B9');
       disc(c, 33, 9, 4.5, '#E11D48');
       shine(c, 26, 17, 5, 2.5);
     },
@@ -369,9 +362,9 @@ window.PV = window.PV || {};
       });
     },
     function pear(c) {
-      disc(c, 32, 42, 18, '#B5E06B');
-      disc(c, 32, 24, 11, '#B5E06B');
-      c.fillStyle = '#B5E06B';
+      disc(c, 32, 42, 18, '#9BD94F');
+      disc(c, 32, 24, 11, '#9BD94F');
+      c.fillStyle = '#9BD94F';
       c.fillRect(22, 24, 20, 18);
       c.strokeStyle = '#6B3E1F'; c.lineWidth = 3; c.lineCap = 'round';
       c.beginPath(); c.moveTo(32, 14); c.lineTo(34, 5); c.stroke();
@@ -381,6 +374,40 @@ window.PV = window.PV || {};
 
   const ORB_COLOURS = ['#FF5A5F', '#FFB400', '#FFE74C', '#6BF178', '#35A7FF', '#8C5CFF', '#FF6FD8', '#FFFFFF'];
 
+  /* Each piece's own colour, for the glow behind it. */
+  const SWEET_GLOW = ['#FF4F9A', '#EF476F', '#FF5D8F', '#4CC9F0', '#E0A458', '#44CC5A', '#3FD8A8', '#FF3D6E'];
+  const FRUIT_GLOW = ['#E63946', '#FF9F1C', '#D62839', '#F2394C', '#8E3CCB', '#FFD93D', '#FF4D6D', '#8FD14A'];
+
+  /**
+   * A snack as a sticker: the drawing, a dark outline round its silhouette,
+   * and a soft glow of its own colour behind. On a pale floor full of
+   * pastel sweets, the outline is what separates a donut from the tiles;
+   * the glow is what makes it catch the eye from across the screen.
+   * Drawn at 96 px from the 64 px drawings, so it stays sharp up close.
+   */
+  function sticker(fn, glow) {
+    const art = canvasOf(96, 96), a = art.getContext('2d');
+    a.scale(1.5, 1.5);
+    fn(a);
+    const sil = canvasOf(96, 96), s = sil.getContext('2d');
+    for (let i = 0; i < 12; i++) {
+      const t = (i / 12) * TAU;
+      s.drawImage(art, Math.cos(t) * 3.2, Math.sin(t) * 3.2);
+    }
+    s.globalCompositeOperation = 'source-in';
+    s.fillStyle = 'rgba(56,26,72,.88)';
+    s.fillRect(0, 0, 96, 96);
+    const out = canvasOf(96, 96), o = out.getContext('2d');
+    const g = o.createRadialGradient(48, 48, 12, 48, 48, 47);
+    g.addColorStop(0, alpha(glow, 0.5));
+    g.addColorStop(1, alpha(glow, 0));
+    o.fillStyle = g;
+    o.fillRect(0, 0, 96, 96);
+    o.drawImage(sil, 0, 0);
+    o.drawImage(art, 0, 0);
+    return out;
+  }
+
   const packs = {};
   /** Eight sprites for a pack, and how big to stamp them per unit of radius. */
   function packSprites(key) {
@@ -389,15 +416,10 @@ window.PV = window.PV || {};
     if (key === 'orbs') {
       out = { list: ORB_COLOURS.map(orbSprite), per: ORB * 0.8 };
     } else {
-      const src = key === 'fruit' ? FRUIT : SWEETS;
-      out = {
-        list: src.map(fn => {
-          const s = canvasOf(64, 64), c = s.getContext('2d');
-          c.save(); fn(c); c.restore();
-          return s;
-        }),
-        per: 64 / 24
-      };
+      const fruit = key === 'fruit';
+      const src = fruit ? FRUIT : SWEETS, glow = fruit ? FRUIT_GLOW : SWEET_GLOW;
+      // The drawing fills a radius of 36 of the 96: that is the snack's size.
+      out = { list: src.map((fn, i) => sticker(fn, glow[i])), per: 96 / 36 };
     }
     return (packs[key] = out);
   }
@@ -539,11 +561,11 @@ window.PV = window.PV || {};
     c.fillRect(0, 0, HEX_W, HEX * 3);
     const hw = HEX_W / 2;
     const centres = [[0, 0], [HEX_W, 0], [hw, HEX * 1.5], [0, HEX * 3], [HEX_W, HEX * 3]];
+    // Flat tiles and thin, quiet joins: the floor is the backdrop, and the
+    // food has to be the loudest thing on it.
     centres.forEach(p => {
-      const inset = 1.8, r = HEX - inset, w = hw - inset * 0.87;
-      const g = c.createLinearGradient(p[0], p[1] - r, p[0], p[1] + r);
-      g.addColorStop(0, f.a); g.addColorStop(1, f.b);
-      c.fillStyle = g;
+      const inset = 1.1, r = HEX - inset, w = hw - inset * 0.87;
+      c.fillStyle = f.a;
       c.beginPath();
       c.moveTo(p[0], p[1] - r); c.lineTo(p[0] + w, p[1] - r / 2); c.lineTo(p[0] + w, p[1] + r / 2);
       c.lineTo(p[0], p[1] + r); c.lineTo(p[0] - w, p[1] + r / 2); c.lineTo(p[0] - w, p[1] - r / 2);
@@ -594,19 +616,33 @@ window.PV = window.PV || {};
     }
   }
 
-  function eyes(c, x, y, r, a, look) {
+  /**
+   * Two big googly eyes, side by side on the front of the head and nearly
+   * touching, pupils on whatever the worm is looking at. `lid` is the head's
+   * colour, for a blink.
+   */
+  function eyes(c, x, y, r, a, look, lid, shut) {
     const fx = Math.cos(a), fy = Math.sin(a), lx = Math.cos(look), ly = Math.sin(look);
+    const er = r * 0.43;
     for (let side = -1; side <= 1; side += 2) {
-      const ex = x + fx * r * 0.32 - fy * side * r * 0.47;
-      const ey = y + fy * r * 0.32 + fx * side * r * 0.47;
-      c.fillStyle = '#FFFFFF';
-      c.beginPath(); c.arc(ex, ey, r * 0.42, 0, TAU); c.fill();
-      c.lineWidth = r * 0.07;
-      c.strokeStyle = 'rgba(30,20,50,.35)';
+      const ex = x + fx * r * 0.22 - fy * side * r * 0.47;
+      const ey = y + fy * r * 0.22 + fx * side * r * 0.47;
+      c.fillStyle = shut ? lid : '#FFFFFF';
+      c.beginPath(); c.arc(ex, ey, er, 0, TAU); c.fill();
+      c.lineWidth = r * 0.075;
+      c.strokeStyle = 'rgba(26,16,48,.6)';
       c.stroke();
-      const px = ex + lx * r * 0.15, py = ey + ly * r * 0.15;
-      disc(c, px, py, r * 0.23, '#1B1726');
-      disc(c, px - r * 0.07, py - r * 0.08, r * 0.075, '#FFFFFF');
+      if (shut) {
+        c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(ex + fy * er * 0.62, ey - fx * er * 0.62);
+        c.lineTo(ex - fy * er * 0.62, ey + fx * er * 0.62);
+        c.stroke();
+        continue;
+      }
+      const px = ex + lx * er * 0.36, py = ey + ly * er * 0.36;
+      disc(c, px, py, er * 0.58, '#1B1726');
+      disc(c, px - er * 0.2, py - er * 0.22, er * 0.2, '#FFFFFF');
     }
   }
 
@@ -654,88 +690,139 @@ window.PV = window.PV || {};
     c.closePath(); c.fill();
   }
 
+  /** A polyline through the body samples `from` to `to`, stroked as set. */
+  function strokeBody(c, from, to) {
+    c.beginPath();
+    c.moveTo(XS[from], YS[from]);
+    for (let i = from + 1; i <= to; i++) c.lineTo(XS[i], YS[i]);
+    c.stroke();
+  }
+
+  const TAIL = 7;                  // body samples the tail tapers over
+
   /**
-   * One worm: its shadow, a glow if it is on the turbo, the balls tail first
-   * so the head lands on top, then the head, its hat and its eyes. Returns
-   * where the head was drawn, or null if none of it was on screen.
+   * One worm, painted as a single soft tube rather than a row of beads:
+   *
+   *   a drop shadow, and a glow on the turbo or a neon skin — one stroke each
+   *   one dark outline round the WHOLE body — a stroke, stamps for the taper
+   *   the balls, tail first, close enough to read as gentle segments
+   *   a gloss streak down its back, lit from the top left like everything
+   *   the head: bigger, outlined, glossy, with googly eyes that blink
+   *
+   * The skin's stripes are counted in fixed lengths of body, not in samples,
+   * so they are the same width however finely the body is drawn — and the
+   * same stripes the engine colours a dead worm's remains by. Returns where
+   * the head was drawn, or null if none of it was on screen.
    */
   function paintWorm(c, w, vis, now, back, look) {
     const skin = PV.WormSkins.get(w.skin);
-    const r = w.r, sp = r * 0.55;
+    const r = w.r, sp = r * 0.5, unit = r * 0.55;
     const avail = w.since + Math.max(0, w.path.length - 1) * PV.Worms.NODE - back;
     const L = Math.max(0, Math.min(w.len, avail));
-    const n = Math.min(XS.length, Math.max(1, Math.floor(L / sp) + 1));
+    const n = Math.min(XS.length, Math.max(2, Math.floor(L / sp) + 1));
     sampleBody(w, back, sp, n);
 
-    const pad = r * 2;
-    let seen = false;
-    for (let i = 0; i < n; i += 4) {
-      if (XS[i] > vis.x0 - pad && XS[i] < vis.x1 + pad && YS[i] > vis.y0 - pad && YS[i] < vis.y1 + pad) { seen = true; break; }
-    }
-    if (!seen) {
-      const i = n - 1;
-      if (!(XS[i] > vis.x0 - pad && XS[i] < vis.x1 + pad && YS[i] > vis.y0 - pad && YS[i] < vis.y1 + pad)) return null;
-    }
+    const pad = r * 2.5;
     const inView = i => XS[i] > vis.x0 - pad && XS[i] < vis.x1 + pad && YS[i] > vis.y0 - pad && YS[i] < vis.y1 + pad;
+    let seen = inView(n - 1);
+    for (let i = 0; i < n && !seen; i += 3) seen = inView(i);
+    if (!seen) return null;
 
-    const D = r * BALL;
-    const sh = shadow(), off = r * 0.2;
-    for (let i = n - 1; i >= 0; i -= 2) {
-      if (inView(i)) c.drawImage(sh, XS[i] - D / 2 + off, YS[i] - D / 2 + off * 1.5, D, D);
-    }
+    const base = skin.colors[0], ink = inkOf(base);
+    const ow = r * 0.17;                               // outline width
+    const cut = Math.max(0, n - 1 - TAIL);             // last sample at full width
+    const radAt = i => {
+      const fromTail = n - 1 - i;
+      return fromTail < TAIL ? r * (0.45 + 0.55 * (fromTail / TAIL)) : r;
+    };
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
 
+    // Shadow, then glow: under everything.
+    c.save();
+    c.translate(r * 0.2, r * 0.32);
+    c.strokeStyle = 'rgba(30,16,62,.17)';
+    c.lineWidth = r * 2.05;
+    strokeBody(c, 0, Math.max(0, n - 3));
+    c.restore();
     if (w.boost || skin.glow) {
-      const gs = glowSprite(skin.glow || '#FFFFFF');
-      const G = D * 1.55;
+      const pulse = w.boost ? 0.5 + 0.5 * Math.sin((now || 0) * 0.35) : 0.5;
       c.globalCompositeOperation = 'lighter';
-      c.globalAlpha = w.boost ? 0.45 + 0.2 * Math.sin(now * 0.35) : 0.3;
-      for (let i = n - 1; i >= 0; i -= 2) if (inView(i)) c.drawImage(gs, XS[i] - G / 2, YS[i] - G / 2, G, G);
-      c.globalAlpha = 1;
+      c.strokeStyle = alpha(skin.glow || '#FFFFFF', 0.16 + 0.1 * pulse);
+      c.lineWidth = r * 3.3;
+      strokeBody(c, 0, n - 1);
+      c.strokeStyle = alpha(skin.glow || '#FFFFFF', 0.22 + 0.12 * pulse);
+      c.lineWidth = r * 2.7;
+      strokeBody(c, 0, n - 1);
       c.globalCompositeOperation = 'source-over';
     }
 
+    // The outline: one stroke for the body, a disc for each tapering sample.
+    c.strokeStyle = ink;
+    c.lineWidth = (r + ow) * 2;
+    if (cut > 0) strokeBody(c, 0, cut);
+    for (let i = n - 1; i > cut; i--) if (inView(i)) disc(c, XS[i], YS[i], radAt(i) + ow, ink);
+
+    // The body, tail first, so each ball overlaps the one behind it.
     for (let i = n - 1; i >= 1; i--) {
       if (!inView(i)) continue;
-      const fromTail = n - 1 - i;
-      const d = fromTail < 4 ? D * (0.6 + fromTail * 0.1) : D;
-      c.drawImage(ballSprite(PV.WormSkins.colorAt(skin, i)), XS[i] - d / 2, YS[i] - d / 2, d, d);
+      const d = radAt(i) * BALL;
+      const colour = PV.WormSkins.colorAt(skin, Math.floor((i * sp) / unit));
+      c.drawImage(ballSprite(colour), XS[i] - d / 2, YS[i] - d / 2, d, d);
+    }
+
+    // The gloss down its back, stopping short of the taper.
+    if (cut > 3) {
+      c.save();
+      c.translate(-r * 0.18, -r * 0.27);
+      c.strokeStyle = 'rgba(255,255,255,.3)';
+      c.lineWidth = r * 0.32;
+      strokeBody(c, 1, cut - 1);
+      c.restore();
     }
 
     if (skin.sparkle) {
-      const beat = Math.floor(now / 7);
-      for (let i = 1; i < n; i++) {
-        if ((i * 7 + beat) % 13 !== 0 || !inView(i)) continue;
-        twinkle(c, XS[i] + r * 0.2, YS[i] - r * 0.25, r * 0.38);
+      const beat = Math.floor((now || 0) / 7);
+      for (let i = 2; i < n; i += 2) {
+        if ((i * 7 + beat) % 17 !== 0 || !inView(i)) continue;
+        twinkle(c, XS[i] + r * 0.15, YS[i] - r * 0.2, r * 0.4);
       }
     }
 
-    const hx = XS[0], hy = YS[0];
-    const HD = D * 1.12;
-    c.drawImage(ballSprite(skin.colors[0]), hx - HD / 2, hy - HD / 2, HD, HD);
-    eyes(c, hx, hy, r * 1.05, w.angle, look);
+    // The head: a size up, outlined, with its own shine.
+    const hx = XS[0], hy = YS[0], hr = r * 1.14;
+    disc(c, hx, hy, hr + ow, ink);
+    c.drawImage(ballSprite(base), hx - hr * BALL / 2, hy - hr * BALL / 2, hr * BALL, hr * BALL);
+    c.fillStyle = 'rgba(255,255,255,.34)';
+    c.beginPath(); c.ellipse(hx - hr * 0.42, hy - hr * 0.48, hr * 0.28, hr * 0.16, -0.7, 0, TAU); c.fill();
+    // A blink every three seconds or so, each worm on its own beat.
+    const shut = now != null && ((Math.floor(now) + w.id * 53) % 190) < 7;
+    eyes(c, hx, hy, hr, w.angle, look, base, shut);
     if (skin.hat) hat(c, skin.hat, hx, hy, r);
     return { x: hx, y: hy };
   }
 
-  /** A small worm lying across a card: the wardrobe's picture of a skin. */
+  /**
+   * The wardrobe's picture of a skin: a worm lying across the card, painted
+   * by the same paintWorm as the arena, so the card cannot drift from it.
+   */
   function skinCard(skin, w, h) {
     const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
     // Sized by its own pixels and the stylesheet, so a narrow card can
     // shrink it without squashing the worm.
     const cv = canvasOf(Math.round(w * dpr), Math.round(h * dpr));
     const c = cv.getContext('2d');
-    c.scale(dpr, dpr);
-    const r = h * 0.2, n = 10;
-    for (let i = n - 1; i >= 0; i--) {
-      const x = w - r * 1.6 - i * r * 0.95;
-      const y = h * 0.58 + Math.sin(i * 0.75) * h * 0.12;
-      const d = (i === 0 ? 1.12 : (i > n - 3 ? 0.8 : 1)) * r * BALL;
-      c.drawImage(ballSprite(PV.WormSkins.colorAt(skin, i)), x - d / 2, y - d / 2, d, d);
-      if (i === 0) {
-        eyes(c, x, y, r * 1.05, 0, 0);
-        if (skin.hat) hat(c, skin.hat, x, y, r);
-      }
+    const k = h / 50;                                  // world units to card pixels
+    c.scale(dpr * k, dpr * k);
+    const W = w / k, H = h / k;
+    const worm = {
+      id: skin.index, skin: skin.index, r: 10, len: W - 26, since: 0, path: [],
+      x: W - 16, y: H * 0.6, angle: 0, boost: false, step: 0
+    };
+    for (let i = 0; i < 60; i++) {
+      worm.path.push({ x: worm.x - i * 4, y: worm.y + Math.sin(i * 0.17) * 4.5 });
     }
+    paintWorm(c, worm, { x0: -1e4, y0: -1e4, x1: 1e4, y1: 1e4 }, null, 0, 0);
     return cv;
   }
 
@@ -1360,7 +1447,7 @@ window.PV = window.PV || {};
       const zoomFx = p.alive && p.fx.zoom > 0 ? 1.6 : 1;
       // A phone held upright is narrow, so it sees a little less of the
       // arena rather than a worm too thin to steer.
-      const across = geom.w < 560 ? 330 : 400;
+      const across = geom.w < 560 ? 300 : 350;
       const want = Math.min(geom.w, geom.h) / (across * grow * zoomFx) * (game.ready ? 0.9 : 1);
       const ms = performance.now();
       const dt = cam.last ? Math.min(0.1, (ms - cam.last) / 1000) : 1;

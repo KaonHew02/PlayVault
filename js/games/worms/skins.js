@@ -61,13 +61,13 @@ window.PV = window.PV || {};
      kinds of each; the engine only ever says "kind 0 to 7". */
   const FOOD_PACKS = ['sweets', 'fruit', 'orbs'];
 
-  /* The floor under the arena: a honeycomb in two tones, the dark world
-     outside the wall, and the wall itself. */
+  /* The floor under the arena: a honeycomb whose joins are only a shade off
+     the tiles, the dark world outside the wall, and the wall itself. */
   const FLOORS = {
-    lilac: { a: '#D8D0F3', b: '#CFC5EE', line: '#BFB3E6', out: '#3A3358', wall: '#F0506E' },
-    mint: { a: '#CDEFD9', b: '#C2E8CF', line: '#A9DBBB', out: '#264236', wall: '#F0506E' },
-    sky: { a: '#CFE6F8', b: '#C3DEF4', line: '#A8CCEA', out: '#23364D', wall: '#F0506E' },
-    night: { a: '#22263B', b: '#1D2134', line: '#2E3350', out: '#0B0D16', wall: '#FF4D6D' }
+    lilac: { a: '#DAD3F4', line: '#CAC0EE', out: '#3A3358', wall: '#F0506E' },
+    mint: { a: '#D3F1DD', line: '#BFE5CB', out: '#264236', wall: '#F0506E' },
+    sky: { a: '#D4E8F9', line: '#C0DAF1', out: '#23364D', wall: '#F0506E' },
+    night: { a: '#23283E', line: '#2D3350', out: '#0B0D16', wall: '#FF4D6D' }
   };
 
   PV.WormSkins = {

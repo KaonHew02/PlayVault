@@ -54,7 +54,7 @@ window.PV = window.PV || {};
   const TURN_MIN = 26;             // the tightest turning circle, world units
   const TURN_K = 1.8;              // ...or this many body radii, if wider
 
-  const SNACK_DENSITY = 1.3e-4;    // floor food per square unit
+  const SNACK_DENSITY = 1.5e-4;    // floor food per square unit
   const SNACK_VALUES = [1, 1, 1, 1, 1, 1, 2, 2, 2, 3];
   const REMAINS_SHARE = 0.8;       // of a dead worm's mass, left on the floor
   const REMAINS_TICKS = 75 * HZ;
@@ -482,7 +482,7 @@ window.PV = window.PV || {};
       const pt = this.randomPoint(this.R - 40);
       const v = SNACK_VALUES[this.rng.int(SNACK_VALUES.length)];
       this.food.add({
-        x: pt.x, y: pt.y, v: v, k: 0, r: 5.5 + v * 1.8, look: this.rng.int(8), c: null,
+        x: pt.x, y: pt.y, v: v, k: 0, r: 7 + v * 2.2, look: this.rng.int(8), c: null,
         born: this.tick, until: 0, ph: this.rng.next() * TAU, cell: -1, slot: -1
       });
       this.snacks++;

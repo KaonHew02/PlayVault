@@ -81,6 +81,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **20** | Crowd Rush: hard is hard, levels are faster, the blob eases | **2026-09-24** — "free run hard mode like ez one, make it more fast more hard" and "level by level can make the stick man move fast a bit, i see not smoothly". Measured with bots first; see below |
 | **21** | Worm Arena rebuilt to its reference | **2026-09-24** — the crazygames *Worms Zone* link, with "fully copy this link, FULLY, bcz current one too shit". A new engine, view and wardrobe rather than a patch; the reference's art, names and code are not copied. See below |
 | **22** | Crowd Rush rebuilt in 3D to its reference | **2026-09-24** — "and then the count master oso fully copy it, FULLY bcz current one too shit", with the crazygames *Count Masters* link. Studied from the reference's trailer and a thirty-level playthrough of its web version, frame by frame. A new engine, a WebGL scene and a new view; FreePlay's art, name and code are not copied. See below |
+| **23** | Worm Arena redrawn | **2026-09-24** — "the worm look some ugly, redesign it and then the map i cant see the food clearly", with a screenshot. A new worm painter, and snacks that stand off the floor. No rule changed but how big the snacks are and how many. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -689,3 +690,34 @@ and a crowd steered round a blade losing far fewer than one run into it.
 
 Not built: the reference's gems, its island-building meta game, the cannon
 and mystery-box bonus levels, and squads stacked as towers.
+
+### Phase 23 — Worm Arena, redrawn
+
+The screenshot showed two things. Every ball had a dark rim of its own, so a
+worm read as beads on a string, with small eyes on its front edge. And pastel
+sweets sat on a pastel honeycomb whose joins were the strongest lines on the
+screen.
+
+- **One outline round the whole worm**, drawn once along the body — a stroke,
+  with discs for the tapering tail — instead of a rim on every ball. The balls
+  have no rim now, are lit in the middle and a shade darker at the edge, and
+  sit half a radius apart, so a body reads as one soft tube with gentle
+  segments. A gloss streak runs down its back, lit from the top left like the
+  rest of the arena; the drop shadow and the turbo's glow are a stroke each.
+- **Googly eyes**: bigger, nearly touching, pupils on whatever the worm is
+  looking at, and a blink every three seconds on each worm's own beat.
+- **The wardrobe's cards are painted by the arena's own `paintWorm`**, so a
+  card cannot drift from the worm it sells.
+- **Snacks are stickers**: the drawing, a dark outline round its silhouette,
+  and a soft glow of its own colour behind it, at 96 px. The pastels were
+  saturated, snacks are about a fifth bigger, there are 15% more of them, and
+  the camera sits a little closer (350 world units across the short side, 300
+  on a phone).
+- **The floor is quieter**: flat tiles, and joins only a shade off them.
+- **What it costs**: fewer stamps per length of worm than before — a ball
+  every half radius and no shadow stamps, against a ball every 0.55 of a
+  radius plus a shadow every second one — and the ball sprite lost the
+  transparent margin every stamp was paying for. With the three strokes the
+  pixels drawn come out about where they were. This was settled by counting:
+  timings in the preview pane, hidden and software-rendered on a machine busy
+  with another build, swung by a factor of a hundred between identical runs.
