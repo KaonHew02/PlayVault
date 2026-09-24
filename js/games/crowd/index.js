@@ -7,8 +7,8 @@
     family: 'arcade',
     name: 'Crowd Rush',
     nameZh: '人潮冲锋',
-    blurb: 'Level by level: run a crowd through the gates that multiply it, beat the king and storm his keep.',
-    blurbZh: '一关一关地带着人潮穿过倍增之门，打败国王，攻下城堡。',
+    blurb: 'Level by level in 3D: grow a crowd through the gates, beat the red squads, climb the stairs as a human tower or bring down the king.',
+    blurbZh: '一关一关的 3D 人潮冲锋：穿过倍增之门，打败红色人群，叠成人塔爬上阶梯，或者击倒国王。',
     accent: '#3B82F6',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
       + '<path d="M6 40h36" stroke="currentColor" stroke-width="2" opacity=".4"/>'
@@ -34,10 +34,10 @@
         ]
       },
       {
-        key: 'course', labelKey: 'crowd.course', def: 'fields',
+        key: 'course', labelKey: 'crowd.course', def: 'ice',
         showIf: (o, inRoom) => inRoom || o.play === 'free',
         choices: PV.CrowdCourse.keys.map(k => ({
-          value: k, labelKey: 'crowd.' + k, tag: '\u2605'.repeat(PV.CrowdCourse.tierOf(k))
+          value: k, labelKey: 'crowd.' + k, tag: '★'.repeat(PV.CrowdCourse.tierOf(k))
         }))
       },
       {

@@ -78,6 +78,9 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **17** | Tower Defense: normal is no longer easy | **2026-09-24** — "normal mode need increase the enemy power, i test play like ez mode". Measured with a bot before changing anything; see below |
 | **18** | Crowd Rush, level by level | **2026-09-24** — "count master is level by level, can make it level by level?" Levels are the default mode now; free run keeps the course and difficulty picker, and races use it. Measured with bots before shipping; see below |
 | **19** | Crowd Rush: smooth, faster, and a road to the bottom edge | **2026-09-24** — "not smooth", "why down side got the green color", "move not fast… more level will increase the speed right?" See below |
+| **20** | Crowd Rush: hard is hard, levels are faster, the blob eases | **2026-09-24** — "free run hard mode like ez one, make it more fast more hard" and "level by level can make the stick man move fast a bit, i see not smoothly". Measured with bots first; see below |
+| **21** | Worm Arena rebuilt to its reference | **2026-09-24** — the crazygames *Worms Zone* link, with "fully copy this link, FULLY, bcz current one too shit". A new engine, view and wardrobe rather than a patch; the reference's art, names and code are not copied. See below |
+| **22** | Crowd Rush rebuilt in 3D to its reference | **2026-09-24** — "and then the count master oso fully copy it, FULLY bcz current one too shit", with the crazygames *Count Masters* link. Studied from the reference's trailer and a thirty-level playthrough of its web version, frame by frame. A new engine, a WebGL scene and a new view; FreePlay's art, name and code are not copied. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -496,3 +499,193 @@ misses one hazard in five), each with and without buying upgrades.
   to 11.7 m/s. A hazard now bites per METRE rather than per tick, or every
   faster level would have made every saw gentler. The level curve measured
   the same afterwards: quicker steering pays for quicker running.
+
+### Phase 20 — Crowd Rush: hard that is hard, faster levels, an eased blob
+
+Free runs were measured the way the levels were — three courses, ten seeds, a
+perfect player and careless ones, with and without upgrades:
+
+| wins | easy | normal | old hard | new hard |
+| --- | --- | --- | --- | --- |
+| perfect, no upgrades | 97% | 90% | 87% | 60% |
+| perfect, a few upgrades | 100% | 100% | 100% | 70-73% |
+| careless (1 gate in 5 wrong) | 27% | 17% | 17% | 13% |
+| careless, a few upgrades | 57% | 60% | 47% | 10% |
+
+- **Hard only tested sloppiness.** To anyone who reads the gates it was easy
+  and normal again. It now runs a third faster than normal (10.9 m/s),
+  assumes a good player steps round the hazards (`graze` 0.97, as levels
+  do), and sends rivals of 78% and a king of 100% of a good player's crowd.
+- **The shop undid any hard.** Three upgrade levels took a perfect run on the
+  new hard straight back to 100%. Hard now sizes its crowds to what you bring
+  (`matchBoost`): the shadow starts with your extra runners and takes your
+  gate bonus, from the same seed, so the gates and hazards stay where they
+  were and only the crowds and the king change. Buying at the start line lays
+  the course again. A race brings no upgrades, so a race on hard is exactly
+  the old layout. Upgrades still help a little on hard — a bigger crowd
+  survives the hazards better — and still pay in full on easy, normal and
+  the levels.
+- **Levels run faster:** the ramp is 1.10 → 1.40 by level 25 and climbs to
+  1.55 — 8.9 m/s at level 1 to 12.6 m/s. The level curve measured the same.
+- **Legs follow the speed.** They swung at one rate whatever the course did,
+  which is part of why a fast level looked slow.
+- **The blob eases.** Its size was recomputed from the count every tick, so
+  every gate snapped the whole crowd to a new shape and every hit in a fight
+  reshuffled it. The drawn size now eases after the count in about a tenth of
+  a second; the number over their heads stays exact.
+- Found on the way, not changed: free-run easy is harsh on a careless player
+  (27%), because a free run has no `mercy` — one wrong red gate early can
+  end it. Levels have it; free runs were left as they were balanced.
+
+### Phase 21 — Worm Arena, played like its reference
+
+"Fully copy this link" cannot mean the reference's art, names or code — they
+belong to its makers — so, as with Crowd Rush, it means the game its page
+describes, built here and drawn from nothing. The old arena was replaced
+rather than patched: `engine.js` and `view.js` are new, and `skins.js` holds
+the wardrobe, the food packs and the floors.
+
+What the page lists, and where it is now:
+
+- **A round arena whose wall kills.** The soft edge is gone. The screen
+  reddens inside 260 units of the wall, and bots measure their way off it: a
+  minute of a full arena in the smoke test, no bot into the wall.
+- **Your score is your size.** One number, mass. Thickness goes with its
+  fourth root, length with its 0.6 power, speed falls with its log — the
+  page's "as you get larger, you get slower". A worm turns on a circle about
+  two body radii across, so a giant turns wide and heavy.
+- **Turbo on either mouse button, Space or ⚡**: twice the speed, for 2 + 1.2%
+  of your mass a second, three quarters of it dropped behind you as food, and
+  never below 10.
+- **Six potions** — magnet, food ×5, radar (arrows to where worms died),
+  speed, sharp turns, zoom — twenty seconds each. The reference's shop sells
+  nothing that makes a worm stronger, only potions that last longer, and that
+  is the one upgrade here: +3 s a level, five levels, never in a race.
+- **Coins on the floor** buy skins: eighteen, three free, a few with hats. The
+  look panel picks the food (sweets, fruit or orbs) and the floor.
+- **Three modes.** Infinity. Time: seven minutes, food and coins doubled, a
+  death is a respawn, and you are placed at the bell. Treasure hunt: three
+  chests with an arrow to the nearest, ten coins and a burst of food each.
+- **The HUD is on the glass**: size, kills and coins top left with the potions
+  under them on their clocks, the top ten top right (five on a phone) with you
+  under them, a round map bottom right (bottom left on touch, out of the
+  turbo button's way), and the clock top middle in Time.
+
+Decisions:
+
+- **Food within reach flies to the mouth, and is that worm's once it leaves
+  the floor.** Everyone has that much magnet; the potion only widens it.
+- **Only food the arena makes is doubled in Time.** Doubling everything paid
+  a dead worm's remains back at 1.6 times what it weighed, so every traded
+  kill printed mass: a fifteen-minute autopilot run ended with a worm of 6.6
+  million. Remains and crumbs are somebody's mass already and are paid at
+  face value; the ×5 potion pays on remains but never on a turbo crumb, or
+  burning one unit and eating it back would pay three. The same run now
+  tops out near eleven thousand.
+- **Bots look down a fan of thirteen headings** for the one that is clear and
+  nearest what they want — food worth the trip, a worm to cut off, or a
+  wander. Three things halved how often they died, each measured before the
+  next: another worm's head is treated as where it is GOING (three obstacles
+  laid ahead of it), the clearance a heading needs is the turning circle the
+  bot is on now — which a turbo doubles — and a turbo is dropped the moment
+  the way ahead closes. A normal arena now loses about twenty worms a minute
+  and a bot lives about a minute. Hunters run alongside and cut in ahead,
+  because straight at a head is a head-on and the bigger worm wins those; big
+  bots coil round small worms. Dim bots sometimes stop looking. That is how
+  the arena gets fed.
+- **Everything is a sprite.** Each ball colour, snack, bottle, coin and chest
+  is painted once into a small canvas and stamped: a full arena draws in 2–4
+  ms on a 1180×510 canvas, and a tick costs 0.1 ms.
+- **The camera draws between ticks** by sampling the body from the head a
+  fraction of the last step back along its own path, instead of moving the
+  whole worm — which would fold the neck whenever a new body point had landed
+  inside the last step.
+- **A start line**, like Crowd Rush's: the arena runs while you choose a skin,
+  and your worm lies parked — an obstacle the bots steer round, and nobody
+  dies on. A race skips it (`autostart`), brings no upgrades, and reports
+  Time's clock as its progress. `worms.meta` holds coins, skins, food, floor
+  and the upgrade; it is sealed and in the backup.
+
+Not built: sound, the seasonal modes, emoji, and "continue" after a death,
+which the reference sells for an advert.
+
+### Phase 22 — Crowd Rush, rebuilt in 3D
+
+Phases 9 to 20 describe a game that is gone: the engine, the course
+generator and the view were all replaced. The reference is a 3D game, and
+a crowd painted onto one vanishing point in 2D could be tuned for ever
+without ever looking like it. Everything below was taken from watching the
+reference — its trailer and a playthrough of levels 1 to 30 of the web
+version — one frame at a time, not from its description.
+
+- **Drawn in WebGL, with no library** (`gl.js`, `scene.js`). PlayVault has
+  no dependencies and a CSP that loads scripts from this origin only; a
+  600 kB engine for one game would have been the first exception to both.
+  WebGL 2 where there is one, WebGL 1 with the instancing extension where
+  not, and GLSL ES 1.00 so the shaders compile under either. Every runner on
+  screen — yours, theirs, the tower, the ones the king sends flying — is one
+  instanced draw call (two when you wear a skin); the limbs swing in the
+  vertex shader, so the CPU sends twelve floats a runner. A frame costs well
+  under a millisecond of script.
+- **Two canvases.** WebGL draws on its own canvas under the harness's 2D
+  one, which carries only the HUD: the level bar, coins, the count pills,
+  the gate numbers floating off the crowd, the start screen's cards and
+  buttons, the needle, the king's health. `loophost.js` is untouched and
+  still draws its pause veil on top.
+- **The camera is the reference's,** measured from its frames: low and
+  flat behind the crowd, the road held in the middle of the screen, gates a
+  third of the way up. Its tower and castle shots stand off to the RIGHT —
+  the stairs climb away to the upper right in every reference frame — and
+  the projection is mirrored once so world +x is screen right.
+- **Runners, not a number.** Each has a place in a round blob on a hex
+  lattice (`SLOTS`), wider than a gate never, longer down the road instead.
+  A gate is taken by the whole crowd, by where its middle is when its front
+  meets the glass — the reference's rule: ×4 at 27 is 108. A trap cuts the
+  runners it touches. A red squad is runners too, and every pair that
+  touches goes down together, which is the one-for-one trade arrived at by
+  contact. Past 300 a side the rest wait in a reservoir; the count is exact
+  either way.
+- **The finishes.** Two of every three levels end at a rainbow staircase,
+  ×1.0 to ×5.0, climbed as a human tower that leaves a row on each step,
+  with a chest at the top; the third is a needle to stop for +10, +40 or
+  +80 and a crowned king in front of a castle with onion domes, who swings a
+  maul and knocks runners flying. The shop sells the reference's two
+  upgrades, Start Units and Income, at 100 coins a level; the colour wheel
+  and eight hats (one more every third level) are the reference's COLOR and
+  SKIN.
+
+What measuring found, each worth not finding again:
+
+- **Traps with gaps narrower than a crowd** cost a perfect player half the
+  crowd on level 2. Wider gaps, and runners now step aside from a blade in
+  their path (`dodge`) — as far as they can in the half metre they see it
+  coming, so a crowd run straight into a saw loses about a third and one
+  steered into the gap loses nothing.
+- **A blob that re-packed toward its middle every tick** poured its
+  survivors into the saw that had just made the gap. Places are now stable;
+  the gaps close once nothing sharp is near (`repack`), and at once in a
+  fight, where closing up is what the reference's crowds do.
+- **A runner that had stepped clear was pulled back into the blade** by its
+  place in the blob. It now holds the edge until the blade has gone by.
+- **The reservoir topped up onto a blade**, and a crowd of six hundred fed
+  its whole reserve into one saw. The reserve only steps in when no trap is
+  near.
+- **A runner appended to a full table was handed place 300 of 300**, stood
+  at NaN, and a fight against it could never end — found by the smoke run,
+  one dusk seed in six. `append()` closes the gaps before counting the
+  newcomer, and the suite now checks every tick that every runner stands
+  somewhere real.
+- **The tower's width came from the crowd**, so 32 runners climbed lower
+  than 31 (three wide to four wide). The width belongs to the level now, and
+  more runners never climb less.
+
+Balance, with the test bot (better gate, widest clear stretch past a trap,
+needle stopped in the middle): it clears levels 1 to 12 every time and 27
+of the first 30; what it loses are presses and hammers, which need timing a
+bot that only chooses where to stand does not have. `smoke.js` holds it,
+along with the one-for-one trade, the gate rule, the reservoir, a king too
+big for a handful, the stairs paying ×1.0 to ×5.0 and never less for more,
+and a crowd steered round a blade losing far fewer than one run into it.
+
+Not built: the reference's gems, its island-building meta game, the cannon
+and mystery-box bonus levels, and squads stacked as towers.

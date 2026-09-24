@@ -61,7 +61,7 @@ const FILES = [
   'js/games/mahjong/layout.js', 'js/games/mahjong/engine.js',
   'js/games/tetris/engine.js',
   'js/games/snake/engine.js',
-  'js/games/worms/engine.js',
+  'js/games/worms/skins.js', 'js/games/worms/engine.js',
   'js/games/crowd/course.js', 'js/games/crowd/engine.js',
   'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
@@ -733,105 +733,203 @@ section('snake — ' + (4 * scale) + ' scripted runs', () => {
 
 /* -------------------------------------------------------------- worm arena */
 
-section('worm arena — appetite, the soft wall, and a repeatable run', () => {
-  const g = new PV.Worms({ seed: 500, bots: 5 });
+section('worm arena — a round wall, mass as the score, and a repeatable run', () => {
+  const W = PV.Worms;
+  const bare = { food: 0, potions: 0, coins: 0, autostart: true };
+  const opt = o => Object.assign({}, bare, o);
+  const ahead = (g, d) => ({ x: g.player.x + Math.cos(g.player.angle) * d, y: g.player.y + Math.sin(g.player.angle) * d });
+
+  const g = new W({ seed: 500, bots: 5, autostart: true });
   ok(g.worms.length === 6, 'the arena should hold the player and five bots');
-  ok(g.food.length === 220, 'the food supply did not fill, got ' + g.food.length);
-  ok(g.player.segments === PV.Worms.START_SEGMENTS && g.player.score === 0,
-    'a worm should start at ten segments and no score');
-  ok(PV.Worms.FOODS.every((f, i, all) => !i || (f.score > all[i - 1].score && f.growth > all[i - 1].growth)),
-    'the food table is not ordered by what it is worth');
+  ok(g.snacks === g.snackTarget && g.food.count === g.snackTarget, 'the floor did not fill, got ' + g.snacks);
+  ok(g.potions.length === g.potionTarget && g.coinSpots.length === g.coinTarget, 'potions or coins are missing');
+  ok(g.player.mass === W.START_MASS, 'a worm should start at ' + W.START_MASS);
+  ok(g.worms.every(w => Math.hypot(w.x, w.y) < g.R), 'a worm arrived outside the wall');
+  g.advance();
+  ok(g.score === Math.floor(g.player.mass), 'the score is not the mass');
 
-  // A pellet pays in two currencies, and they are not the same number: a pizza
-  // is a hundred points and twenty segments.
-  const e = new PV.Worms({ seed: 502, bots: 0 });
-  e.food.length = 0;
-  e.foodCount = 0;                                  // and stop it refilling
-  e.player.angle = 0; e.player.aim = 0;
-  e.food.push({ x: e.player.x + 6, y: e.player.y, kind: 'pizza',
-                score: 100, growth: 20, r: 9, c: '#fff' });
-  const seg = e.player.segments;
-  e.advance();
-  ok(e.food.length === 0, 'the pellet was not swallowed');
-  ok(e.player.score === 100, 'the pizza paid ' + e.player.score + ' points');
-  ok(e.player.segments === seg + 20, 'the pizza grew ' + (e.player.segments - seg) + ' segments');
+  // "As you get larger, you get slower": thicker, much longer, and slower.
+  ok(W.radiusOf(2000) > W.radiusOf(20) * 2.5, 'a big worm is not much thicker');
+  ok(W.lengthOf(2000) > W.lengthOf(20) * 10, 'a big worm is not much longer');
+  ok(W.speedOf(2000) < W.speedOf(20) * 0.8, 'a big worm is not slower');
 
-  // The wall turns a worm round rather than killing it. Aim at it and wait.
-  const wall = new PV.Worms({ seed: 501, bots: 0 });
-  wall.player.x = wall.W - 40; wall.player.y = 300;
-  wall.player.angle = 0; wall.player.aim = 0;
-  let sawEdge = false;
-  for (let i = 0; i < 600; i++) { wall.advance(); sawEdge = sawEdge || wall.player.atEdge; }
-  ok(!wall.over, 'the wall killed a worm');
-  ok(sawEdge, 'a worm sat on the boundary without the edge ever registering');
-  ok(wall.player.x <= wall.W && wall.player.x >= 0, 'a worm left the arena');
+  // The start line: the arena runs, the player waits.
+  const wait = new W({ seed: 510, bots: 3 });
+  const at = { x: wait.player.x, y: wait.player.y };
+  for (let i = 0; i < 60; i++) wait.advance();
+  ok(wait.ready && wait.player.x === at.x && wait.player.y === at.y, 'the player moved before the start');
+  ok(wait.worms.some(w => w.bot && Math.hypot(w.x - w.px, w.y - w.py) > 0), 'the bots stood still at the start line');
+  ok(wait.score === 0 && !wait.over, 'a waiting run scored or ended');
+  wait.input('go');
+  wait.advance();
+  ok(!wait.ready && !wait.player.parked, 'go did not start the run');
 
-  // A head into a body kills the head, credits the body, and leaves a meal.
-  const k = new PV.Worms({ seed: 507, bots: 1 });
-  const victim = k.worms[1];
-  k.player.x = 1000; k.player.y = 800;
-  k.player.nodes = [{ x: 1000, y: 800 }, { x: 1005, y: 800 }, { x: 1010, y: 800 }];
-  victim.x = 1005; victim.y = 800;
-  victim.segments = 200;                            // a large worm: worth 1000
-  k.food.length = 0;
-  const before = k.player.score;
-  k.advance();
-  ok(!victim.alive, 'a head that ran into a body survived');
-  ok(k.player.alive, 'the worm whose body was hit died as well');
-  ok(k.player.kills === 1, 'the kill was not credited');
-  ok(k.player.score >= before + 1000, 'beating a large worm paid ' + (k.player.score - before));
-  ok(k.food.length > 0, 'a dead worm left nothing behind');
+  // Food in reach flies to the mouth and pays exactly its value...
+  const e = new W(opt({ seed: 502, bots: 0 }));
+  const snack = p => Object.assign({ v: 3, k: 0, r: 8, look: 0, c: null, born: 0, until: 0, ph: 0, cell: -1, slot: -1 }, p);
+  e.food.add(snack(ahead(e, 30)));
+  e.snacks++;
+  for (let i = 0; i < 20; i++) e.advance();
+  ok(e.food.count === 0 && e.flying.length === 0, 'the snack was not eaten');
+  ok(Math.abs(e.player.mass - (W.START_MASS + 3)) < 1e-9, 'a 3-point snack grew ' + (e.player.mass - W.START_MASS));
+  // ...and five times that on the blue potion.
+  e.player.fx.x5 = 600;
+  const m5 = e.player.mass;
+  e.food.add(snack(Object.assign(ahead(e, 30), { v: 2 })));
+  e.snacks++;
+  for (let i = 0; i < 20; i++) e.advance();
+  ok(Math.abs(e.player.mass - (m5 + 10)) < 1e-9, 'food x5 paid ' + (e.player.mass - m5) + ' for a 2');
+  // Never on a turbo crumb, or burning one unit and eating it back pays three.
+  const mc = e.player.mass;
+  e.gain(e.player, { v: 2, k: 2 });
+  ok(e.player.mass === mc + 2, 'the x5 potion paid on a turbo crumb');
 
-  // The dash eats the tail: nine segments a second, dropped behind as food.
-  const b = new PV.Worms({ seed: 505, bots: 0 });
-  b.food.length = 0; b.foodCount = 0;
-  b.player.x = b.W / 2; b.player.y = b.H / 2;
-  b.player.segments = 200;
-  const fat = b.player.segments;
-  for (let i = 0; i < 240; i++) { b.input('boost'); b.advance(); }
-  const burned = fat - b.player.segments;
-  ok(burned >= 30 && burned <= 42,
-    'four seconds of dashing should cost about 36 segments, cost ' + burned);
-  ok(b.player.fuel === b.player.segments - PV.Worms.BOOST_FLOOR, 'fuel is not the spare tail');
-  ok(b.food.length >= Math.floor(burned / 3) - 1,
-    'the burned tail was not dropped behind: ' + b.food.length + ' crumbs for ' + burned);
-  ok(b.food.every(f => f.kind !== 'crumb' || f.growth < 3), 'a crumb pays back more than it cost');
+  // A head into somebody's body dies; the body gets the kill, the floor the meal.
+  const k = new W(opt({ seed: 507, bots: 1 }));
+  const v = k.worms.find(w => w.bot);
+  v.bot = false;                                   // no brain: it holds its course
+  v.mass = 200;
+  W.size(v);
+  k.layBody(k.player, 0, 0, -Math.PI / 2);          // heading up, body hanging below
+  k.layBody(v, -40, 50, 0);                         // heading right, into that body
+  for (let i = 0; i < 40 && v.alive; i++) k.advance();
+  ok(!v.alive && v.cause === 'worm', 'a head that ran into a body survived');
+  ok(k.player.alive && k.player.kills === 1, 'the kill was not credited');
+  let left = 0, pieces = 0;
+  k.food.each(-k.R, -k.R, k.R, k.R, f => { if (f.k === 1) { left += f.v; pieces++; } });
+  ok(pieces >= 3 && Math.abs(left - 200 * W.REMAINS_SHARE) < 50, 'a 200 worm left ' + left.toFixed(1) + ' in ' + pieces);
+  ok(k.graves.length === 1, 'the radar was not told where it died');
 
-  // Coasting costs nothing at all — there is no tank to refill.
-  const held = b.player.segments;
+  // Head to head, the bigger worm wins.
+  const h = new W(opt({ seed: 508, bots: 1 }));
+  const small = h.worms.find(w => w.bot), big = h.player;
+  small.bot = false;
+  small.mass = W.START_MASS;
+  W.size(small);
+  big.mass = 400;
+  W.size(big);
+  h.layBody(big, -30, 0, 0);
+  h.layBody(small, 30, 0, Math.PI);
+  for (let i = 0; i < 40 && small.alive && big.alive; i++) h.advance();
+  ok(big.alive && !small.alive, 'a head-on did not go to the bigger worm');
+
+  // The wall kills, and an endless run ends a moment later on the mass you had.
+  const wall = new W(opt({ seed: 501, bots: 0 }));
+  wall.layBody(wall.player, wall.R - 60, 0, 0);
+  for (let i = 0; i < 120 && wall.player.alive; i++) wall.advance();
+  ok(wall.lastDeath && wall.lastDeath.cause === 'wall', 'the wall did not kill');
+  ok(!wall.over, 'the run ended before the moment to watch it');
+  for (let i = 0; i < W.DEATH_TICKS + 5 && !wall.over; i++) wall.advance();
+  ok(wall.over && wall.finalScore === W.START_MASS && wall.score === W.START_MASS, 'the run did not end on its mass');
+
+  // The turbo: twice as fast, costs mass by size, and drops most of it behind.
+  const b = new W(opt({ seed: 505, bots: 0 }));
+  b.player.mass = 1000;
+  W.size(b.player);
+  b.layBody(b.player, -1200, 0, 0);
+  let x0 = b.player.x;
+  for (let i = 0; i < 60; i++) b.advance();
+  const coast = b.player.x - x0;
+  x0 = b.player.x;
+  const m1 = b.player.mass;
+  for (let i = 0; i < 60; i++) { b.input('boost'); b.advance(); }
+  const dash = b.player.x - x0, burned = m1 - b.player.mass;
+  ok(dash > coast * 1.9 && dash < coast * 2.1, 'the turbo went ' + dash.toFixed(1) + ' to ' + coast.toFixed(1));
+  ok(Math.abs(burned - (W.BURN_BASE + 1000 * W.BURN_RATE)) < 1.5, 'a second of turbo at 1000 cost ' + burned.toFixed(2));
+  let dropped = 0;
+  b.food.each(-b.R, -b.R, b.R, b.R, f => { if (f.k === 2) dropped += f.v; });
+  ok(dropped > burned * W.CRUMB_SHARE * 0.6 && dropped <= burned * W.CRUMB_SHARE + 1e-9,
+    'dropped ' + dropped.toFixed(2) + ' of ' + burned.toFixed(2) + ' burned');
+  // Every body point is NODE along the path from the last, turbo or not.
+  const p0 = b.player.path;
+  ok(p0.slice(1, 60).every((q, i) => Math.abs(Math.hypot(q.x - p0[i].x, q.y - p0[i].y) - W.NODE) < 0.01),
+    'the turbo laid the body out coarser');
+  // Coasting costs nothing, and the floor is never spent.
+  const held = b.player.mass;
   for (let i = 0; i < 120; i++) b.advance();
-  ok(b.player.segments === held, 'not dashing changed the length');
+  ok(b.player.mass === held, 'coasting changed the mass');
+  b.player.mass = W.BOOST_FLOOR + 1;
+  W.size(b.player);
+  for (let i = 0; i < 200; i++) { b.input('boost'); b.advance(); }
+  ok(b.player.mass >= W.BOOST_FLOOR - 1e-9 && !b.player.boost, 'the turbo spent below the floor: ' + b.player.mass);
 
-  // ...and the floor is the size you started at, so a dash cannot end you.
-  b.player.segments = PV.Worms.BOOST_FLOOR;
-  b.input('boost'); b.advance();
-  ok(!b.player.boosting, 'a worm dashed itself below the floor');
-  ok(b.player.segments === PV.Worms.BOOST_FLOOR, 'the floor was eaten into');
+  // Potions: taken on touch, back later, and they do what they say.
+  const pz = new W(opt({ seed: 511, bots: 0 }));
+  pz.potions.push(Object.assign(ahead(pz, 15), { kind: 'speed', ph: 0 }));
+  pz.advance();
+  ok(pz.player.fx.speed > 0 && pz.potions.length === 0, 'the potion was not picked up');
+  ok(pz.later.some(l => l.what === 'potion'), 'a taken potion never comes back');
+  pz.advance();
+  ok(Math.abs(pz.player.step - W.speedOf(pz.player.mass) * W.SPEED_FX) < 1e-9, 'the speed potion did not speed you up');
+  const reach = pz.captureOf(pz.player);
+  pz.player.fx.magnet = 5;
+  ok(pz.captureOf(pz.player) >= reach + W.MAGNET, 'the magnet did not reach further');
+  for (let i = 0; i < 6; i++) pz.advance();
+  ok(pz.player.fx.magnet === 0, 'a potion did not wear off');
+  // The shop's one upgrade: the player's potions last longer, capped at the top level.
+  const up = new W(opt({ seed: 516, bots: 0, potionLevel: 2 }));
+  up.potions.push(Object.assign(ahead(up, 15), { kind: 'zoom', ph: 0 }));
+  up.advance();
+  ok(up.player.fx.zoom === W.POTION_TICKS + 2 * W.POTION_UP.per, 'a level 2 potion lasts ' + up.player.fx.zoom);
+  ok(new W(opt({ seed: 516, bots: 0, potionLevel: 99 })).potionTicks
+    === W.POTION_TICKS + W.POTION_UP.max * W.POTION_UP.per, 'the upgrade went past its top level');
 
-  // A long chase does not carpet the arena in crumbs.
-  const cc = new PV.Worms({ seed: 506, bots: 0 });
-  cc.player.segments = 4000;
-  for (let i = 0; i < 60 * 40; i++) { cc.input('boost'); cc.advance(); }
-  ok(cc.food.length <= cc.foodCount * 3 + 2,
-    'crumbs piled up to ' + cc.food.length + ' on a forty-second dash');
+  // Coins are yours alone, and go in this run's purse.
+  const cz = new W(opt({ seed: 512, bots: 0 }));
+  cz.coinSpots.push(Object.assign(ahead(cz, 12), { ph: 0 }));
+  cz.advance();
+  ok(cz.coins === 1 && cz.coinSpots.length === 0, 'the coin was not collected');
 
-  // Bots keep off the walls and out of the food queue.
-  const arena = new PV.Worms({ seed: 503, bots: 6 });
-  for (let i = 0; i < 900 * scale; i++) { arena.over = false; arena.advance(); }
-  const inside = w => w.x >= 0 && w.x <= arena.W && w.y >= 0 && w.y <= arena.H;
-  ok(arena.worms.filter(w => w.alive).every(inside), 'a worm left the arena');
-  ok(arena.worms.filter(w => w.alive && w.bot).length >= 4, 'the bots all died and stayed dead');
-  ok(arena.food.length >= 200, 'the food supply ran down to ' + arena.food.length);
+  // Time: double food, a death is a respawn, and the bell ends it with a place.
+  const tm = new W({ seed: 513, mode: 'time', bots: 4, autostart: true });
+  ok(tm.timeLeft() === W.MODES.time.ticks, 'the clock did not start full');
+  tm.gain(tm.player, { v: 1, k: 0 });
+  ok(tm.player.mass === W.START_MASS + 2, 'time mode did not double the floor food');
+  // ...but not remains: paying a dead worm back at 1.6 times its weight
+  // printed mass every time two worms traded kills.
+  tm.gain(tm.player, { v: 10, k: 1 });
+  ok(tm.player.mass === W.START_MASS + 12, 'time mode doubled a worm’s remains');
+  tm.kill(tm.player, 'wall', null);
+  ok(!tm.over && tm.respawnAt > 0, 'a death ended a timed round');
+  for (let i = 0; i < W.RESPAWN_TICKS + 2; i++) tm.advance();
+  ok(tm.player.alive && tm.player.mass === W.START_MASS && tm.deaths === 1, 'no respawn in time mode');
+  tm.startTick = tm.tick - W.MODES.time.ticks + 3;
+  for (let i = 0; i < 10 && !tm.over; i++) tm.advance();
+  ok(tm.over && tm.overReason === 'time' && tm.finalRank && tm.finalRank.place >= 1, 'the bell did not end the round');
 
-  // Same seed, same inputs, same run — the property a versus mode needs.
+  // Treasure: chests on the map pay coins and burst into food.
+  const th = new W(opt({ seed: 515, mode: 'treasure', bots: 0 }));
+  ok(th.chests.length === 3, 'a treasure hunt needs three chests, got ' + th.chests.length);
+  Object.assign(th.chests[0], ahead(th, 20));
+  th.advance();
+  ok(th.chestsFound === 1 && th.coins === 10, 'the chest did not pay');
+  ok(th.food.count + th.flying.length >= 12, 'the chest did not burst into food');
+  ok(th.later.some(l => l.what === 'chest'), 'no new chest is coming');
+
+  // The bots: they keep the arena full, stay inside, and leave the wall alone.
+  const arena = new W({ seed: 503, autostart: true });
+  arena.player.parked = true;                     // a bystander: the run is theirs
+  let wallDeaths = 0, deaths = 0;
+  const kill = arena.kill.bind(arena);
+  arena.kill = (w, cause, by) => { if (w.alive) { deaths++; if (cause === 'wall') wallDeaths++; } return kill(w, cause, by); };
+  for (let i = 0; i < 60 * 60 * scale; i++) arena.advance();
+  ok(deaths > 0, 'nobody died in a minute of a full arena');
+  ok(wallDeaths <= scale, 'bots drove into the wall ' + wallDeaths + ' times');
+  ok(arena.worms.filter(w => w.alive && w.bot).length >= arena.botCount - 6, 'the bots died and stayed dead');
+  ok(arena.worms.every(w => !w.alive || Math.hypot(w.x, w.y) < arena.R), 'a worm is outside the wall');
+  ok(arena.snacks >= arena.snackTarget - 12, 'the floor ran out of food');
+  ok(arena.food.count <= arena.foodCap + 400, 'remains and crumbs piled up to ' + arena.food.count);
+
+  // Same seed, same inputs, same run — the property a race needs.
   const run = () => {
-    const r = new PV.Worms({ seed: 777, bots: 4 });
-    for (let i = 0; i < 400; i++) {
-      if (i % 40 === 0) r.input(i % 80 === 0 ? 'left' : 'right');
+    const r = new W({ seed: 777, bots: 6, autostart: true });
+    for (let i = 0; i < 900; i++) {
+      if (i % 50 === 0) r.input({ aim: (i / 50) * 0.9 });
+      if (i % 170 === 0) r.input({ boost: i % 340 === 0 });
       if (!r.advance()) break;
     }
-    return JSON.stringify({ x: r.player.x, y: r.player.y, s: r.player.score,
-                            g: r.player.segments, f: r.food.length, t: r.tick });
+    return JSON.stringify({ x: r.player.x, y: r.player.y, m: r.player.mass, t: r.tick, f: r.food.count,
+                            w: r.worms.map(w => [w.name, Math.round(w.mass * 1000)]) });
   };
   ok(run() === run(), 'the same seed and inputs gave two different runs');
 });
@@ -1086,244 +1184,271 @@ section('tower defense — ' + (2 * scale) + ' runs per map', () => {
 
 /* ------------------------------------------------------------ crowd rush */
 
-section('crowd rush — ' + (2 * scale) + ' runs per course', () => {
-  const DIFFS = Object.keys(PV.CrowdRush.DIFFS);
+section('crowd rush — ' + (2 * scale) + ' runs per course, and the levels', () => {
+  const C = PV.CrowdCourse, R = PV.CrowdRush;
 
-  /** A player who always takes the better gate and steps off the hazards. */
+  /** A player who takes the better gate and steers for the widest clear
+      stretch past whatever trap is coming. Cheap on purpose: it reads the
+      trap as it will be when the crowd gets there, not by simulating. */
   function aimFor(g) {
-    const f = g.course.features[g.at];
-    if (!f) return 0;
-    const d = f.at - g.dist;
-    if (f.kind === 'gates') {
-      let best = null, bv = -Infinity;
-      for (const lane of f.lanes) {
-        const v = PV.CrowdCourse.apply(lane.op, lane.val, g.n);
-        if (v > bv) { bv = v; best = lane; }
+    const list = g.course.features;
+    for (const ti of g.traps) {
+      const f = list[ti];
+      if (f.z + 2.5 < g.z + g.back) continue;
+      if (f.z > g.z + 16) break;
+      const eta = g.tick + Math.max(0, (f.z - g.z) / g.speed);
+      let cuts;
+      if (f.kind === 'saws') cuts = f.saws.map(s => { const x = R.sawX(f, s, eta); return [x - s.r - 0.3, x + s.r + 0.3]; });
+      else if (f.kind === 'bar') cuts = [[(f.x || 0) - f.len - 0.3, (f.x || 0) + f.len + 0.3]];
+      else if (f.kind === 'spikes') cuts = [[f.x0 - 0.3, f.x1 + 0.3]];
+      else if (f.kind === 'hammer') cuts = [[-2.4, 2.4]];
+      else if (f.kind === 'press') {
+        const b = f.blocks.slice().sort((p, q) => R.pressLift(f, q, eta) - R.pressLift(f, p, eta))[1];
+        cuts = [[b.x - b.w / 2 - 0.2, b.x + b.w / 2 + 0.2]];
+      } else continue;
+      cuts.sort((p, q) => p[0] - q[0]);
+      let best = 0, bw = -1, x = -R.EDGE;
+      for (const c of cuts.concat([[R.EDGE, R.EDGE]])) {
+        if (c[0] - x > bw) { bw = c[0] - x; best = (x + c[0]) / 2; }
+        x = Math.max(x, c[1]);
       }
-      const side = (best.x0 + best.x1) / 2;
-      // Hug the outer edge, so the whole crowd fits inside the good gate.
-      return side > 0 ? Math.max(0, 1 - g.width / 2) : Math.min(0, -1 + g.width / 2);
+      return best / R.EDGE;
     }
-    if (f.kind === 'rivals' || f.kind === 'castle') return 0;
-    if (d > 7) return 0;
-    return PV.CrowdRush.hazardX(f, g.tick) > 0 ? -0.8 : 0.8;
+    const sh = g.shots[g.at] != null ? list[g.shots[g.at]] : null;
+    if (sh && sh.kind === 'gates') {
+      let bv = -1, aim = 0;
+      for (const ln of sh.lanes) {
+        const v = C.apply(ln.op, ln.val, g.count);
+        if (v > bv) { bv = v; aim = (ln.x0 + ln.x1) / 2; }
+      }
+      // A lone red gate: go round it.
+      if (sh.lanes.length === 1 && bv < g.count) aim = sh.lanes[0].x0 < 0 ? 3 : -3;
+      return aim / R.EDGE;
+    }
+    return 0;
   }
 
-  function play(course, difficulty, seed, smart, boost) {
-    const g = new PV.CrowdRush({ seed: seed, course: course, difficulty: difficulty, boost: boost });
-    g.input('go');                           // off the start line
+  const WON = { climbed: 1, stormed: 1 };
+  function play(opts, smart) {
+    const g = new R(opts);
+    g.input('go');
     let ticks = 0;
     while (!g.isOver() && ticks < 60 * 60 * 6) {
-      if (smart) g.input({ lane: aimFor(g) });
+      if (smart) {
+        if (g.phase === 'gauge' && Math.abs(g.needle(g.gaugeT)) < 0.12) g.input('go');
+        g.input({ lane: aimFor(g) });
+      }
       g.advance();
       ticks++;
-      ok(g.n >= 0, course + ': the crowd went negative');
-      ok(Math.abs(g.x) <= g.reach + 1e-6, course + ': the crowd hung off the track');
-      ok(g.dist <= g.course.length + 1, course + ': ran past the end of the course');
+      if (ticks % 7) continue;
+      ok(g.count >= 0 && g.units <= R.CAP && g.extra >= 0, 'the crowd went negative or over the cap');
+      ok(g.foes <= R.CAP && g.foeExtra >= 0, 'a squad went over the cap');
+      // Where every runner is: on the road, and a real number. A runner
+      // handed a place past the end of the table once stood at NaN, and a
+      // fight against it could never end.
+      let off = 0, lost = 0;
+      for (let i = 0; i < g.units; i++) {
+        if (!Number.isFinite(g.ux[i]) || !Number.isFinite(g.uz[i])) lost++;
+        else if (Math.abs(g.ux[i]) > R.EDGE + 1e-9) off++;
+      }
+      ok(off === 0, off + ' runners stood off the road');
+      ok(lost === 0, lost + ' runners stood nowhere');
     }
     return g;
   }
 
-  for (const course of PV.CrowdCourse.keys) {
-    const built = PV.CrowdCourse.build(course, PV.CrowdRush.DIFFS.normal, new PV.RNG(4));
-    ok(built.features.length > 5, course + ': the course is nearly empty');
-    ok(built.features[built.features.length - 1].kind === 'castle',
-      course + ': the keep is not the last thing on the course');
-    for (let i = 1; i < built.features.length; i++) {
-      ok(built.features[i].at >= built.features[i - 1].at, course + ': features are out of order');
-    }
-    for (const f of built.features) {
-      ok(f.at > 0 && f.at < built.length, course + ': a feature sits off the course');
+  // Every course and a spread of levels are laid out sanely.
+  const built = C.keys.map(k => new R({ seed: 4, course: k, difficulty: 'normal' }))
+    .concat([1, 2, 3, 9, 20, 45].map(n => new R({ seed: C.seedFor(n), level: n })));
+  for (const g of built) {
+    const c = g.course, list = c.features, name = (g.level ? 'level ' + g.level : g.courseKey);
+    ok(list.length >= 4, name + ': the course is nearly empty');
+    for (let i = 1; i < list.length; i++) ok(list[i].z >= list[i - 1].z, name + ': features are out of order');
+    for (const f of list) {
+      ok(f.z > 0 && f.z < c.finish, name + ': a feature sits off the course');
       if (f.kind === 'gates') {
-        ok(f.lanes.length === 2 && f.lanes[0].x0 === -1 && f.lanes[1].x1 === 1,
-          course + ': a gate pair does not span the track');
+        ok(f.lanes.length >= 1 && f.lanes.every(l => l.x1 > l.x0 && l.x0 >= -C.HALF && l.x1 <= C.HALF),
+          name + ': a gate does not sit on the road');
       }
-      if (f.kind === 'rivals' || f.kind === 'castle') ok(f.n > 0, course + ': an empty crowd was placed');
+      if (f.kind === 'squad') ok(f.n > 0 && f.r > 0, name + ': an empty squad was placed');
     }
+    if (c.boss) ok(c.king.k >= 2 && c.gauge.length === 3 && c.kingZ > c.finish, name + ': the king has no castle');
+    else ok(c.stairs > c.finish && c.chest > c.top, name + ': the stairs are missing');
+    ok(list[0].kind === 'gates' && list[0].lanes.every(l => C.isGood(l.op)),
+      name + ': the first thing on the road is not a pair of gates worth taking');
+  }
+  ok(new R({ seed: 4, course: 'dusk', difficulty: 'hard' }).course.boss, 'a free run did not end at the castle');
 
+  // The same seed and the same hands give the same run.
+  for (const course of C.keys) {
     for (let n = 0; n < 2 * scale; n++) {
-      const seed = 21000 + n;
-      const difficulty = DIFFS[n % DIFFS.length];
-      const a = play(course, difficulty, seed, true);
+      const seed = 21000 + n, difficulty = ['easy', 'normal', 'hard'][n % 3];
+      const a = play({ seed: seed, course: course, difficulty: difficulty }, true);
       ok(a.isOver(), course + ' seed ' + seed + ': the run never ended');
-      ok(['stormed', 'overrun', 'wiped', 'held'].indexOf(a.overReason) >= 0,
+      ok(['climbed', 'stormed', 'wiped', 'overrun', 'held'].indexOf(a.overReason) >= 0,
         course + ' seed ' + seed + ': odd ending ' + a.overReason);
-      const b = play(course, difficulty, seed, true);
-      ok(a.tick === b.tick && a.score === b.score && a.n === b.n,
+      const b = play({ seed: seed, course: course, difficulty: difficulty }, true);
+      ok(a.tick === b.tick && a.score === b.score && a.count === b.count && a.overReason === b.overReason,
         course + ' seed ' + seed + ': the same seed gave a different run');
     }
   }
 
-  // The gate split is by overlap, not by where the middle of the crowd is.
-  const g = new PV.CrowdRush({ seed: 9, course: 'fields', difficulty: 'normal' });
-  const pair = {
-    kind: 'gates', at: 0,
-    lanes: [{ x0: -1, x1: 0, op: 'mul', val: 2 }, { x0: 0, x1: 1, op: 'sub', val: 1000 }]
-  };
-  g.n = 100; g.x = -g.reach;                 // hard against the good side
-  g.runGates(pair);
-  ok(g.n === 200, 'a crowd wholly inside the x2 gate did not double, got ' + g.n);
+  // A gate is taken by the whole crowd: whichever one its middle is in.
+  const pair = { kind: 'gates', z: 0, lanes: [
+    { x0: -C.HALF, x1: 0, op: 'mul', val: 2 }, { x0: 0, x1: C.HALF, op: 'sub', val: 1000 }] };
+  const gt = new R({ seed: 9, level: 1, autostart: true });
+  gt.addUnits(99);
+  gt.x = -0.3;
+  gt.takeGate(pair, 0);
+  ok(gt.count === 200, 'a crowd whose middle was in the ×2 gate did not double, got ' + gt.count);
+  gt.x = 0.3;
+  gt.takeGate(pair, 0);
+  ok(gt.count === 0, 'a red gate did not take the whole crowd');
 
-  g.n = 100; g.x = 0;                        // straddling both
-  g.runGates(pair);
-  ok(g.n > 90 && g.n < 130, 'straddling the line did not split the crowd, got ' + g.n);
+  // Past the cap the count is exact; the rest wait in the reservoir.
+  const big = new R({ seed: 9, level: 1, autostart: true });
+  big.addUnits(2999);
+  ok(big.count === 3000 && big.units === R.CAP && big.extra === 3000 - R.CAP, 'the reservoir lost runners');
+  big.removeUnits(2900);
+  ok(big.count === 100 && big.units === 100 && big.extra === 0, 'a red gate did not empty the reservoir first');
 
-  // A clash is a one-for-one trade: the bigger crowd wins by the difference.
+  // A squad is a one-for-one trade, fought runner against runner.
   function clash(mine, theirs) {
-    const c = new PV.CrowdRush({ seed: 1, course: 'fields', difficulty: 'normal' });
-    c.n = mine;
-    c.startClash({ kind: 'rivals', at: 0, n: theirs });
+    const c = new R({ seed: 1, level: 1, autostart: true });
+    c.removeUnits(c.count);
+    c.addUnits(mine);
+    c.engage({ kind: 'squad', z: c.z + 4, n: theirs, r: C.squadRadius(theirs) }, 999);
     let guard = 0;
-    while (c.clash && !c.isOver() && guard++ < 20000) c.fight();
+    while (c.phase === 'fight' && guard++ < 5000) c.advance();
     return c;
   }
   const won = clash(100, 40);
-  ok(won.n === 60, '100 against 40 should leave 60, left ' + won.n);
+  ok(won.count === 60 && won.phase === 'run', '100 against 40 should leave 60, left ' + won.count);
   ok(won.beaten === 40, 'the win was not credited, got ' + won.beaten);
   const lostIt = clash(30, 80);
-  ok(lostIt.isOver() && lostIt.n === 0, 'the smaller crowd survived a clash');
-  ok(clash(900, 400).n === 500, 'a big clash does not trade one for one');
+  ok(lostIt.count === 0 && lostIt.phase === 'lost', 'the smaller crowd survived a fight');
+  ok(clash(900, 400).count === 500, 'a fight past the cap does not trade one for one');
 
-  // Easy is a course a good player clears; that is what the shadow run is for.
-  let cleared = 0;
-  for (let n = 0; n < 3; n++) {
-    const r = play('fields', 'easy', 31000 + n, true);
-    if (r.overReason === 'stormed') cleared++;
-  }
-  ok(cleared >= 2, 'a perfect player cleared only ' + cleared + '/3 easy runs');
-
-  // ...and a player who never steers is not supposed to get there.
-  const idle = play('keep', 'hard', 777, false);
-  ok(idle.overReason !== 'stormed' || idle.n < idle.peak,
-    'standing still won the hardest course outright');
-
-  /* The start line: nothing moves until the player says go, and the shop's
-     upgrades change the player, never the course. */
-  const wait = new PV.CrowdRush({ seed: 5, course: 'fields', difficulty: 'normal' });
+  // The start line: nothing moves until the player says go.
+  const wait = new R({ seed: 5, level: 1 });
   for (let k = 0; k < 120; k++) wait.advance();
-  ok(wait.ready && wait.dist === 0 && !wait.isOver(), 'the crowd set off before anyone tapped');
+  ok(wait.ready && wait.z === 0 && !wait.isOver(), 'the crowd set off before anyone tapped');
   wait.input({ lane: 0.5 });
   wait.advance();
   ok(wait.ready, 'hovering the mouse over the canvas started the run');
   wait.input('go');
   wait.advance();
-  ok(!wait.ready && wait.dist > 0, 'go did not start the run');
-  ok(wait.setBoost({ start: 5 }) === false && wait.n === PV.CrowdRush.DIFFS.normal.start,
-    'an upgrade landed after the run had started');
-  ok(new PV.CrowdRush({ seed: 5, course: 'fields', difficulty: 'normal', autostart: true }).phase === 'run',
-    'a race start still waited at the line');
+  ok(!wait.ready && wait.z > 0, 'go did not start the run');
+  ok(wait.setBoost({ units: 5 }) === false && wait.count === 1, 'an upgrade landed after the run had started');
+  ok(new R({ seed: 5, level: 1, autostart: true }).phase === 'run', 'a race start still waited at the line');
 
-  const plain = new PV.CrowdRush({ seed: 8, course: 'dunes', difficulty: 'normal' });
-  const boosted = new PV.CrowdRush({ seed: 8, course: 'dunes', difficulty: 'normal', boost: { start: 4, gate: 5 } });
-  ok(boosted.n === plain.n + 4 * PV.CrowdRush.BOOSTS.start.per,
-    'the starting-crowd upgrade did not add its runners');
-  ok(JSON.stringify(boosted.course) === JSON.stringify(plain.course),
-    'an upgrade changed the course it was bought to beat');
-  ok(new PV.CrowdRush({ seed: 8, course: 'dunes', difficulty: 'normal', boost: { start: 1e9, gate: -3 } }).boost.start
-    === PV.CrowdRush.BOOSTS.start.max, 'a boost level was not clamped');
-  ok(PV.CrowdRush.boostCost('start', 3) > PV.CrowdRush.boostCost('start', 2), 'a higher level did not cost more');
+  // Upgrades change the player, never the course.
+  const plain = new R({ seed: 8, level: 5 });
+  const rich = new R({ seed: 8, level: 5, boost: { units: 6, income: 4 } });
+  ok(rich.count === 6 && plain.count === 1, 'Start Units did not put its runners on the line');
+  ok(JSON.stringify(rich.course) === JSON.stringify(plain.course), 'an upgrade changed the course');
+  ok(new R({ seed: 8, level: 5, boost: { units: 1e9, income: -3 } }).boost.units === R.BOOSTS.units.max,
+    'an upgrade level was not clamped');
+  ok(R.boostCost('units', 4) > R.boostCost('units', 3), 'a higher level did not cost more');
 
-  // The gate bonus is a share more of what a GREEN gate gave, and nothing on red.
-  const gb = new PV.CrowdRush({ seed: 9, course: 'fields', difficulty: 'normal', boost: { gate: 5 } });
-  gb.n = 100; gb.x = -gb.reach;
-  gb.runGates(pair);
-  ok(gb.n === 200 + 5 * PV.CrowdRush.BOOSTS.gate.per,
-    'the gate bonus did not add its runners to a green gate, got ' + gb.n);
-  gb.n = 100; gb.x = gb.reach;
-  gb.runGates(pair);
-  ok(gb.n === 0, 'the gate bonus softened a red gate');
-
-  /* The king: a longer fight than a rival, and when he falls the crowd walks
-     in for a moment before the run is over — still a win, still one payout. */
-  function kingFight(mine, his) {
-    const c = new PV.CrowdRush({ seed: 1, course: 'fields', difficulty: 'normal', autostart: true });
-    c.n = mine;
-    c.startClash({ kind: 'castle', at: 0, n: his });
-    let ticks = 0;
-    while (!c.isOver() && ticks++ < 20000) c.advance();
-    return { c: c, ticks: ticks };
+  // Traps cut the runners they touch — and a crowd steered into the gap
+  // loses far fewer than one steered into the blade.
+  function sawRun(x) {
+    const s = new R({ seed: 2, level: 1, autostart: true });
+    s.removeUnits(s.count);
+    s.addUnits(60);
+    s.course = { features: [{ kind: 'saws', z: 20, phase: 0, saws: [{ x: 0, r: 1.2 }] }], finish: 60, boss: false, stairs: 70, top: 90, chest: 97, length: 100 };
+    s.traps = [0]; s.shots = [];
+    for (let k = 0; k < 400 && s.z < 30; k++) { s.input({ lane: x }); s.advance(); }
+    return 60 - s.count;
   }
-  const k = kingFight(300, 120);
-  ok(k.c.overReason === 'stormed' && k.c.n === 180, 'beating the king was not a win by the difference');
-  ok(k.ticks > PV.CrowdRush.VICTORY, 'the run ended the moment the king fell');
-  ok(k.c.coins > 0, 'a win paid nothing');
-  ok(clash(300, 120).n === 180, 'a rival fight stopped trading one for one');
-  const kLost = kingFight(50, 400);
-  ok(kLost.c.overReason === 'held' && kLost.c.n === 0, 'a crowd smaller than the king took the keep');
-  ok(kLost.c.coins > 0, 'a lost run paid nothing for the way it got');
-  const winPay = play('fields', 'easy', 31000, true);
-  const losePay = play('keep', 'hard', 777, false);
-  ok(winPay.overReason !== 'stormed' || winPay.coins > losePay.coins,
-    'storming the keep paid less than being routed');
+  const intoIt = sawRun(0), round = sawRun(0.8);
+  ok(intoIt > 5, 'a blade through the middle of the crowd cut only ' + intoIt);
+  ok(round < intoIt / 2, 'going round the blade saved nothing: ' + round + ' against ' + intoIt);
 
-  // Upgrades help: the same player with a bigger start does at least as well.
-  const lean = play('keep', 'hard', 31500, true);
-  const rich = play('keep', 'hard', 31500, true, { start: 40, gate: 25 });
-  ok(rich.overReason === 'stormed' || lean.overReason !== 'stormed',
-    'a fully upgraded crowd lost a run the plain one won');
-
-  /* Levels. Level n is worked out from n alone and played from its own seed,
-     so it is the same level every time; each one asks a little more. */
-  const L = PV.CrowdCourse;
-  ok(L.level(0).level === 1 && L.level(1e9).level === L.MAX_LEVEL, 'a level number was not clamped');
-  for (let n = 1; n < 40; n++) {
-    const a = L.level(n), b = L.level(n + 1);
-    ok(b.diff.rival >= a.diff.rival && b.diff.king >= a.diff.king && b.diff.hazard >= a.diff.hazard
-      && b.diff.badBias >= a.diff.badBias && b.def.length >= a.def.length && b.diff.start <= a.diff.start
-      && b.diff.speed >= a.diff.speed,
-      'level ' + (n + 1) + ' is easier than level ' + n + ' somewhere');
-    ok(L.seedFor(n) !== 0 && L.seedFor(n) === L.seedFor(n) && L.seedFor(n) !== L.seedFor(n + 1),
-      'level ' + n + ' has no seed of its own');
-  }
-  const easyDiff = PV.CrowdRush.DIFFS.easy, first = L.level(1).diff;
-  ok(first.king < easyDiff.king && first.rival < easyDiff.rival && first.hazard < easyDiff.hazard
-    && first.badBias < easyDiff.badBias, 'level 1 is not gentler than a free run on easy');
-  const once = new PV.CrowdRush({ seed: L.seedFor(12), level: 12 });
-  const twice = new PV.CrowdRush({ seed: L.seedFor(12), level: 12 });
-  ok(once.level === 12 && JSON.stringify(once.course) === JSON.stringify(twice.course),
-    'level 12 was not the same course twice');
-  ok(['fields', 'dunes', 'keep'].indexOf(once.courseKey) >= 0, 'a level has no scenery of its own');
-  // On the first levels no red gate can finish a crowd off at the first pair —
-  // level 1 used to open on -30 | +50 at a crowd of twenty.
-  for (let n = 1; n <= 15; n++) {
-    const g = new PV.CrowdRush({ seed: L.seedFor(n), level: n });
-    const pair = g.course.features.find(f => f.kind === 'gates');
-    ok(!pair || pair.lanes.every(ln => ln.op !== 'sub' || ln.val < g.n),
-      'level ' + n + ' opens on a gate that wipes the whole crowd');
-  }
-  // Later levels run visibly faster, not a few per cent faster.
-  ok(L.level(25).diff.speed >= L.level(1).diff.speed * 1.25, 'level 25 does not run noticeably faster than level 1');
-
-  /* A hazard costs the same share of the crowd however fast the course runs:
-     its bite is per metre. Per tick, a faster level spent fewer ticks in the
-     saw and every hazard got gentler as the levels went up. */
-  const bitten = faster => {
-    const h = new PV.CrowdRush({ seed: 3, course: 'fields', difficulty: 'normal', autostart: true });
-    h.speed *= faster;
-    h.course = { length: 1000, king: 1, features: [{ kind: 'spikes', at: 6, x: 0, w: 2, phase: 0 }] };
-    h.n = 1000;
-    while (h.dist < 8 && !h.isOver()) h.advance();
-    return 1 - h.n / 1000;
+  // The tower: more runners climb higher, and enough reach the chest.
+  const towerOf = n => {
+    const t = new R({ seed: 3, level: 1, autostart: true });
+    t.removeUnits(t.count);
+    t.addUnits(n);
+    t.startTower();
+    return t;
   };
-  const slowBite = bitten(1), fastBite = bitten(1.4);
-  ok(slowBite > 0.05 && Math.abs(fastBite - slowBite) / slowBite < 0.25,
-    'a hazard bit ' + (slowBite * 100).toFixed(0) + '% slow and ' + (fastBite * 100).toFixed(0) + '% fast');
+  let lastMult = 0;
+  for (const n of [1, 5, 20, 60, 140, 400]) {
+    const t = towerOf(n);
+    ok(t.mult >= lastMult && t.mult >= 1 && t.mult <= 5, 'the stairs paid ×' + t.mult + ' for ' + n);
+    lastMult = t.mult;
+  }
+  ok(towerOf(1).mult === 1 && towerOf(400).tower.top && towerOf(400).mult === 5, 'the stairs do not run ×1.0 to ×5.0');
+  const climber = towerOf(40);
+  while (!climber.isOver()) climber.advance();
+  ok(climber.overReason === 'climbed' && climber.coins > 0, 'climbing the stairs was not a paid win');
+
+  // The needle: stopped in the middle it pays the most.
+  const needle = new R({ seed: C.seedFor(3), level: 3, autostart: true });
+  needle.z = needle.course.finish;
+  needle.finale();
+  while (Math.abs(needle.needle(needle.gaugeT)) > 0.05) needle.advance();
+  const before = needle.count;
+  needle.input('go');
+  needle.advance();
+  ok(needle.count - before === needle.course.gauge[2], 'the middle of the needle did not pay the most');
+
+  // The king: a crowd that is big enough brings him down; a handful does not.
+  function kingFight(n) {
+    const k = new R({ seed: C.seedFor(3), level: 3, autostart: true });
+    k.removeUnits(k.count);
+    k.addUnits(n);
+    k.z = k.course.finish;
+    k.finale();
+    k.input('go');
+    let guard = 0;
+    while (!k.isOver() && guard++ < 20000) k.advance();
+    return k;
+  }
+  const storm = kingFight(300), held = kingFight(3);
+  ok(storm.overReason === 'stormed' && storm.count > 0, 'three hundred runners lost to the king (' + storm.overReason + ')');
+  ok(held.overReason === 'held' && held.count === 0, 'a handful of runners took the castle');
+  ok(storm.coins > held.coins, 'bringing down the king paid less than losing to him');
+
+  // Income multiplies what a run pays.
+  const poor = kingFight(300), paid = new R({ seed: C.seedFor(3), level: 3, autostart: true, boost: { income: 11 } });
+  paid.removeUnits(paid.count); paid.addUnits(300); paid.z = paid.course.finish; paid.finale(); paid.input('go');
+  while (!paid.isOver()) paid.advance();
+  ok(paid.overReason === 'stormed' && paid.coins === Math.round(poor.coins * 2), 'Income did not double the pay at level 11');
+
+  /* Levels. Level n is worked out from n alone and played from its own seed;
+     each asks a little more, and every third one is a king. */
+  ok(C.level(0).level === 1 && C.level(1e9).level === C.MAX_LEVEL, 'a level number was not clamped');
+  for (let n = 1; n < 45; n++) {
+    const a = C.level(n), b = C.level(n + 1);
+    ok(b.squad >= a.squad && b.bad >= a.bad && b.speed >= a.speed && b.king >= a.king && b.beats >= a.beats
+      && (n < 2 || b.hazard >= a.hazard), 'level ' + (n + 1) + ' is easier than level ' + n + ' somewhere');
+    ok(C.seedFor(n) !== 0 && C.seedFor(n) !== C.seedFor(n + 1), 'level ' + n + ' has no seed of its own');
+    ok(a.boss === (n % 3 === 0), 'level ' + n + ' has the wrong finish');
+  }
+  ok(C.level(30).speed >= C.level(1).speed * 1.25, 'level 30 does not run noticeably faster than level 1');
+  const once = new R({ seed: C.seedFor(12), level: 12 }), twice = new R({ seed: C.seedFor(12), level: 12 });
+  ok(once.level === 12 && JSON.stringify(once.course) === JSON.stringify(twice.course), 'level 12 was not the same course twice');
+  ok(C.THEMES.indexOf(once.theme) >= 0, 'a level has no scenery of its own');
+
+  // A good player clears the first twelve levels with nothing bought.
+  for (let n = 1; n <= 12; n++) {
+    const g = play({ seed: C.seedFor(n), level: n }, true);
+    ok(WON[g.overReason], 'a good player lost level ' + n + ' (' + g.overReason + ')');
+  }
+  // ...and one who never steers does not get far.
+  let idle = 0;
+  for (let n = 1; n <= 12; n++) if (WON[play({ seed: C.seedFor(n), level: n }, false).overReason]) idle++;
+  ok(idle < 9, 'standing still won ' + idle + ' of the first twelve levels');
 
   // The view draws between ticks, so the engine keeps where it was.
-  const lg = new PV.CrowdRush({ seed: 3, course: 'fields', difficulty: 'normal', autostart: true });
+  const lg = new R({ seed: 3, level: 1, autostart: true });
   lg.advance();
-  const was = lg.dist;
+  const was = lg.z;
   lg.advance();
-  ok(lg.lastDist === was && lg.dist > was, 'the last position was not kept for drawing between ticks');
-
-  // A good player clears the first ten levels without buying anything.
-  for (let n = 1; n <= 10; n++) {
-    const g = new PV.CrowdRush({ seed: L.seedFor(n), level: n });
-    g.input('go');
-    let ticks = 0;
-    while (!g.isOver() && ticks++ < 60 * 60 * 8) { g.input({ lane: aimFor(g) }); g.advance(); }
-    ok(g.overReason === 'stormed', 'a good player lost level ' + n + ' (' + g.overReason + ')');
-  }
+  ok(lg.lastZ === was && lg.z > was && lg.pux.length === R.CAP, 'the last position was not kept for drawing between ticks');
 });
 
 /* --------------------------------------------------------------- security */

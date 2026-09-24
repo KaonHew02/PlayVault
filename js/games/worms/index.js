@@ -7,26 +7,36 @@
     family: 'arcade',
     name: 'Worm Arena',
     nameZh: '蠕虫竞技场',
-    blurb: 'Swallow pellets, cut off a bigger worm, and eat everything it drops.',
-    blurbZh: '吞食光点，别人撞上你就爆成食物，抢过来就是你的。',
+    blurb: 'Grow the biggest worm: eat, cut the others off, and swallow everything they drop.',
+    blurbZh: '长成最大的蠕虫：吃食物，拦截对手，吞掉他们掉落的一切。',
     accent: '#A3E635',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
-      + '<path d="M9 38c0-10 6-16 13-16 5 0 8 3 8 6.5S27 34 24 33" fill="none" stroke="#A3E635" '
-      + 'stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
-      + '<circle cx="24" cy="33" r="5" fill="#A3E635"/>'
-      + '<circle cx="22.4" cy="31.4" r="1.5" fill="#101820"/>'
-      + '<circle cx="25.8" cy="32.2" r="1.5" fill="#101820"/>'
-      + '<circle cx="34" cy="13" r="3" fill="#F6B32B"/>'
-      + '<circle cx="14" cy="12" r="2.4" fill="#38BDF8"/>'
-      + '<circle cx="42" cy="25" r="2.2" fill="#F87171"/></svg>',
+      + '<g fill="#8BDA4B"><circle cx="9" cy="35" r="4.4"/><circle cx="13" cy="30" r="4.8"/>'
+      + '<circle cx="18" cy="26.5" r="5"/><circle cx="24" cy="25" r="5.2"/></g>'
+      + '<g fill="#6CC23A"><circle cx="11" cy="32.5" r="4.5"/><circle cx="21" cy="25.5" r="5.1"/></g>'
+      + '<circle cx="30" cy="25.5" r="6.4" fill="#8BDA4B"/>'
+      + '<circle cx="31.2" cy="22.4" r="2.6" fill="#fff"/><circle cx="33.4" cy="27" r="2.6" fill="#fff"/>'
+      + '<circle cx="32" cy="22.6" r="1.3" fill="#1B1726"/><circle cx="34.2" cy="27.2" r="1.3" fill="#1B1726"/>'
+      + '<circle cx="40" cy="14" r="3.4" fill="#FF6FAE"/><circle cx="40" cy="14" r="1.2" fill="#A8662C"/>'
+      + '<circle cx="15" cy="12" r="2.6" fill="#FFD166"/>'
+      + '<circle cx="42" cy="34" r="2.4" fill="#35A7FF"/></svg>',
 
     options: [
       {
+        // The reference's three: Infinity, Time and Treasure Hunter.
+        key: 'mode', labelKey: 'worms.mode', def: 'endless',
+        choices: [
+          { value: 'endless', labelKey: 'worms.mode.endless' },
+          { value: 'time', labelKey: 'worms.mode.time' },
+          { value: 'treasure', labelKey: 'worms.mode.treasure' }
+        ]
+      },
+      {
         key: 'crowd', labelKey: 'worms.crowd', def: 'normal',
         choices: [
-          { value: 'quiet', labelKey: 'worms.quiet' },
-          { value: 'normal', labelKey: 'diff.normal' },
-          { value: 'busy', labelKey: 'worms.busy' }
+          { value: 'quiet', labelKey: 'worms.crowd.quiet' },
+          { value: 'normal', labelKey: 'worms.crowd.normal' },
+          { value: 'busy', labelKey: 'worms.crowd.busy' }
         ]
       }
     ],

@@ -1,717 +1,594 @@
 /* 人潮冲锋 / Crowd Rush — view.
 
-   A runner drawn down one vanishing point. Everything the engine holds is a
-   distance ahead and a position across a track two units wide; `depth()` maps
-   that to a y and a scale, and every gate, saw, rival and stickman goes
-   through the same two functions. That is what keeps a gate the crowd is
-   about to hit lined up with the gate the engine is about to apply.
+   Two canvases, one on top of the other. Underneath, WebGL draws the world
+   (scene.js). On top, the loop harness's own 2D canvas carries everything
+   that is text or a button, exactly where the reference puts it: the level
+   bar and the coins along the top, a count in a pill over every crowd, the
+   gate's number floating up as you take it, and at the start line the
+   "press space" prompt, the two upgrade cards, the colour wheel and the
+   skins. The harness never learns there is a second canvas; it still draws
+   its pause veil over the top one.
 
-   The crowd is drawn as PEOPLE — up to a hundred and forty of them, each with
-   a head, a body and legs that swing — because the number is the whole game
-   and a bar labelled 128 is not a crowd of 128. Past that cap the drawn crowd
-   stops growing and the figure above their heads carries it; a thousand
-   stickmen at sixty frames a second buys nothing you can see.
-
-   A crowd packs into a round blob on a sunflower spiral, and each runner
-   keeps its place in it by index, so a crowd keeps its shape from frame to
-   frame and grows from the outside. The king at the keep is drawn here too:
-   the same runner, five times the size, with a crown and a face. */
+   Steering is the reference's too: the crowd follows the mouse across the
+   road, a finger drags it, and the arrow keys push it. Space or a click
+   starts the run and stops the needle before the king. */
 window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
   const t = (k, p) => window.PV.t(k, p);
   const TAU = Math.PI * 2;
-  const CAP = 140;                 // most stickmen we ever draw
-  const FAR = 42;                  // metres of track visible ahead
+  const FONT = '"Arial Rounded MT Bold", "Nunito", "Segoe UI", system-ui, sans-serif';
 
-  const THEMES = {
-    fields: {
-      sky: ['#4CC3F0', '#BDE9FB'], ground: '#43BE6B', ground2: '#4ACB74',
-      road: '#F4F7FA', edge: '#D6DEE7', dash: '#C9D4E0', prop: '#2FA85C'
-    },
-    dunes: {
-      sky: ['#63C7F2', '#D9EFFB'], ground: '#E0B564', ground2: '#E8C075',
-      road: '#FAF6EE', edge: '#DFD2BC', dash: '#D3C4AA', prop: '#C79B4C'
-    },
-    keep: {
-      sky: ['#3BAFE0', '#C6E9F7'], ground: '#5FC7C9', ground2: '#68D2D4',
-      road: '#EFF3F7', edge: '#CFD8E2', dash: '#BFCBD8', prop: '#3FA9AC'
-    }
-  };
+  /* The crowd colours the wheel steps through; the first is the reference's
+     own light blue. Each has a darker partner for the pill over its head. */
+  const COLORS = [
+    ['#45AFF4', '#1E7FD8'], ['#4CD068', '#23973B'], ['#A36BFF', '#6F35D6'], ['#FFC21F', '#C98A00'],
+    ['#FF8B33', '#D0600E'], ['#FF6FAE', '#D63F82'], ['#2DD0C3', '#138F86'], ['#5A74FF', '#2F46CF']
+  ];
+  const FOE_PILL = '#E0342E';
+  const MAX_UP = 99;
+  const SKIN_COUNT = 8;              // scene.js draws them; see PV.CrowdScene.SKINS
 
-  /* Count Masters' own palette: a near-white road on bright ground, flat
-     saturated gates, and chunky blue runners. Nothing here is translucent —
-     the reference reads at a glance because everything in it is solid. */
-  const GOOD_FACE = '#2DC44E', GOOD_DARK = '#1F9C3A';
-  const BAD_FACE = '#EF4444', BAD_DARK = '#C0342F';
-  const POST = '#2C3440';
-  const MINE = '#3F8EF7', MINE_DARK = '#2463C9', MINE_LIT = '#8FC0FF';
-  const THEIRS = '#F2484E', THEIRS_DARK = '#B32A33', THEIRS_LIT = '#FF9AA0';
-  const BLUE = { body: MINE, dark: MINE_DARK, lit: MINE_LIT };
-  const RED = { body: THEIRS, dark: THEIRS_DARK, lit: THEIRS_LIT };
+  /* ---------------------------------------------------- what is saved */
 
-  function hash(i, salt) {
-    let h = Math.imul(i + 17, 374761393) + Math.imul(salt || 1, 668265263) | 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-  }
-
-  function rr(c, x, y, w, h, r) {
-    if (c.roundRect) { c.beginPath(); c.roundRect(x, y, w, h, r); return; }
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.arcTo(x + w, y, x + w, y + h, r);
-    c.arcTo(x + w, y + h, x, y + h, r);
-    c.arcTo(x, y + h, x, y, r);
-    c.arcTo(x, y, x + w, y, r);
-    c.closePath();
-  }
-
-  /** The label a gate wears. */
-  function gateText(g) {
-    if (g.op === 'mul') return '\u00D7' + g.val;
-    if (g.op === 'add') return '+' + g.val;
-    if (g.op === 'sub') return '\u2212' + g.val;
-    return '\u00F7' + g.val;
-  }
-  function gateGood(g) { return g.op === 'mul' || g.op === 'add'; }
-
-  /* ---------------------------------------------------------- the camera */
-
-  /** One vanishing point, and everything on the track goes through it. */
-  function camera(geom) {
-    const w = geom.w, h = geom.h;
-    const yBase = h * 0.80, yHor = h * 0.30, halfW = w * 0.44;
-    return {
-      w: w, h: h, cx: w / 2, yBase: yBase, yHor: yHor, halfW: halfW,
-      depth(d) { const t = Math.max(0, d) / (Math.max(0, d) + 15); return t; },
-      y(d) { return yBase - this.depth(d) * (yBase - yHor); },
-      s(d) { return 1 - this.depth(d) * 0.80; },
-      x(xt, d) { return this.cx + xt * halfW * this.s(d); },
-
-      /* The same projection with no clamp, for the GROUND only. Nothing
-         stands behind the crowd's line, but the road does run on toward the
-         camera: drawn with the clamped one it stopped four fifths of the way
-         down and left a flat green band under it. `near` is a little past the
-         bottom edge (y(-4.29) is the bottom, whatever the canvas size). */
-      near: -4.6,
-      gy(d) { return yBase - (d / (d + 15)) * (yBase - yHor); },
-      gs(d) { return 1 - (d / (d + 15)) * 0.80; },
-      gx(xt, d) { return this.cx + xt * halfW * this.gs(d); }
-    };
-  }
-
-  /**
-   * One runner, feet at (x, y), `hp` pixels tall. Not a stick figure: the
-   * reference's crowd is made of chunky blob people — a big round head, a
-   * rounded body, stubby limbs and a highlight — and that is most of why it
-   * reads as a crowd of characters rather than a scribble.
-   *
-   * `lod` drops the limbs when there are hundreds on screen. At that size a
-   * swinging arm is two pixels nobody can see, and it is 280 fills a frame.
-   */
-  function runner(c, x, y, hp, phase, skin, lod) {
-    const head = hp * 0.30, bw = hp * 0.40;
-    const sw = Math.sin(phase), sw2 = -sw;
-    const hipY = y - hp * 0.30, topY = y - hp * 0.62;
-
-    if (lod) {
-      // Legs first, so the body overlaps where they meet it.
-      c.fillStyle = skin.dark;
-      for (const s of [sw, sw2]) {
-        const lx = x + s * hp * 0.13;
-        rr(c, lx - hp * 0.09, hipY - hp * 0.02, hp * 0.18, hp * 0.32 - s * hp * 0.05, hp * 0.09);
-        c.fill();
-      }
-    }
-    c.fillStyle = skin.body;
-    rr(c, x - bw / 2, topY, bw, hipY - topY + hp * 0.06, bw * 0.42);
-    c.fill();
-    if (lod) {
-      c.fillStyle = skin.body;
-      for (const s of [sw2, sw]) {
-        const ax = x + (s > 0 ? bw * 0.42 : -bw * 0.42 - hp * 0.12);
-        rr(c, ax, topY + hp * 0.04 - s * hp * 0.05, hp * 0.12, hp * 0.24, hp * 0.06);
-        c.fill();
-      }
-    }
-    c.fillStyle = skin.body;
-    c.beginPath();
-    c.arc(x, topY - head * 0.72, head, 0, TAU);
-    c.fill();
-    // The gloss, up and to the left, the way every one of these games does it.
-    c.fillStyle = skin.lit;
-    c.beginPath();
-    c.ellipse(x - head * 0.30, topY - head * 1.05, head * 0.34, head * 0.24, -0.5, 0, TAU);
-    c.fill();
-  }
-
-  /** How deep a crowd `width` track units across stands on the ground, in
-      metres. The track is two units and about six metres wide, so a ROUND
-      crowd is three times its width deep. */
-  const depthOf = width => Math.max(0.8, width * 3);
-
-  /**
-   * A crowd of `n`, its near edge at distance `d`, centred on `xt`, `width`
-   * track units across. Runners pack into a round blob on a sunflower
-   * spiral — the shape a crowd runner's mob has, where a random scatter reads
-   * as a queue. Runner i keeps its angle whatever the count, so a gate that
-   * adds people grows the blob from the outside instead of reshuffling it.
-   *
-   * `pace` is how fast legs swing: 0 standing, 1 running, more charging.
-   * Runners further away than `cut` are not drawn — they have gone in
-   * through the castle gate.
-   */
-  const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-  function crowd(c, cam, n, xt, d, width, tick, skin, salt, pace, cut) {
-    const shown = Math.min(CAP, Math.max(1, n));
-    const lod = shown <= 70;                 // limbs only while you can see them
-    const rx = width / 2, rd = depthOf(width) / 2;
-    // A little jitter, a fraction of the spacing, so the packing does not
-    // read as a pattern.
-    const gap = 1 / Math.sqrt(shown);
-    const units = [];
-    for (let i = 0; i < shown; i++) {
-      const r = Math.sqrt((i + 0.5) / shown);
-      const a = i * GOLDEN + salt;
-      const jx = (hash(i, salt) - 0.5) * gap * 0.7;
-      const jd = (hash(i, salt + 5) - 0.5) * gap * 0.7;
-      // Spread AWAY from the camera, never toward it: behind the camera's
-      // line everything clamps to one y and one scale and the depth is lost.
-      const ud = d + rd + (Math.sin(a) * r + jd) * rd;
-      if (cut != null && ud > cut) continue;
-      units.push({ x: xt + (Math.cos(a) * r + jx) * rx, d: Math.max(d, ud), i: i });
-    }
-    units.sort((p, q) => q.d - p.d);
-    // One pass of soft shadows under the whole crowd, then the crowd: drawn
-    // per figure they stack into a dark smear where the ranks overlap.
-    c.fillStyle = 'rgba(20,40,60,.16)';
-    for (const u of units) {
-      const s = cam.s(u.d), hp = cam.h * 0.052 * s;
-      c.beginPath();
-      c.ellipse(cam.x(u.x, u.d), cam.y(u.d), hp * 0.34, hp * 0.13, 0, 0, TAU);
-      c.fill();
-    }
-    for (const u of units) {
-      const s = cam.s(u.d);
-      // Standing still, a runner only breathes; running, its legs swing.
-      const bob = pace ? 0 : Math.sin(tick * 0.08 + u.i) * cam.h * 0.002 * s;
-      runner(c, cam.x(u.x, u.d), cam.y(u.d) + bob, cam.h * 0.052 * s,
-        tick * 0.34 * pace + u.i * 0.9, skin, lod && pace > 0);
-    }
-  }
-
-  /* A crowd waiting on the course stands still until you are close, then
-     runs at you. `dd` is the engine's distance to it, which reaches MEET the
-     tick the fight starts; `rest` is where it stands while it waits; `meet`
-     is just past the front of your crowd, where the fight is drawn. The
-     charge lands exactly on `meet` at MEET, so the fight starts where the
-     charge ends and nothing jumps. */
-  const MEET = 2.6, RUSH = 9;
-  function approach(dd, rest, meet) {
-    const u = (dd - MEET) / RUSH;
-    if (u >= 1) return { d: rest, pace: 0 };
-    const k = Math.max(0, u);
-    return { d: meet + (rest - meet) * k * k, pace: 1.7 };
-  }
-
-  /** The number over a crowd's heads — the thing the game is actually about. */
-  function tally(c, cam, n, xt, d, colour) {
-    // Just over the heads of the rank at `d`. Yours is anchored to its near
-    // rank — anchored to the back it climbs into whatever gate is coming. A
-    // rival's goes over its FAR rank, or the two numbers stack when they meet.
-    const s = cam.s(d);
-    tallyAt(c, cam.x(xt, d), cam.y(d) - cam.h * 0.13 * s, Math.max(13, cam.h * 0.072 * s), n, colour);
-  }
-
-  /** A count in the house style — heavy, with a dark outline — at a point. */
-  function tallyAt(c, x, y, size, n, colour) {
-    c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.lineWidth = size * 0.28;
-    c.lineJoin = 'round';
-    c.strokeStyle = 'rgba(8,11,16,.85)';
-    c.strokeText(String(n), x, y);
-    c.fillStyle = colour;
-    c.fillText(String(n), x, y);
-  }
-
-  /* -------------------------------------------------------- the scenery */
-
-  function ground(c, cam, th, dist) {
-    const g = c.createLinearGradient(0, 0, 0, cam.yHor);
-    g.addColorStop(0, th.sky[0]);
-    g.addColorStop(1, th.sky[1]);
-    c.fillStyle = g;
-    c.fillRect(0, 0, cam.w, cam.yHor);
-
-    c.fillStyle = th.ground;
-    c.fillRect(0, cam.yHor, cam.w, cam.h - cam.yHor);
-
-    // Bands of ground, spaced in metres, so the world scrolls under you — all
-    // the way down past the bottom edge, not just to the crowd's line.
-    const near = cam.near;
-    c.fillStyle = th.ground2;
-    const band = 10;
-    for (let k = Math.floor((dist + near) / band) * band; k < dist + FAR; k += band) {
-      const d0 = Math.max(near, k - dist), d1 = k - dist + band / 2;
-      if (d1 <= near) continue;
-      const y0 = cam.gy(d1), y1 = cam.gy(d0);
-      c.fillRect(0, y0, cam.w, Math.max(1, y1 - y0));
-    }
-
-    // The track itself: one trapezoid from the far clip to past the bottom.
-    const yFar = cam.gy(FAR), yNear = cam.gy(near);
-    for (const [half, colour] of [[1.16, th.edge], [1, th.road]]) {
-      c.fillStyle = colour;
-      c.beginPath();
-      c.moveTo(cam.gx(-half, FAR), yFar); c.lineTo(cam.gx(half, FAR), yFar);
-      c.lineTo(cam.gx(half, near), yNear); c.lineTo(cam.gx(-half, near), yNear);
-      c.closePath(); c.fill();
-    }
-
-    // Centre dashes and roadside posts, both pinned to whole metres.
-    c.fillStyle = th.dash;
-    c.globalAlpha = 0.55;
-    for (let k = Math.ceil((dist + near) / 6) * 6; k < dist + FAR; k += 6) {
-      const d0 = k - dist, d1 = d0 + 2.2;
-      const y0 = cam.gy(d1), y1 = cam.gy(d0), s = cam.gs(d0);
-      c.fillRect(cam.cx - cam.halfW * 0.012 * s * 2, y0,
-        Math.max(1, cam.halfW * 0.024 * s * 2), Math.max(1, y1 - y0));
-    }
-    c.globalAlpha = 1;
-    c.fillStyle = th.prop;
-    for (let k = Math.ceil((dist + near) / 9) * 9; k < dist + FAR; k += 9) {
-      const d0 = k - dist, s = cam.gs(d0), y = cam.gy(d0), hp = cam.h * 0.06 * s;
-      for (const side of [-1, 1]) {
-        const x = cam.gx(side * 1.3, d0);
-        c.fillRect(x - hp * 0.12, y - hp, Math.max(1, hp * 0.24), hp);
-      }
-    }
-    // Vanishing haze, so the far clip is not a hard line across the world.
-    const haze = c.createLinearGradient(0, yFar - cam.h * 0.06, 0, yFar + cam.h * 0.10);
-    haze.addColorStop(0, th.sky[1]);
-    haze.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = haze;
-    c.fillRect(0, yFar - cam.h * 0.06, cam.w, cam.h * 0.16);
-  }
-
-  /** A gate pair: two solid slabs on dark posts, the way the reference has
-      them. Translucent panels were the other thing making this look homemade —
-      a gate you can see the road through does not read as a wall. */
-  function gateWall(c, cam, f, dist) {
-    const d = f.at - dist;
-    const s = cam.s(d), yb = cam.y(d), hp = cam.h * 0.34 * s;
-    const post = Math.max(2, hp * 0.075);
-
-    for (const g of f.lanes) {
-      const x0 = cam.x(g.x0, d), x1 = cam.x(g.x1, d);
-      const good = gateGood(g);
-      c.fillStyle = good ? GOOD_FACE : BAD_FACE;
-      c.fillRect(x0, yb - hp, x1 - x0, hp);
-      // A darker skirt, so the slab sits ON the road instead of floating.
-      c.fillStyle = good ? GOOD_DARK : BAD_DARK;
-      c.fillRect(x0, yb - hp * 0.16, x1 - x0, hp * 0.16);
-      c.fillStyle = 'rgba(255,255,255,.18)';
-      c.fillRect(x0, yb - hp, x1 - x0, hp * 0.10);
-
-      const size = Math.max(12, hp * 0.34);
-      c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.lineWidth = size * 0.22;
-      c.lineJoin = 'round';
-      c.strokeStyle = 'rgba(18,24,32,.75)';
-      c.strokeText(gateText(g), (x0 + x1) / 2, yb - hp * 0.52);
-      c.fillStyle = '#FFFFFF';
-      c.fillText(gateText(g), (x0 + x1) / 2, yb - hp * 0.52);
-    }
-
-    // The posts go on last: one at each end and one on the split, which is
-    // the line the player is actually aiming at.
-    c.fillStyle = POST;
-    const edges = [f.lanes[0].x0].concat(f.lanes.map(g => g.x1));
-    for (const xt of edges) {
-      const px = cam.x(xt, d);
-      c.fillRect(px - post / 2, yb - hp * 1.06, post, hp * 1.06);
-    }
-    c.fillStyle = 'rgba(0,0,0,.14)';
-    c.fillRect(cam.x(f.lanes[0].x0, d), yb, cam.x(f.lanes[f.lanes.length - 1].x1, d) - cam.x(f.lanes[0].x0, d), Math.max(1, hp * 0.05));
-  }
-
-  /** Saw, hammer, spikes — each drawn where the engine says it is this tick. */
-  function hazard(c, cam, f, dist, tick) {
-    const d = f.at - dist;
-    const s = cam.s(d), yb = cam.y(d);
-    const hx = PV.CrowdRush.hazardX(f, tick);
-    const live = PV.CrowdRush.hazardLive(f, tick);
-    const x = cam.x(hx, d);
-    const half = (cam.x(hx + f.w / 2, d) - cam.x(hx - f.w / 2, d)) / 2;
-    const hp = cam.h * 0.14 * s;
-
-    c.fillStyle = 'rgba(20,40,60,.20)';
-    c.beginPath();
-    c.ellipse(x, yb, Math.max(2, half), Math.max(1.5, hp * 0.14), 0, 0, TAU);
-    c.fill();
-
-    if (f.kind === 'saw') {
-      // The teeth stop at the edge of the span the engine actually cuts with:
-      // a blade drawn wider than its own hitbox is a blade you dodge wrong.
-      const r = Math.max(4, half);
-      c.save();
-      c.translate(x, yb - r * 0.42);
-      c.rotate(tick * 0.22);
-      c.fillStyle = '#8A94A6';
-      c.beginPath();
-      for (let i = 0; i < 12; i++) {
-        const a = i / 12 * TAU;
-        c.lineTo(Math.cos(a) * r * 0.86, Math.sin(a) * r * 0.42);
-        c.lineTo(Math.cos(a + 0.16) * r, Math.sin(a + 0.16) * r * 0.54);
-      }
-      c.closePath(); c.fill();
-      // A rim and a pale face, or a dark disc on a white road reads as a hole.
-      c.strokeStyle = '#4A5568';
-      c.lineWidth = Math.max(1, r * 0.06);
-      c.stroke();
-      c.fillStyle = '#CBD3DE';
-      c.beginPath(); c.ellipse(0, 0, r * 0.62, r * 0.30, 0, 0, TAU); c.fill();
-      c.fillStyle = '#EF4444';
-      c.beginPath(); c.ellipse(0, 0, r * 0.26, r * 0.14, 0, 0, TAU); c.fill();
-      c.restore();
-    } else if (f.kind === 'hammer') {
-      const drop = live ? 1 : 0.35;
-      const headH = hp * 0.8;
-      c.fillStyle = '#8B5E3C';
-      c.fillRect(x - Math.max(1, half * 0.10), yb - hp * 2.4, Math.max(2, half * 0.2), hp * 2.4 * (1 - drop * 0.55));
-      c.fillStyle = live ? '#EF4444' : '#5A6678';
-      rr(c, x - half, yb - headH - hp * 1.5 * (1 - drop), half * 2, headH, headH * 0.22);
-      c.fill();
-      if (live) {
-        c.strokeStyle = 'rgba(255,214,170,.7)';
-        c.lineWidth = Math.max(1, s * 3);
-        c.beginPath(); c.ellipse(x, yb, half * 1.5, half * 0.4, 0, 0, TAU); c.stroke();
-      }
-    } else {
-      const n = Math.max(3, Math.round(half / 6));
-      c.fillStyle = '#5A6678';
-      for (let i = 0; i < n; i++) {
-        const px = x - half + (i + 0.5) * (half * 2 / n);
-        c.beginPath();
-        c.moveTo(px - half / n * 0.8, yb);
-        c.lineTo(px, yb - hp);
-        c.lineTo(px + half / n * 0.8, yb);
-        c.closePath(); c.fill();
-      }
-    }
-  }
-
-  /**
-   * The king who holds the keep: our own runner, five times the
-   * size, in red, with a cape, a plain gold crown and a scowl — he is the one
-   * figure on the course with a face, because he is the one who looks at you.
-   * His health is the number of runners it takes to bring him down.
-   *
-   * `fallen` counts ticks since he fell (or -1): he topples, then fades.
-   */
-  function king(c, cam, d, hp, full, tick, fighting, fallen) {
-    const s = cam.s(d), y = cam.y(d);
-    const H = cam.h * 0.052 * s * 5;
-    let x = cam.cx;
-    if (fighting) x += Math.sin(tick * 1.9) * H * 0.025;     // taking hits
-    const bw = H * 0.46, head = H * 0.27;
-    const hipY = -H * 0.30, topY = -H * 0.64;
-
-    c.save();
-    c.translate(x, y);
-    c.fillStyle = 'rgba(20,40,60,.22)';
-    c.beginPath(); c.ellipse(0, 0, H * 0.34, H * 0.08, 0, 0, TAU); c.fill();
-    if (fallen >= 0) {
-      c.rotate(Math.min(1, fallen / 22) * Math.PI * 0.48);
-      c.globalAlpha = Math.max(0, 1 - Math.max(0, fallen - 34) / 26);
-    }
-    // Cape first, so the body stands in front of it.
-    c.fillStyle = '#7F1D2A';
-    c.beginPath();
-    c.moveTo(-bw * 0.46, topY + H * 0.02);
-    c.lineTo(bw * 0.46, topY + H * 0.02);
-    c.lineTo(bw * 0.72, -H * 0.04);
-    c.lineTo(-bw * 0.72, -H * 0.04);
-    c.closePath(); c.fill();
-    // Legs, planted.
-    c.fillStyle = THEIRS_DARK;
-    for (const side of [-1, 1]) {
-      rr(c, side * bw * 0.24 - H * 0.07, hipY - H * 0.02, H * 0.14, H * 0.32, H * 0.06);
-      c.fill();
-    }
-    // Arms: raised and swinging while he fights, down while he waits.
-    for (const side of [-1, 1]) {
-      const swing = fighting ? Math.sin(tick * 0.5 + side) * 0.6 - 0.9 : 0.15;
-      c.save();
-      c.translate(side * bw * 0.5, topY + H * 0.08);
-      c.rotate(side * swing);
-      c.fillStyle = THEIRS;
-      rr(c, -H * 0.06, 0, H * 0.12, H * 0.30, H * 0.06); c.fill();
-      c.restore();
-    }
-    c.fillStyle = THEIRS;
-    rr(c, -bw / 2, topY, bw, hipY - topY + H * 0.06, bw * 0.40); c.fill();
-    // A belt with a gold buckle.
-    c.fillStyle = '#5B1620';
-    c.fillRect(-bw / 2, hipY - H * 0.06, bw, H * 0.06);
-    c.fillStyle = '#F6B32B';
-    c.fillRect(-H * 0.035, hipY - H * 0.065, H * 0.07, H * 0.07);
-    // Head, gloss and face.
-    const hy = topY - head * 0.72;
-    c.fillStyle = THEIRS;
-    c.beginPath(); c.arc(0, hy, head, 0, TAU); c.fill();
-    c.fillStyle = THEIRS_LIT;
-    c.beginPath(); c.ellipse(-head * 0.34, hy - head * 0.38, head * 0.30, head * 0.20, -0.5, 0, TAU); c.fill();
-    for (const side of [-1, 1]) {
-      c.fillStyle = '#FFFFFF';
-      c.beginPath(); c.ellipse(side * head * 0.36, hy + head * 0.06, head * 0.19, head * 0.22, 0, 0, TAU); c.fill();
-      c.fillStyle = '#1F2430';
-      c.beginPath(); c.arc(side * head * 0.32, hy + head * 0.12, head * 0.10, 0, TAU); c.fill();
-      // The scowl: each brow slopes down toward the nose.
-      c.strokeStyle = '#3A0E14';
-      c.lineWidth = Math.max(1.5, head * 0.10);
-      c.lineCap = 'round';
-      c.beginPath();
-      c.moveTo(side * head * 0.58, hy - head * 0.26);
-      c.lineTo(side * head * 0.14, hy - head * 0.12);
-      c.stroke();
-    }
-    // A plain crown: a band and three points, gold, with a red stone.
-    const cy = hy - head * 0.80, cw = head * 1.2, ch = head * 0.58;
-    c.fillStyle = '#F6B32B';
-    c.beginPath();
-    c.moveTo(-cw / 2, cy);
-    c.lineTo(-cw / 2, cy - ch);
-    c.lineTo(-cw / 4, cy - ch * 0.5);
-    c.lineTo(0, cy - ch * 1.1);
-    c.lineTo(cw / 4, cy - ch * 0.5);
-    c.lineTo(cw / 2, cy - ch);
-    c.lineTo(cw / 2, cy);
-    c.closePath(); c.fill();
-    c.fillStyle = '#D9901A';
-    c.fillRect(-cw / 2, cy - ch * 0.22, cw, ch * 0.22);
-    c.fillStyle = '#EF4444';
-    c.beginPath(); c.arc(0, cy - ch * 0.46, ch * 0.13, 0, TAU); c.fill();
-    c.restore();
-
-    if (fallen >= 0) return;
-    // His health, over the crown: a bar that empties and the number left.
-    const barW = H * 0.9, barH = Math.max(4, H * 0.055);
-    const by = y - H * 1.46, bx = x - barW / 2;
-    c.fillStyle = 'rgba(255,255,255,.9)';
-    rr(c, bx - 2, by - 2, barW + 4, barH + 4, (barH + 4) / 2); c.fill();
-    c.fillStyle = 'rgba(60,20,26,.35)';
-    rr(c, bx, by, barW, barH, barH / 2); c.fill();
-    c.fillStyle = BAD_FACE;
-    rr(c, bx, by, Math.max(barH, barW * Math.max(0, hp) / Math.max(1, full)), barH, barH / 2); c.fill();
-    tallyAt(c, x, by - barH * 1.4, Math.max(13, cam.h * 0.06 * s), hp, '#FECDD3');
-  }
-
-  /** The keep at the end of the course. Its flags are the king's until he
-      falls, and yours after. */
-  function castle(c, cam, d, ours) {
-    const s = cam.s(d), yb = cam.y(d);
-    const x0 = cam.x(-1.25, d), x1 = cam.x(1.25, d);
-    const wallH = cam.h * 0.34 * s;
-    c.fillStyle = '#8E99A8';
-    c.fillRect(x0, yb - wallH, x1 - x0, wallH);
-    c.fillStyle = '#A7B2C0';
-    for (let i = 0; i < 9; i++) {
-      const bw = (x1 - x0) / 9;
-      c.fillRect(x0 + i * bw, yb - wallH - wallH * 0.16, bw * 0.62, wallH * 0.16);
-    }
-    for (const side of [-1, 1]) {
-      const tx = cam.x(side * 1.05, d);
-      c.fillStyle = '#76818F';
-      c.fillRect(tx - wallH * 0.16, yb - wallH * 1.35, wallH * 0.32, wallH * 1.35);
-      c.fillStyle = ours ? MINE : '#F43F5E';
-      c.beginPath();
-      c.moveTo(tx, yb - wallH * 1.7);
-      c.lineTo(tx + wallH * 0.3, yb - wallH * 1.58);
-      c.lineTo(tx, yb - wallH * 1.46);
-      c.closePath(); c.fill();
-      c.fillStyle = '#C8D2DE';
-      c.fillRect(tx - wallH * 0.02, yb - wallH * 1.72, wallH * 0.04, wallH * 0.42);
-    }
-    c.fillStyle = '#3B4452';
-    const gw = (x1 - x0) * 0.22;
-    rr(c, (x0 + x1) / 2 - gw / 2, yb - wallH * 0.78, gw, wallH * 0.78, gw * 0.5);
-    c.fill();
-  }
-
-  /** Confetti over a taken keep, placed by hash and moved by the tick, so it
-      is the same shower every time and needs no state. */
-  const CONFETTI = ['#3F8EF7', '#F6B32B', '#2DC44E', '#EF4444', '#FFFFFF', '#A78BFA'];
-  function confetti(c, cam, tick) {
-    for (let i = 0; i < 60; i++) {
-      const x = hash(i, 11) * cam.w + Math.sin(tick * 0.07 + i) * cam.w * 0.02;
-      const fall = cam.h * (0.25 + hash(i, 12) * 0.6);
-      const y = -cam.h * 0.1 + ((tick * (2 + hash(i, 13) * 2.5) + hash(i, 14) * cam.h) % (fall + cam.h * 0.1));
-      const sz = Math.max(3, cam.h * 0.012);
-      c.save();
-      c.translate(x, y);
-      c.rotate(tick * 0.1 + i);
-      c.fillStyle = CONFETTI[i % CONFETTI.length];
-      c.fillRect(-sz / 2, -sz / 4, sz, sz / 2);
-      c.restore();
-    }
-  }
-
-  /* ------------------------------------------------------ coins and shop */
-
-  /* What a player has saved and bought, kept between runs. Sealed like the
-     profile, so a number typed into devtools is dropped on the next read, and
-     rebuilt on every read like every other store. */
+  /* Coins, the two upgrades, the level you are on, your colour and your
+     skin, kept between runs. Sealed like the profile (store.js) and rebuilt
+     on every read. Before the rebuild the upgrades were `start` (+3 runners
+     a level) and `gate` (a gate bonus); what was paid for carries over as
+     levels of the two the reference has, Start Units and Income. */
   const META = 'crowd.meta';
   const MAX_COINS = 1e9;
   PV.Store.validate(META, v => {
     const m = PV.Safe.obj(v);
     if (!m) return undefined;
+    const units = m.units != null ? PV.Safe.int(m.units, 1, MAX_UP, 1) : 1 + PV.Safe.int(m.start, 0, 40, 0);
+    const income = m.income != null ? PV.Safe.int(m.income, 1, MAX_UP, 1) : 1 + PV.Safe.int(m.gate, 0, 25, 0);
     return {
       coins: PV.Safe.int(m.coins, 0, MAX_COINS, 0),
-      start: PV.Safe.int(m.start, 0, PV.CrowdRush.BOOSTS.start.max, 0),
-      gate: PV.Safe.int(m.gate, 0, PV.CrowdRush.BOOSTS.gate.max, 0),
-      // The level you are on. A record from before levels has none: level 1.
-      level: PV.Safe.int(m.level, 1, PV.CrowdCourse.MAX_LEVEL, 1)
+      units: Math.min(MAX_UP, units),
+      income: Math.min(MAX_UP, income),
+      level: PV.Safe.int(m.level, 1, PV.CrowdCourse.MAX_LEVEL, 1),
+      color: PV.Safe.int(m.color, 0, COLORS.length - 1, 0),
+      skin: PV.Safe.int(m.skin, 0, SKIN_COUNT - 1, 0)
     };
   });
-  const loadMeta = () => PV.Store.get(META, null) || { coins: 0, start: 0, gate: 0, level: 1 };
+  const loadMeta = () => PV.Store.get(META, null) || { coins: 0, units: 1, income: 1, level: 1, color: 0, skin: 0 };
 
-  /** A gold coin, for the canvas. */
-  function coin(c, x, y, r) {
-    c.fillStyle = '#C98A0B';
-    c.beginPath(); c.arc(x, y + r * 0.12, r, 0, TAU); c.fill();
-    c.fillStyle = '#F6B32B';
-    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
-    c.fillStyle = '#FFE58A';
-    c.beginPath(); c.arc(x - r * 0.28, y - r * 0.28, r * 0.34, 0, TAU); c.fill();
+  /* A new skin every third level reached, as the reference fills in a
+     silhouette a little after every level. Worked out from the level, so
+     there is nothing extra to save or to forge. */
+  const SKIN_EVERY = 3;
+  const skinsAt = level => Math.min(SKIN_COUNT, 1 + Math.floor((Math.max(1, level) - 1) / SKIN_EVERY));
+
+  /* ------------------------------------------------------- 2D helpers */
+
+  function rr(c, x, y, w, h, r) {
+    const q = Math.min(r, w / 2, h / 2);
+    c.beginPath();
+    c.moveTo(x + q, y);
+    c.arcTo(x + w, y, x + w, y + h, q);
+    c.arcTo(x + w, y + h, x, y + h, q);
+    c.arcTo(x, y + h, x, y, q);
+    c.arcTo(x, y, x + w, y, q);
+    c.closePath();
   }
 
-  /** A level's number in a disc, for the ends of the progress bar. */
-  function badge(c, x, y, r, n, fill, ink) {
-    c.fillStyle = 'rgba(12,20,32,.35)';
-    c.beginPath(); c.arc(x, y + r * 0.12, r, 0, TAU); c.fill();
+  function font(c, size, weight) { c.font = (weight || 900) + ' ' + size.toFixed(1) + 'px ' + FONT; }
+
+  /** Heavy text with a dark edge, the house style for everything on screen. */
+  function say(c, text, x, y, size, fill, edge, align) {
+    font(c, size);
+    c.textAlign = align || 'center';
+    c.textBaseline = 'middle';
+    c.lineJoin = 'round';
+    if (edge) {
+      c.lineWidth = size * 0.2;
+      c.strokeStyle = edge;
+      c.strokeText(text, x, y);
+    }
     c.fillStyle = fill;
-    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
-    const s = String(n);
-    c.fillStyle = ink;
-    c.font = '800 ' + (r * (s.length > 3 ? 0.62 : (s.length > 2 ? 0.8 : 1.05))).toFixed(1) + 'px system-ui, sans-serif';
+    c.fillText(text, x, y);
+  }
+
+  /** A count in a rounded pill with a little tail pointing down at the crowd. */
+  function pill(c, x, y, text, bg, size) {
+    font(c, size);
+    const w = Math.max(size * 1.9, c.measureText(text).width + size * 1.1), h = size * 1.45;
+    c.fillStyle = 'rgba(0,0,0,0.18)';
+    rr(c, x - w / 2, y - h + size * 0.12, w, h, h / 2); c.fill();
+    c.fillStyle = bg;
+    rr(c, x - w / 2, y - h, w, h, h / 2); c.fill();
+    c.beginPath();
+    c.moveTo(x - size * 0.32, y - 1);
+    c.lineTo(x + size * 0.32, y - 1);
+    c.lineTo(x, y + size * 0.36);
+    c.closePath(); c.fill();
+    c.fillStyle = '#FFFFFF';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(s, x, y + r * 0.06);
+    c.fillText(text, x, y - h / 2 + size * 0.04);
   }
+
+  function coin(c, x, y, r) {
+    c.fillStyle = '#C98A0B';
+    c.beginPath(); c.arc(x, y + r * 0.14, r, 0, TAU); c.fill();
+    c.fillStyle = '#FFC83A';
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+    c.strokeStyle = '#E8A417';
+    c.lineWidth = r * 0.16;
+    c.beginPath(); c.arc(x, y, r * 0.62, 0, TAU); c.stroke();
+  }
+
+  /** A little stickman, for the Start Units card and the skin button. */
+  function stickIcon(c, x, y, s, col) {
+    c.fillStyle = col;
+    c.beginPath(); c.arc(x, y - s * 0.62, s * 0.2, 0, TAU); c.fill();
+    rr(c, x - s * 0.15, y - s * 0.42, s * 0.3, s * 0.42, s * 0.14); c.fill();
+    c.lineCap = 'round';
+    c.strokeStyle = col;
+    c.lineWidth = s * 0.1;
+    c.beginPath();
+    c.moveTo(x - s * 0.08, y - s * 0.04); c.lineTo(x - s * 0.12, y + s * 0.3);
+    c.moveTo(x + s * 0.08, y - s * 0.04); c.lineTo(x + s * 0.12, y + s * 0.3);
+    c.moveTo(x - s * 0.15, y - s * 0.36); c.lineTo(x - s * 0.3, y - s * 0.08);
+    c.moveTo(x + s * 0.15, y - s * 0.36); c.lineTo(x + s * 0.3, y - s * 0.08);
+    c.stroke();
+  }
+
+  function flagIcon(c, x, y, r) {
+    c.save();
+    c.beginPath(); c.arc(x, y, r * 0.7, 0, TAU); c.clip();
+    const n = 4, q = r * 1.4 / n;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        c.fillStyle = (i + j) % 2 ? '#22262E' : '#FFFFFF';
+        c.fillRect(x - r * 0.7 + i * q, y - r * 0.7 + j * q, q, q);
+      }
+    }
+    c.restore();
+  }
+
+  function crownIcon(c, x, y, s) {
+    c.fillStyle = '#FFC83A';
+    c.beginPath();
+    c.moveTo(x - s, y + s * 0.5); c.lineTo(x - s, y - s * 0.3); c.lineTo(x - s * 0.5, y + s * 0.1);
+    c.lineTo(x, y - s * 0.6); c.lineTo(x + s * 0.5, y + s * 0.1); c.lineTo(x + s, y - s * 0.3);
+    c.lineTo(x + s, y + s * 0.5); c.closePath(); c.fill();
+  }
+
+  function skull(c, x, y, s) {
+    c.fillStyle = '#FFFFFF';
+    c.beginPath(); c.arc(x, y - s * 0.1, s * 0.55, 0, TAU); c.fill();
+    c.fillRect(x - s * 0.3, y + s * 0.2, s * 0.6, s * 0.3);
+    c.fillStyle = '#20242B';
+    c.beginPath(); c.arc(x - s * 0.2, y - s * 0.12, s * 0.14, 0, TAU); c.arc(x + s * 0.2, y - s * 0.12, s * 0.14, 0, TAU); c.fill();
+  }
+
+  function wheelIcon(c, x, y, r) {
+    const cols = ['#FF5252', '#FFB300', '#FFEB3B', '#4CAF50', '#00BCD4', '#3F51B5', '#9C27B0'];
+    for (let i = 0; i < cols.length; i++) {
+      c.fillStyle = cols[i];
+      c.beginPath(); c.moveTo(x, y);
+      c.arc(x, y, r, i / cols.length * TAU, (i + 1) / cols.length * TAU);
+      c.closePath(); c.fill();
+    }
+    c.fillStyle = '#FFFFFF';
+    c.beginPath(); c.arc(x, y, r * 0.35, 0, TAU); c.fill();
+  }
+
+  function fmt(n) { return PV.fmtNum(Math.max(0, Math.round(n))); }
 
   /* ------------------------------------------------------------ the view */
 
   PV.CrowdRushView = function (ctx) {
     const opts = ctx.opts || {};
-    const courseKey = PV.CrowdCourse.COURSES[opts.course] ? opts.course : 'fields';
-    const def = PV.CrowdCourse.COURSES[courseKey];
-    const diffKey = PV.CrowdRush.DIFFS[opts.difficulty] ? opts.difficulty : 'normal';
-    // A race is the same course for everyone: nobody brings upgrades to it,
-    // and nobody waits at the line while the others run.
     const racing = !!ctx.race;
     const meta = loadMeta();
-    // Levels, unless free run was picked. Never in a race: everyone's level
-    // is their own, and a race needs one course for all of them.
     const levels = !racing && opts.play !== 'free';
+    const courseKey = PV.CrowdCourse.COURSES[opts.course] ? opts.course : 'ice';
+    const diffKey = ({ easy: 1, normal: 1, hard: 1 })[opts.difficulty] ? opts.difficulty : 'normal';
+    const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
-    let ui = null, countEl, beatEl, goneEl, whereEl, shopEl = null;
-    let shopOpen = null;             // the state the shop was last painted in
+    let ui = null, scene = null, glCanvas = null, broken = false;
+    let hits = [];                   // buttons painted this frame: {x, y, w, h, act}
+    let pops = [], seen = 0;         // numbers floating up off the crowd
+    let lastNow = 0, roadPx = 0, crowdPx = null;
+    let drag = null;                 // a finger steering: {x0, lane0}
+    let lane = 0;
 
-    /* Puffs where two crowds meet, one per runner lost, drawn and aged per
-       frame: they are decoration, and the engine never hears of them. */
-    let puffs = [], foe = null, foeN = 0, puffSeq = 0;
-
-    function onMove(e) {
-      if (!ui) return;
-      const rect = ui.canvas.getBoundingClientRect();
-      if (!rect.width) return;
-      const lane = ((e.clientX - rect.left) - rect.width / 2) / (rect.width * 0.44);
-      ui.input({ lane: Math.max(-1, Math.min(1, lane)) });
-    }
-    // A press both steers and, at the start line, starts the run.
-    function onDown(e) { onMove(e); if (ui) ui.input('go'); }
+    const skinName = () => (PV.CrowdScene.SKINS || ['plain'])[Math.min(meta.skin, skinsAt(meta.level) - 1)] || 'plain';
+    const look = { color: PV.CrowdGL.rgb(COLORS[meta.color][0]), skin: skinName() };
 
     function saveMeta() { PV.Store.set(META, meta); }
 
-    /** Where this run is: a level and its scenery, or a course and a difficulty. */
     function whereText(game) {
-      if (game.level) return t('crowd.level', { n: game.level }) + ' · ' + t('crowd.' + game.courseKey);
-      return t('crowd.' + courseKey) + ' ' + '★'.repeat(def.tier) + ' · ' + t('diff.' + diffKey);
+      if (game.level) return t('crowd.level', { n: game.level }) + ' · ' + t('crowd.' + game.theme);
+      return t('crowd.' + courseKey) + ' ' + '★'.repeat(PV.CrowdCourse.tierOf(courseKey)) + ' · ' + t('diff.' + diffKey);
     }
+
+    /* ---- the shop, the wheel and the skins, at the start line only ---- */
 
     function buy(kind) {
       const game = ui && ui.game;
-      if (!game || !game.ready) return;
-      const level = meta[kind], cost = PV.CrowdRush.boostCost(kind, level);
-      if (level >= PV.CrowdRush.BOOSTS[kind].max || meta.coins < cost) return;
+      if (!game || !game.ready || racing) return;
+      const lv = meta[kind], cost = PV.CrowdRush.boostCost(kind, lv);
+      if (lv >= MAX_UP || meta.coins < cost) return;
       meta.coins -= cost;
-      meta[kind] = level + 1;
+      meta[kind] = lv + 1;
       saveMeta();
-      game.setBoost(meta);
-      paintShop();
+      game.setBoost(racing ? null : meta);
       ui.draw();
     }
-
-    /** The upgrades, in the side panel: open at the start line only. */
-    function paintShop() {
-      if (!shopEl) return;
-      const game = ui && ui.game;
-      shopOpen = !!(game && game.ready);
-      PV.clear(shopEl);
-      shopEl.appendChild(PV.el('div', { class: 'shop-head' },
-        PV.el('span', { class: 'k' }, t('crowd.shop')),
-        PV.el('b', {}, PV.el('span', { class: 'coin' }), PV.fmtNum(meta.coins))));
-      [['start', 'crowd.upStart', 'crowd.upStartFx', l => l * PV.CrowdRush.BOOSTS.start.per],
-        ['gate', 'crowd.upGate', 'crowd.upGateFx', l => l * PV.CrowdRush.BOOSTS.gate.per]]
-        .forEach(([kind, name, fx, amount]) => {
-          const level = meta[kind];
-          const top = level >= PV.CrowdRush.BOOSTS[kind].max;
-          const cost = PV.CrowdRush.boostCost(kind, level);
-          shopEl.appendChild(PV.el('div', { class: 'up-row' },
-            PV.el('span', { class: 'nm' }, t(name) + ' · ' + t('crowd.lv', { n: level })),
-            PV.el('button', {
-              class: 'btn primary small-btn',
-              disabled: !shopOpen || top || meta.coins < cost,
-              onclick: () => buy(kind)
-            }, top ? t('crowd.max') : PV.el('span', {}, PV.el('span', { class: 'coin' }), PV.fmtNum(cost))),
-            // What the NEXT level would make it; at the top, what it is.
-            PV.el('span', { class: 'fx' }, t(fx, { n: amount(top ? level : level + 1) }))));
-        });
-      if (!shopOpen) shopEl.appendChild(PV.el('p', { class: 'fx' }, t('crowd.shopLater')));
+    function recolor() {
+      meta.color = (meta.color + 1) % COLORS.length;
+      look.color = PV.CrowdGL.rgb(COLORS[meta.color][0]);
+      saveMeta();
+      if (ui) ui.draw();
+    }
+    /** The next skin you have, round to the first. */
+    function reskin() {
+      const have = skinsAt(meta.level);
+      meta.skin = (Math.min(meta.skin, have - 1) + 1) % have;
+      look.skin = skinName();
+      saveMeta();
+      if (ui) ui.draw();
     }
 
-    /** Coins for a finished run, paid once however often the outcome is read. */
     function pay(game) {
       if (game.paid != null) return game.paid;
-      game.paid = game.coins;
+      game.paid = racing ? 0 : game.coins;
       meta.coins = Math.min(MAX_COINS, meta.coins + game.paid);
       saveMeta();
-      paintShop();
       return game.paid;
     }
+
+    /* ---- steering ---- */
+
+    function point(e) {
+      const rect = ui.canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    function steerTo(px) {
+      const half = roadPx || (ui.canvas.clientWidth * 0.28);
+      const cx = crowdPx != null ? crowdPx : ui.canvas.clientWidth / 2;
+      lane = Math.max(-1, Math.min(1, (px - cx) / half));
+      ui.input({ lane: lane });
+    }
+    function onMove(e) {
+      if (!ui || !ui.game) return;
+      const p = point(e);
+      if (e.pointerType === 'mouse') { steerTo(p.x); return; }
+      if (drag) {
+        const half = roadPx || (ui.canvas.clientWidth * 0.28);
+        lane = Math.max(-1, Math.min(1, drag.lane0 + (p.x - drag.x0) / half * 1.15));
+        ui.input({ lane: lane });
+      }
+    }
+    function onDown(e) {
+      if (!ui || !ui.game) return;
+      const p = point(e);
+      for (const h of hits) {
+        if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) { h.act(); return; }
+      }
+      if (e.pointerType !== 'mouse') {
+        drag = { x0: p.x, lane0: ui.game.x / PV.CrowdRush.EDGE };
+        try { ui.canvas.setPointerCapture(e.pointerId); } catch (err) { /* not ours to capture */ }
+      } else steerTo(p.x);
+      ui.input('go');
+    }
+    function onUp() { drag = null; }
+
+    /* ---- painting ---- */
+
+    function sizeGL(geom) {
+      if (!glCanvas || !scene) return;
+      const w = geom.w, h = geom.h;
+      if (glCanvas.style.width !== w + 'px') glCanvas.style.width = w + 'px';
+      if (glCanvas.style.height !== h + 'px') glCanvas.style.height = h + 'px';
+      scene.resize(w, h, Math.min(2, window.devicePixelRatio || 1));
+    }
+
+    /** New events since the last frame: the numbers that float off the crowd. */
+    function readPops(game) {
+      const ev = game.events;
+      let i = ev.length - 1;
+      while (i >= 0 && ev[i].s > seen) i--;
+      for (i++; i < ev.length; i++) {
+        const e = ev[i];
+        seen = e.s;
+        if (e.k === 'gate') {
+          const txt = e.op === 'mul' ? '×' + e.val : e.op === 'add' ? '+' + e.val : e.op === 'sub' ? '−' + e.val : '÷' + e.val;
+          pops.push({ text: txt, good: PV.CrowdCourse.isGood(e.op), age: 0 });
+        } else if (e.k === 'bonus') {
+          pops.push({ text: '+' + e.d, good: true, age: 0, big: true });
+        }
+      }
+      if (pops.length > 6) pops.splice(0, pops.length - 6);
+    }
+
+    function hud(c, game, geom, v, dt) {
+      // One unit for every size on screen: a hundredth of the short side, a
+      // little more on a phone, where a hundredth is under four pixels.
+      const W = geom.w, H = geom.h, u = Math.min(W, H) / 100 * (H > W ? 1.18 : 1);
+      const P = COLORS[meta.color];
+      hits = [];
+
+      // Where the crowd is on screen, and how wide the road is there: the
+      // mouse maps onto the road, not onto the whole canvas.
+      const at = scene.project(v.x, 0, v.z), edge = scene.project(v.x + PV.CrowdCourse.HALF, 0, v.z);
+      const mid = scene.project(0, 0, v.z);
+      if (at && edge && mid) { roadPx = Math.abs(edge.x - at.x); crowdPx = mid.x; }
+
+      const phase = game.phase;
+      const showCounts = phase !== 'tower' && !(phase === 'won' && !game.king);
+
+      // Red squads' numbers over their heads.
+      if (showCounts) {
+        const list = game.course.features;
+        for (let fi = 0; fi < list.length; fi++) {
+          const f = list[fi];
+          if (f.kind !== 'squad' || game.beatenAt[fi]) continue;
+          if (f.z < v.z - 4 || f.z > v.z + 70) continue;
+          const engaged = game.clash && game.clash.i === fi;
+          const n = engaged ? game.foeCount : f.n;
+          const p = scene.project(engaged ? game.clash.x : 0, 1.9, (engaged ? game.clash.z : f.z) + f.r * 0.3);
+          if (p) pill(c, p.x, p.y, fmt(n), FOE_PILL, Math.max(10, u * 3.2 * Math.min(1.2, p.s * 11)));
+        }
+      }
+
+      // Yours — not at the start line, where the reference shows none.
+      if (showCounts && game.count > 0 && phase !== 'ready') {
+        let px = v.x, pz = v.z + Math.max(0.3, game.front * 0.3);
+        if (game.king && (phase === 'boss' || phase === 'won')) {
+          let sx = 0, sz = 0;
+          for (let i = 0; i < game.units; i++) { sx += game.ux[i]; sz += game.uz[i]; }
+          if (game.units) { px = sx / game.units; pz = sz / game.units; }
+        }
+        const p = scene.project(px, 1.5, pz);
+        if (p) {
+          const size = Math.max(11, u * 3.3 * Math.min(1.25, p.s * 11));
+          pill(c, p.x, p.y, fmt(game.count), P[1], size);
+          // The gate just taken floats up out of the crowd.
+          for (const q of pops) {
+            q.age += dt;
+            const k = q.age / 1.0;
+            if (k >= 1) continue;
+            c.globalAlpha = Math.min(1, (1 - k) * 2.2);
+            say(c, q.text, p.x, p.y - size * 2.1 - k * u * 9, (q.big ? 7 : 5.2) * u * (1 + 0.15 * Math.sin(Math.min(1, k * 4) * Math.PI)),
+              q.good ? '#FFFFFF' : '#FF5A5A', q.good ? 'rgba(20,70,130,0.55)' : 'rgba(90,0,0,0.5)');
+            c.globalAlpha = 1;
+          }
+        }
+      }
+      pops = pops.filter(q => q.age < 1);
+
+      // The king's health.
+      if (game.course.boss && (game.king || v.z > game.course.finish - 30) && phase !== 'won') {
+        const k = game.king || { x: 0, z: game.course.kingZ, hp: 1 };
+        const p = scene.project(k.x, 4.3, k.z);
+        if (p) {
+          const bw = u * 13, bh = u * 1.7;
+          c.fillStyle = 'rgba(255,255,255,0.95)';
+          rr(c, p.x - bw / 2 - 2, p.y - bh / 2 - 2, bw + 4, bh + 4, (bh + 4) / 2); c.fill();
+          c.fillStyle = '#5B1A1A';
+          rr(c, p.x - bw / 2, p.y - bh / 2, bw, bh, bh / 2); c.fill();
+          c.fillStyle = '#F4433C';
+          rr(c, p.x - bw / 2, p.y - bh / 2, Math.max(bh, bw * Math.max(0, k.hp)), bh, bh / 2); c.fill();
+          crownIcon(c, p.x, p.y - bh * 1.5, u * 1.3);
+        }
+      }
+
+      topBar(c, game, W, u, v);
+
+      if (phase === 'ready') startScreen(c, game, W, H, u, at);
+      if (phase === 'gauge') needle(c, game, W, H, u);
+      if (game.tower) towerText(c, game, W, H, u);
+      if (phase === 'won' && game.king && game.king.down) winText(c, W, H, u, game.endT);
+      if (phase === 'lost') {
+        const k = Math.min(1, game.endT / 20);
+        c.globalAlpha = k;
+        say(c, t('crowd.failed'), W / 2, H * 0.3, u * 11 * (0.8 + 0.2 * k), '#FF4B4B', '#FFFFFF');
+        c.globalAlpha = 1;
+      }
+    }
+
+    /** The level bar: this level's number, the run so far, the finish. */
+    function topBar(c, game, W, u, v) {
+      const ready = game.phase === 'ready';
+      const bw = u * 30, bh = u * 2.4, cx = W / 2, y = u * (ready ? 10.5 : 5.5);
+      if (ready && game.level) say(c, t('crowd.level', { n: game.level }).toUpperCase(), cx, u * 4.6, u * 4.2, '#FFFFFF', 'rgba(20,40,70,0.6)');
+      c.fillStyle = 'rgba(255,255,255,0.92)';
+      rr(c, cx - bw / 2 - 3, y - bh / 2 - 3, bw + 6, bh + 6, (bh + 6) / 2); c.fill();
+      c.fillStyle = 'rgba(30,50,80,0.25)';
+      rr(c, cx - bw / 2, y - bh / 2, bw, bh, bh / 2); c.fill();
+      const pct = Math.max(0, Math.min(1, v.z / game.course.finish));
+      c.fillStyle = '#2E9BEA';
+      rr(c, cx - bw / 2, y - bh / 2, Math.max(bh, bw * pct), bh, bh / 2); c.fill();
+      // The squads on the way, as skulls along the bar.
+      for (const f of game.course.features) {
+        if (f.kind !== 'squad') continue;
+        const x = cx - bw / 2 + bw * Math.min(1, f.z / game.course.finish);
+        c.fillStyle = 'rgba(25,35,55,0.75)';
+        c.beginPath(); c.arc(x, y, u * 1.5, 0, TAU); c.fill();
+        skull(c, x, y + u * 0.1, u * 1.2);
+      }
+      const r = u * 2.6;
+      c.fillStyle = '#2E9BEA';
+      c.beginPath(); c.arc(cx - bw / 2 - r * 0.6, y, r, 0, TAU); c.fill();
+      c.lineWidth = u * 0.5; c.strokeStyle = '#FFFFFF'; c.stroke();
+      say(c, game.level ? String(game.level) : '★', cx - bw / 2 - r * 0.6, y + u * 0.1, u * (String(game.level || '').length > 2 ? 2.2 : 2.9), '#FFFFFF');
+      c.fillStyle = '#FFFFFF';
+      c.beginPath(); c.arc(cx + bw / 2 + r * 0.6, y, r, 0, TAU); c.fill();
+      c.lineWidth = u * 0.5; c.strokeStyle = '#2E9BEA'; c.stroke();
+      if (game.course.boss) crownIcon(c, cx + bw / 2 + r * 0.6, y + u * 0.2, u * 1.5);
+      else flagIcon(c, cx + bw / 2 + r * 0.6, y, r);
+
+      if (!racing) {
+        // Coins, top right.
+        const label = fmt(meta.coins), s = u * 3;
+        font(c, s);
+        const tw = c.measureText(label).width, pw = tw + s * 2.4, ph = s * 1.6;
+        const px = W - pw - u * 2, py = u * 2;
+        c.fillStyle = 'rgba(15,25,45,0.42)';
+        rr(c, px, py, pw, ph, ph / 2); c.fill();
+        coin(c, px + pw - ph * 0.55, py + ph / 2, s * 0.55);
+        say(c, label, px + ph * 0.45, py + ph / 2 + 1, s, '#FFFFFF', null, 'left');
+      }
+    }
+
+    function startScreen(c, game, W, H, u, at) {
+      // The prompt, as the reference words it, just over the crowd's head.
+      const s = u * 3.1;
+      const txt = coarse ? t('crowd.tapStart') : null;
+      font(c, s);
+      const y = Math.min(H * 0.56, (at ? at.y : H * 0.75) - u * 15);
+      if (txt) {
+        const w = c.measureText(txt).width + s * 2;
+        c.fillStyle = 'rgba(15,25,45,0.45)';
+        rr(c, W / 2 - w / 2, y - s, w, s * 2, s); c.fill();
+        say(c, txt, W / 2, y + 1, s, '#FFFFFF');
+      } else {
+        const a = t('crowd.press'), key = t('crowd.space'), b = t('crowd.orClick');
+        const wa = c.measureText(a).width, wb = c.measureText(b).width;
+        font(c, s * 0.62);
+        const wk = c.measureText(key).width + s * 1.1;
+        const gap = s * 0.5, w = wa + wk + wb + gap * 2 + s * 1.6;
+        const x0 = W / 2 - w / 2;
+        c.fillStyle = 'rgba(15,25,45,0.45)';
+        rr(c, x0, y - s, w, s * 2, s * 0.6); c.fill();
+        let x = x0 + s * 0.8;
+        say(c, a, x, y + 1, s, '#FFFFFF', null, 'left'); x += wa + gap;
+        c.fillStyle = '#FFFFFF';
+        rr(c, x, y - s * 0.5, wk, s, s * 0.25); c.fill();
+        say(c, key, x + wk / 2, y + 1, s * 0.62, '#2A3342'); x += wk + gap;
+        say(c, b, x, y + 1, s, '#FFFFFF', null, 'left');
+      }
+      if (racing) return;
+      // The two upgrade cards.
+      const cw = u * 13, ch = u * 16.5, gap = u * 2;
+      const cy = H - ch - u * 2.2;
+      card(c, W / 2 - cw - gap / 2, cy, cw, ch, u, 'units');
+      card(c, W / 2 + gap / 2, cy, cw, ch, u, 'income');
+
+      // The colour wheel, left.
+      const bs = u * 11, bx = u * 2.5, by = H * 0.42;
+      c.fillStyle = '#B04BE0';
+      rr(c, bx, by, bs, bs * 1.05, u * 2); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.18)';
+      rr(c, bx, by, bs, bs * 0.45, u * 2); c.fill();
+      wheelIcon(c, bx + bs / 2, by + bs * 0.42, bs * 0.3);
+      say(c, t('crowd.color'), bx + bs / 2, by + bs * 0.88, u * 2.2, '#FFFFFF', 'rgba(60,0,90,0.5)');
+      hits.push({ x: bx, y: by, w: bs, h: bs * 1.05, act: recolor });
+
+      // The skin, right: what you are wearing, and when the next one comes.
+      const have = skinsAt(meta.level), sx = W - bs - u * 2.5;
+      c.fillStyle = '#3DBE55';
+      rr(c, sx, by, bs, bs * 1.05, u * 2); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.18)';
+      rr(c, sx, by, bs, bs * 0.45, u * 2); c.fill();
+      stickIcon(c, sx + bs / 2, by + bs * 0.55, bs * 0.5, COLORS[meta.color][0]);
+      say(c, t('crowd.skin'), sx + bs / 2, by + bs * 0.88, u * 2.2, '#FFFFFF', 'rgba(0,70,20,0.5)');
+      say(c, t('crowd.skin.' + look.skin) + ' ' + (Math.min(meta.skin, have - 1) + 1) + '/' + have,
+        sx + bs / 2, by + bs * 1.05 + u * 2, u * 1.7, '#FFFFFF', 'rgba(0,0,0,0.45)');
+      if (have < SKIN_COUNT) {
+        say(c, t('crowd.skinNext', { n: 1 + have * SKIN_EVERY }), sx + bs / 2, by + bs * 1.05 + u * 4.3, u * 1.6,
+          'rgba(255,255,255,0.85)', 'rgba(0,0,0,0.45)');
+      }
+      hits.push({ x: sx, y: by, w: bs, h: bs * 1.05, act: reskin });
+    }
+
+    function card(c, x, y, w, h, u, kind) {
+      const lv = meta[kind], cost = PV.CrowdRush.boostCost(kind, lv);
+      const top = lv >= MAX_UP, can = !top && meta.coins >= cost;
+      const units = kind === 'units';
+      const g = c.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, units ? '#5AB8FA' : '#FFBE4A');
+      g.addColorStop(1, units ? '#2E86E8' : '#FF8F1F');
+      c.fillStyle = 'rgba(0,0,0,0.25)';
+      rr(c, x, y + u * 0.6, w, h, u * 1.8); c.fill();
+      c.fillStyle = g;
+      rr(c, x, y, w, h, u * 1.8); c.fill();
+      c.lineWidth = u * 0.4; c.strokeStyle = 'rgba(255,255,255,0.75)'; c.stroke();
+      say(c, String(lv), x + u * 2.2, y + u * 2.4, u * 2.7, '#FFFFFF', 'rgba(0,0,0,0.3)');
+      say(c, t('crowd.lvl'), x + u * 2.2, y + u * 4.4, u * 1.4, '#FFFFFF');
+      if (units) stickIcon(c, x + w / 2, y + h * 0.5, u * 7, '#E9F6FF');
+      else {
+        coin(c, x + w / 2 - u * 1.8, y + h * 0.43, u * 2.3);
+        coin(c, x + w / 2 + u * 1.6, y + h * 0.38, u * 2.3);
+        coin(c, x + w / 2, y + h * 0.5, u * 2.7);
+      }
+      say(c, t(units ? 'crowd.startUnits' : 'crowd.income'), x + w / 2, y + h * 0.68, u * 1.9, '#FFFFFF', 'rgba(0,0,0,0.3)');
+      const sh = u * 3.8, sy = y + h - sh;
+      c.fillStyle = top ? '#8E99AA' : (can ? '#43C257' : '#8E99AA');
+      rr(c, x, sy, w, sh, u * 1.8); c.fill();
+      c.fillRect(x, sy, w, sh * 0.4);
+      if (top) say(c, t('crowd.max'), x + w / 2, sy + sh / 2, u * 2.3, '#FFFFFF');
+      else {
+        say(c, '⬆', x + u * 2.2, sy + sh / 2, u * 2, '#FFFFFF');
+        say(c, fmt(cost), x + w / 2 + u * 0.4, sy + sh / 2 + 1, u * 2.4, '#FFFFFF');
+        coin(c, x + w - u * 2.4, sy + sh / 2, u * 1.1);
+      }
+      hits.push({ x: x, y: y, w: w, h: h, act: () => buy(kind) });
+    }
+
+    /** The needle before the king: stop it on the middle for the most. */
+    function needle(c, game, W, H, u) {
+      const g = game.course.gauge, cx = W / 2, cy = H * 0.48, r = u * 15;
+      const segs = [[-1, -0.6, g[0], '#FFD54F'], [-0.6, -0.22, g[1], '#8BD35A'], [-0.22, 0.22, g[2], '#E9FFD9'],
+        [0.22, 0.6, g[1], '#8BD35A'], [0.6, 1, g[0], '#FFD54F']];
+      const ang = v => -Math.PI / 2 + v * Math.PI / 2;
+      c.fillStyle = 'rgba(15,25,45,0.35)';
+      c.beginPath(); c.arc(cx, cy, r + u * 1.2, Math.PI, 0); c.closePath(); c.fill();
+      for (const s of segs) {
+        c.fillStyle = s[3];
+        c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r, ang(s[0]), ang(s[1])); c.closePath(); c.fill();
+        const mid = ang((s[0] + s[1]) / 2);
+        say(c, '+' + s[2], cx + Math.cos(mid) * r * 0.7, cy + Math.sin(mid) * r * 0.7, u * 2.2, s[3] === '#E9FFD9' ? '#2D6A1E' : '#FFFFFF', s[3] === '#E9FFD9' ? null : 'rgba(0,0,0,0.3)');
+      }
+      c.fillStyle = 'rgba(15,25,45,0.55)';
+      c.beginPath(); c.arc(cx, cy, r * 0.28, Math.PI, 0); c.closePath(); c.fill();
+      const nv = game.gaugeVal != null ? game.needle(game.gaugeLockT || game.gaugeT) : game.needle(game.gaugeT);
+      const a = ang(nv);
+      c.strokeStyle = '#FFFFFF';
+      c.lineWidth = u * 1.1;
+      c.lineCap = 'round';
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * r * 0.95, cy + Math.sin(a) * r * 0.95); c.stroke();
+      c.fillStyle = '#FFFFFF';
+      c.beginPath(); c.arc(cx, cy, u * 1.4, 0, TAU); c.fill();
+      if (game.gaugeVal == null) say(c, t('crowd.tapChoose'), cx, cy - r - u * 3.4, u * 3.4, '#FFFFFF', 'rgba(20,40,70,0.6)');
+    }
+
+    function towerText(c, game, W, H, u) {
+      const T = game.tower, R = PV.CrowdRush;
+      const climbed = R.GATHER + (T.reach + 1) * R.STEP_T;
+      if (T.t < climbed) return;
+      const k = Math.min(1, (T.t - climbed) / 14);
+      const big = 1 + 0.25 * Math.sin(k * Math.PI);
+      say(c, '×' + game.mult.toFixed(1), W / 2, H * 0.34, u * 9 * big, '#FFD54F', 'rgba(90,50,0,0.6)');
+      if (T.top && T.t > climbed + R.CHEST_T * 0.6) winText(c, W, H, u, T.t - climbed - R.CHEST_T * 0.6);
+    }
+
+    function winText(c, W, H, u, age) {
+      const k = Math.min(1, age / 16);
+      const s = u * 12 * (0.6 + 0.4 * k + 0.08 * Math.sin(k * Math.PI));
+      c.globalAlpha = k;
+      say(c, t('crowd.youWin'), W / 2, H * 0.2, s, '#3BD14E', '#FFFFFF');
+      c.globalAlpha = 1;
+    }
+
+    /* ---- the harness ---- */
 
     return PV.loopHost(ctx, {
       hz: 60,
       keymap: {
-        ArrowLeft: 'left', ArrowRight: 'right', a: 'left', d: 'right',
-        A: 'left', D: 'right', ' ': 'go', Enter: 'go'
+        ArrowLeft: 'left', ArrowRight: 'right', a: 'left', d: 'right', A: 'left', D: 'right',
+        ' ': 'go', Enter: 'go'
       },
       sustained: ['left', 'right'],
-      pad: [{ label: '\u25C0', action: 'left' }, { label: '\u25B6', action: 'right' }],
-      padCols: 2,
-      pct: game => Math.min(1, game.dist / game.course.length),
+      pad: null,
+      pct: game => game.progress,
 
-      // A level is always played from its own seed, so a lost level comes
-      // back exactly as it was. Winning moves meta.level on (see outcome), so
-      // the button after a win builds the next one.
       create: () => (levels
         ? new PV.CrowdRush({ seed: PV.CrowdCourse.seedFor(meta.level), level: meta.level, boost: meta })
         : new PV.CrowdRush({
@@ -720,244 +597,121 @@ window.PV = window.PV || {};
         })),
 
       onReset(game) {
-        puffs = []; foe = null; shopOpen = null;
-        if (whereEl) whereEl.textContent = whereText(game);
+        pops = []; seen = game.seq; drag = null;
+        if (scene) scene.reset(game);
+        if (ui) ui.status.textContent = whereText(game);
       },
 
       fit(availW, availH) {
-        let w = Math.max(280, Math.min(availW, 760));
-        if (w * 0.78 > availH) w = Math.max(280, availH / 0.78);
-        return { w: w, h: w * 0.78 };
+        if (PV.stage().phone) {
+          const w = Math.max(280, availW);
+          return { w: w, h: Math.round(Math.max(380, Math.min(availH + 70, w * 1.62))) };
+        }
+        let w = Math.min(availW, 1180), h = w * 0.62;
+        if (h > availH) { h = availH; w = h / 0.62; }
+        return { w: Math.round(Math.max(320, w)), h: Math.round(Math.max(220, h)) };
       },
 
       build(api) {
         ui = api;
-        countEl = PV.el('b', {}, String(PV.CrowdRush.DIFFS[diffKey].start));
-        beatEl = PV.el('b', {}, '0');
-        goneEl = PV.el('b', {}, '0%');
-        api.side.appendChild(PV.el('div', { class: 'panel-mini stats' },
-          PV.el('span', { class: 'k' }, t('crowd.count')), countEl,
-          PV.el('span', { class: 'k' }, t('crowd.beaten')), beatEl,
-          PV.el('span', { class: 'k' }, t('crowd.run')), goneEl));
-        whereEl = PV.el('div', { class: 'muted small td-where' });
-        api.side.appendChild(whereEl);
-        if (!racing) {
-          shopEl = PV.el('div', { class: 'panel-mini crowd-shop' });
-          api.side.appendChild(shopEl);
+        // The world goes on a canvas of its own, underneath the harness's.
+        const box = api.canvas.parentElement;
+        box.style.position = 'relative';
+        api.canvas.style.position = 'relative';
+        api.canvas.style.zIndex = '1';
+        glCanvas = PV.el('canvas', { class: 'crowd-gl' });
+        glCanvas.style.position = 'absolute';
+        glCanvas.style.left = '1px';
+        glCanvas.style.top = '1px';
+        glCanvas.style.borderRadius = '9px';
+        glCanvas.style.pointerEvents = 'none';
+        box.insertBefore(glCanvas, api.canvas);
+        try {
+          scene = PV.CrowdScene(glCanvas);
+        } catch (e) {
+          scene = null;
+          broken = true;
         }
+        glCanvas.addEventListener('webglcontextlost', ev => { ev.preventDefault(); broken = true; });
         api.below.appendChild(PV.el('p', { class: 'muted small' }, t('crowd.hint')));
         api.canvas.addEventListener('pointermove', onMove);
         api.canvas.addEventListener('pointerdown', onDown);
+        api.canvas.addEventListener('pointerup', onUp);
+        api.canvas.addEventListener('pointercancel', onUp);
       },
 
       onDestroy() {
-        if (!ui) return;
-        ui.canvas.removeEventListener('pointermove', onMove);
-        ui.canvas.removeEventListener('pointerdown', onDown);
+        if (ui) {
+          ui.canvas.removeEventListener('pointermove', onMove);
+          ui.canvas.removeEventListener('pointerdown', onDown);
+          ui.canvas.removeEventListener('pointerup', onUp);
+          ui.canvas.removeEventListener('pointercancel', onUp);
+        }
+        if (scene) scene.destroy();
+        scene = null;
+        if (glCanvas) glCanvas.remove();
       },
 
-      onRelabel() { paintShop(); },
-
-      onFrame(game) {
-        // Only what changed: a text node rewritten sixty times a second is a
-        // layout sixty times a second, for numbers that mostly sit still.
-        const put = (node, text) => { if (node.textContent !== text) node.textContent = text; };
-        put(countEl, PV.fmtNum(game.n));
-        put(beatEl, PV.fmtNum(game.beaten));
-        put(goneEl, Math.round(Math.min(1, game.dist / game.course.length) * 100) + '%');
-        // The shop opens and closes with the start line.
-        if (shopEl && shopOpen !== game.ready) paintShop();
-      },
+      onRelabel(api) { if (api.game) api.status.textContent = whereText(api.game); },
 
       draw(c, game, geom, api, alpha) {
-        const cam = camera(geom);
-        // Drawn between the last two ticks, `alpha` of the way from one to the
-        // other, so the road glides instead of stepping. The rules never see
-        // this: it is where things are drawn, not where they are.
-        const a = alpha == null ? 1 : Math.max(0, Math.min(1, alpha));
-        const dist = game.lastDist + (game.dist - game.lastDist) * a;
-        const px = game.lastX + (game.x - game.lastX) * a;
-        const tick = Math.max(0, game.tick - 1 + a);
-        // The game's own course: a level picks its scenery from its number.
-        const th = THEMES[game.courseKey] || THEMES.fields;
-        ground(c, cam, th, dist);
-
-        // A fight is drawn just past the front of YOUR crowd, wherever that
-        // is: a big crowd is deep, and a rival drawn at a fixed distance
-        // would stand inside it.
-        const meet = depthOf(game.width) + 0.35;
-        const fightingKing = !!(game.clash && game.clash.kind === 'castle');
-        const won = game.phase === 'won';
-        const vic = won ? Math.max(0, game.victory - 1 + a) : 0;
-        const walk = vic / PV.CrowdRush.VICTORY;
-        let gateLine = null;
-
-        const list = game.course.features;
-        for (let i = list.length - 1; i >= 0; i--) {
-          const f = list[i];
-          const d = f.at - dist;
-          if (f.kind === 'castle') {
-            // The keep stands back from where the king meets you, and he
-            // walks out of its gate to do it.
-            const wall = d + 6;
-            if (wall > FAR + 6) continue;
-            castle(c, cam, wall, won);
-            gateLine = wall - 0.2;
-            const at = approach(d, d + 4.5, meet);
-            const kd = (fightingKing || won) ? meet + (won ? walk * 2 : 0) : at.d;
-            const hp = fightingKing ? game.clash.n : (won ? 0 : f.n);
-            king(c, cam, kd, hp, f.n, tick, fightingKing, won ? vic : -1);
-            continue;
-          }
-          if (d > FAR || d < -2) continue;
-          if (f.kind === 'gates') gateWall(c, cam, f, dist);
-          else if (f.kind === 'rivals') {
-            if (i < game.at) continue;       // met already: the fight is drawn below
-            const at = approach(d, d, meet);
-            const rw = Math.min(1.4, PV.CrowdRush.widthOf(f.n));
-            crowd(c, cam, f.n, 0, at.d, rw, tick, RED, 31 + i, at.pace);
-            tally(c, cam, f.n, 0, at.d + depthOf(rw), '#FECDD3');
-          } else hazard(c, cam, f, dist, tick);
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const dt = lastNow ? Math.min(0.1, Math.max(0, (now - lastNow) / 1000)) : 0.016;
+        lastNow = now;
+        c.clearRect(0, 0, geom.w, geom.h);
+        if (!scene || broken) {
+          c.fillStyle = '#1B2330';
+          c.fillRect(0, 0, geom.w, geom.h);
+          say(c, t('crowd.noGL'), geom.w / 2, geom.h / 2, Math.max(12, geom.w * 0.028), '#EAF0F7');
+          return;
         }
-
-        // The crowd being fought right now, pressed up against yours.
-        if (game.clash && !fightingKing) {
-          const rw = Math.min(1.4, PV.CrowdRush.widthOf(game.clash.n));
-          crowd(c, cam, game.clash.n, 0, meet, rw, tick, RED, 5, 1.2);
-          tally(c, cam, game.clash.n, 0, meet + depthOf(rw), '#FECDD3');
+        sizeGL(geom);
+        readPops(game);
+        const v = scene.frame(game, alpha, dt, look);
+        if (game.phase === 'ready') {
+          c.fillStyle = 'rgba(20,30,50,0.22)';
+          c.fillRect(0, 0, geom.w, geom.h);
         }
-
-        // Every runner lost in a fight goes up in a puff where the sides meet.
-        if (game.clash) {
-          if (foe === game.clash && game.clash.n < foeN) {
-            const span = Math.min(game.width, PV.CrowdRush.widthOf(game.clash.n)) / 2;
-            for (let k = Math.min(6, foeN - game.clash.n); k > 0; k--) {
-              puffSeq++;
-              puffs.push({
-                x: (fightingKing ? 0 : px * 0.5) + (hash(puffSeq, 3) - 0.5) * 2 * span,
-                d: meet - 0.2 + hash(puffSeq, 4) * 0.4, life: 18
-              });
-            }
-          }
-          foe = game.clash; foeN = game.clash.n;
-        } else foe = null;
-        for (let k = puffs.length - 1; k >= 0; k--) {
-          const p = puffs[k];
-          const age = 1 - p.life / 18, r = cam.h * 0.022 * cam.s(p.d) * (0.6 + age * 1.4);
-          c.fillStyle = 'rgba(255,255,255,' + (0.85 * (1 - age)).toFixed(3) + ')';
-          c.beginPath(); c.arc(cam.x(p.x, p.d), cam.y(p.d) - r, r, 0, TAU); c.fill();
-          if (--p.life <= 0) puffs.splice(k, 1);
-        }
-
-        // Your crowd. After the king falls it closes up and pours in through
-        // the gate: anyone past the gate line is inside, and not drawn.
-        const pace = game.ready ? 0 : 1;
-        crowd(c, cam, game.n, px, won ? walk * Math.max(0, (gateLine || 6) - 1) : 0,
-          game.width, tick, BLUE, 1, pace, won ? gateLine : null);
-        if (!won) tally(c, cam, game.n, px, 0, '#DBEAFE');
-        if (won) confetti(c, cam, vic);
-
-        for (const p of game.pops) {
-          const k = 1 - p.life / 48;
-          c.globalAlpha = Math.max(0, 1 - k * 1.1);
-          const size = Math.max(12, cam.h * 0.046);
-          c.font = '800 ' + size.toFixed(1) + 'px system-ui, sans-serif';
-          c.textAlign = 'center';
-          const px = cam.x(p.x, 0), py = cam.yBase - cam.h * (0.24 + k * 0.16);
-          c.lineWidth = size * 0.30;
-          c.lineJoin = 'round';
-          c.strokeStyle = 'rgba(255,255,255,.92)';        // a halo, for a white road
-          c.strokeText(p.text, px, py);
-          c.fillStyle = p.tone === 'bad' ? '#DC2626' : (p.tone === 'win' ? '#B45309' : '#15A34A');
-          c.fillText(p.text, px, py);
-          c.globalAlpha = 1;
-        }
-
-        // How far along the course you are, with the keep at the end of it.
-        const bw = cam.w * 0.62, bx = (cam.w - bw) / 2, by = cam.h * 0.045, bh = Math.max(6, cam.h * 0.018);
-        c.fillStyle = 'rgba(255,255,255,.55)';
-        rr(c, bx - 2, by - 2, bw + 4, bh + 4, (bh + 4) / 2); c.fill();
-        c.fillStyle = 'rgba(31,58,84,.28)';
-        rr(c, bx, by, bw, bh, bh / 2); c.fill();
-        c.fillStyle = '#F6B32B';
-        rr(c, bx, by, Math.max(bh, bw * Math.min(1, dist / game.course.length)), bh, bh / 2);
-        c.fill();
-        if (game.level) {
-          // On a level, the bar runs from this level's number to the next's.
-          const r = Math.max(9, bh * 1.35), cy = by + bh / 2;
-          badge(c, bx - r * 0.35, cy, r, game.level, '#F6B32B', '#3A2600');
-          badge(c, bx + bw + r * 0.35, cy, r, game.level + 1,
-            won ? '#F6B32B' : '#FFFFFF', won ? '#3A2600' : '#1F2430');
-        } else {
-          // The keep, at the end of the bar.
-          c.fillStyle = '#2C3440';
-          c.fillRect(bx + bw - bh * 0.1, by - bh * 0.7, Math.max(2, bh * 0.28), bh * 2.4);
-          c.fillStyle = won ? MINE : '#EF4444';
-          c.beginPath();
-          c.moveTo(bx + bw + bh * 0.16, by - bh * 0.7);
-          c.lineTo(bx + bw + bh * 1.1, by - bh * 0.25);
-          c.lineTo(bx + bw + bh * 0.16, by + bh * 0.2);
-          c.closePath(); c.fill();
-        }
-
-        // Coins in hand, top right under the bar. Not in a race: nothing
-        // bought with them comes along.
-        if (!racing) {
-          const cs = Math.max(13, cam.h * 0.042), label = PV.fmtNum(meta.coins);
-          c.font = '800 ' + cs.toFixed(1) + 'px system-ui, sans-serif';
-          const tw = c.measureText(label).width;
-          const pw = tw + cs * 2.1, ph = cs * 1.55;
-          const px = cam.w - pw - cam.w * 0.03, py = by + bh + cam.h * 0.03;
-          c.fillStyle = 'rgba(12,20,32,.45)';
-          rr(c, px, py, pw, ph, ph / 2); c.fill();
-          coin(c, px + ph / 2, py + ph / 2, cs * 0.46);
-          c.textAlign = 'left';
-          c.textBaseline = 'middle';
-          c.fillStyle = '#FFFFFF';
-          c.fillText(label, px + ph * 0.95, py + ph / 2 + 1);
-        }
-
-        // At the start line: the crowd stands, and the screen says how to go.
-        if (game.ready) {
-          // Up in the sky, clear of the first gate's numbers.
-          if (game.level) {
-            tallyAt(c, cam.cx, cam.h * 0.19, Math.max(16, cam.h * 0.06),
-              t('crowd.level', { n: game.level }), '#FFE58A');
-          }
-          const pulse = 1 + Math.sin(tick * 0.12) * 0.05;
-          tallyAt(c, cam.cx, cam.h * 0.47, Math.max(20, cam.h * 0.075) * pulse,
-            t('crowd.tapToRun'), '#FFFFFF');
-          tallyAt(c, cam.cx, cam.h * 0.55, Math.max(12, cam.h * 0.036),
-            '◀  ' + t('crowd.drag') + '  ▶', '#FFFFFF');
-        }
+        hud(c, game, geom, v, dt);
       },
 
       outcome(game) {
-        const won = game.overReason === 'stormed';
+        const won = game.overReason === 'stormed' || game.overReason === 'climbed';
         const coins = pay(game);
         const lv = game.level;
-        // A won level moves you on to the next, once however often this is
-        // read. Lost, you stay, and the same level comes back.
+        let fresh = null;
         if (lv && won && !game.advanced) {
           game.advanced = true;
           if (meta.level === lv) {
+            const had = skinsAt(meta.level);
             meta.level = Math.min(PV.CrowdCourse.MAX_LEVEL, lv + 1);
+            if (skinsAt(meta.level) > had) {
+              // A new skin: put it on, as the reference dresses you at once.
+              meta.skin = skinsAt(meta.level) - 1;
+              look.skin = skinName();
+              fresh = look.skin;
+            }
             saveMeta();
           }
         }
+        const how = game.overReason === 'climbed'
+          ? (game.tower && game.tower.top ? t('crowd.chest') : t('crowd.climbed', { m: game.mult.toFixed(1) }))
+          : (game.overReason === 'stormed' ? t('crowd.bossDown') : null);
         return {
           result: won ? 'win' : 'lose',
           score: game.score,
-          xp: Math.round((won ? 130 : Math.max(10, Math.round(game.dist / 6))) * game.diff.xp),
+          xp: Math.round((won ? 120 : 20 + 80 * game.progress) * (0.8 + game.spec.t)),
           tone: won ? 'good' : 'bad',
           title: lv ? t(won ? 'crowd.levelDone' : 'crowd.levelFailed', { n: lv })
             : (won ? t('crowd.stormed') : t('crowd.routed')),
           againLabel: lv ? (won ? t('crowd.nextLevel') : t('common.retry')) : undefined,
           lines: [
-            lv ? whereText(game) : t('crowd.' + game.courseKey) + ' \u00B7 ' + t('diff.' + game.diff.key),
-            t('crowd.count') + ': ' + PV.fmtNum(game.n) + ' \u00B7 ' + t('crowd.peak') + ': ' + PV.fmtNum(game.peak),
-            t('crowd.beaten') + ': ' + PV.fmtNum(game.beaten) + ' \u00B7 ' + t('crowd.lost') + ': ' + PV.fmtNum(game.lost),
-            t('crowd.earned', { n: PV.fmtNum(coins) }),
+            whereText(game),
+            how,
+            t('crowd.count') + ': ' + fmt(game.count) + ' · ' + t('crowd.peak') + ': ' + fmt(game.peak),
+            t('crowd.beaten') + ': ' + fmt(game.beaten) + ' · ' + t('crowd.lost') + ': ' + fmt(game.lost),
+            racing ? null : t('crowd.earned', { n: fmt(coins) }),
+            fresh ? t('crowd.skinNew', { name: t('crowd.skin.' + fresh) }) : null,
             '@best'
           ]
         };
