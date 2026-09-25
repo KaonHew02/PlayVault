@@ -186,10 +186,11 @@ something that does not match the source:
 
 ### Records are sealed against a hand edit
 
-`profile` and `stats` are stored with a checksum of themselves. A value that
-does not match its own sum is dropped on the next read and the app starts
-that record again, so editing a number in devtools does not survive a
-refresh — which is the thing that actually happened.
+`profile` and `stats` are stored with a checksum of themselves, and so is
+each game's record of coins and unlocks (`crowd.meta`, `worms.meta`,
+`fps.meta`). A value that does not match its own sum is dropped on the next
+read and the app starts that record again, so editing a number in devtools
+does not survive a refresh — which is the thing that actually happened.
 
 The salt is a constant in the same JavaScript the player already has, so
 anyone who reads the bundle can recompute a sum. Treat this as what it is: it

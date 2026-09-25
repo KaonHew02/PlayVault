@@ -7,7 +7,8 @@ dropped at the user's request, leaving one card solitaire on the roster.
 
 Spider Solitaire · Mahjong Solitaire · Sudoku · Tetris · Snake · Worm Arena ·
 Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋 — plus Crowd Rush, added
-2026-09-22. Kart Racing was removed the same day
+2026-09-22, and Strike Squad, a first-person shooter, added 2026-09-25.
+Kart Racing was removed on 2026-09-22.
 
 ## Three families, three contracts
 
@@ -43,7 +44,7 @@ opponent, no turn order.
   solitaires need boards that can actually be finished, or players hit dead
   ones and blame the game.
 
-### 3. Real-time loop — Tetris, Snake, Worm Arena, Tower Defense, Crowd Rush
+### 3. Real-time loop — Tetris, Snake, Worm Arena, Tower Defense, Crowd Rush, Strike Squad
 
 A canvas and a fixed-timestep loop. Nothing here is turn-based, so nothing here
 uses the board contract.
@@ -83,6 +84,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **22** | Crowd Rush rebuilt in 3D to its reference | **2026-09-24** — "and then the count master oso fully copy it, FULLY bcz current one too shit", with the crazygames *Count Masters* link. Studied from the reference's trailer and a thirty-level playthrough of its web version, frame by frame. A new engine, a WebGL scene and a new view; FreePlay's art, name and code are not copied. See below |
 | **23** | Worm Arena redrawn | **2026-09-24** — "the worm look some ugly, redesign it and then the map i cant see the food clearly", with a screenshot. A new worm painter, and snacks that stand off the floor. No rule changed but how big the snacks are and how many. See below |
 | **24** | Five fixes to playing with friends | **2026-09-24** — found by walking every game through a room, asked for as "fix all four": Back froze or restarted a match, the board rematch card reset one board, a Snake race could never end, and Worm Arena's room opened with no mode picked. Then "fix the call it ranking too": a host who crashed first could call a race and take the medal. See below |
+| **25** | Strike Squad | **2026-09-25** — "i want add on game for fps shooter like this, just copy all the thing", with the crazygames *Hazmob FPS: Online Shooter* link. A new game: a first-person shooter against bots, with the reference's seven modes, eight maps, gun classes, upgrades, attachments, camos, keychains, clothes, skills, missions and crates. Hazmob's art, names and code are not copied. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -795,3 +797,116 @@ end, before anything was changed.
   shows; the worm's is its mass, as a finished worm's is its mass when it
   died. Puzzles are unchanged — an unsolved board still ranks below every
   solver.
+
+### Phase 25 — Strike Squad
+
+"Just copy all the thing" cannot mean the reference's art, names or code —
+Hazmob's — so, as with Crowd Rush and Worm Arena, it means the game its page
+describes, built here from nothing. The reference is a Unity game of 134 MB;
+this is fourteen files in `js/games/fps/`, raw WebGL like Crowd Rush, no
+library, nothing fetched.
+
+What the page lists, and where it is now:
+
+- **Seven modes and a quick battle.** Team deathmatch (to 75), free for all
+  (to 30), domination (A, B and C, a point every two seconds, to 200), capture
+  the flag (to 3), search and destroy and elimination (rounds, no respawns,
+  first to 4), and gun race (twenty guns, finish with the knife; a knife kill
+  sends the victim back one). Quick battle is the reference's button: a mode
+  and a map drawn from the seed, so a room's quick battle is the same one for
+  everybody.
+- **Eight maps for close fighting**: Depot, Dust Town, Village, Frostbite,
+  Downtown, Factory, Temple, Training Yard. Each is a few lines of
+  placements on a one-metre grid (`maps.js`); most are drawn half at a time
+  and turned half round for the other side, so a team map is fair by
+  construction. The option sheet shows each one from above.
+- **Five classes and then some**: twenty-two guns — four assault rifles, four
+  SMGs, two shotguns, three snipers, two LMGs, four pistols, three blades —
+  bought with coins once your rank reaches theirs. Every gun has four upgrade
+  tracks of five levels (damage, accuracy, reload, magazine), four attachment
+  slots (optics to 8×, suppressor, compensator, brake, extended and fast mags,
+  grips, a laser), thirteen camos drawn by the shader, and a keychain that
+  swings on its cord. The reference's "55+ weapons" counts its skins; this
+  counts guns.
+- **Clothes that change your numbers**: helmets and vests are armour (it soaks
+  half of every hit until it runs out), boots are speed, gloves are reload
+  time, ghost boots are quiet. What you wear is what the bots see on you.
+- **Skills on 4, 5 and 6**: medkit, adrenaline, radar and shield, three in the
+  kit. Q throws a grenade, E plants and defuses, G takes a gun off the floor,
+  Tab is the scoreboard — the reference's keys.
+- **Missions and crates**: three daily and three weekly missions, worked out
+  from the date so there is nothing to store but progress; a killer crate
+  every 25 kills and a winner crate every 3 wins, each a camo or keychain you
+  do not have yet, or coins.
+- **With friends** it is a race on one seed, as every arcade game here is:
+  each player fights their own bots on the same map and mode, stock guns and
+  no clothes, and the scores are compared. The reference's online matches
+  need a server this app does not have.
+
+Decisions:
+
+- **The world is a height map.** Every solid thing is a box grown from the
+  floor, and the only thing ever over a walkway is a roof over a building's
+  inside. That is what lets bots find their way with a plain A* over metre
+  cells, jumping onto anything a jump clears (1.15 m) and dropping off
+  anything, and what lets collision be boxes swept one axis at a time with a
+  half-metre step walked up rather than jumped.
+- **Lit once.** Every corner of every metre of every face sends a ray at the
+  sun and six across the sky above it when the map is built — shadows of
+  walls on the ground, dark under roofs, darker in corners — and a frame pays
+  a texture lookup for it. It costs 30–130 ms a map and is kept for the page.
+- **Hitscan against a head and a body.** A shot is a ray through a cone as
+  wide as the spread right now (hip or aimed, moving or not, in the air, plus
+  the bloom of the last shots); a soldier is a sphere and an upright
+  cylinder, the lowest two fifths legs. Recoil is a kick that comes back by
+  itself and a climb that stays, and the bots aim through the same recoil.
+- **The mouse goes through the engine.** Its movement is sent as look input
+  once a frame and the camera shows what has been sent and not yet applied,
+  so aiming answers at the screen's rate while a match still replays from its
+  seed and its inputs. Losing the pointer lock — Esc, another window — pauses.
+- **Sound is made, not loaded.** The CSP says `media-src 'none'`; every
+  gunshot, reload, footstep and explosion is filtered noise and oscillators
+  from the Web Audio API, placed by distance and panned by direction.
+- **The lobby is a phase of the match.** The map is built and the squads
+  stand at their spawns behind the lobby panel; Deploy hands the engine the
+  loadout and counts it in. A race skips it.
+
+What measuring found (bots in every place, `node` with the engine alone):
+
+- **Capture the flag never scored.** Nine minutes, eight maps, not one flag
+  moved: both sides met in the middle of every map and the attacker died
+  there, ten seconds into each life. Attackers now take a lane (left, middle
+  or right, by role) to half way, keep moving and shoot on the move instead of
+  stopping to trade, only one bot a side stays home, and a death costs five
+  seconds instead of three. Flags now come home on six maps of eight in
+  bot-only matches.
+- **The gun race could not end.** Bots on the last rung never swung the
+  knife: the fight code checked for rounds in the magazine, and a knife has
+  none. The last rung's knife now also kills in one, as the classic mode's
+  golden knife does.
+- **One side won too often.** Search and destroy went to the same team on all
+  eight maps. Soldiers were updated in list order, squad by squad, so in
+  every duel that ended on the same tick the first squad fired first. The
+  order is shuffled every tick from the match's RNG; the same 24 matches now
+  split 12–12, team deathmatch 13–11.
+- **Matches were too short.** Team deathmatch to 40 took 70–100 seconds —
+  small maps, ten soldiers, and a bot life of about ten seconds. The limits
+  went up (75, 30, 200) and the points score every two seconds; bot-only
+  matches now run two to four minutes, longer with a person in them. Bots hit
+  23–29% of their shots, which is about what people do.
+- **Difficulty is the bots' hands**, measured as one bot facing a player who
+  stands in the open fifteen metres away: easy takes about 2.2 s to kill,
+  normal 1.2 s, hard 0.9 s (median of twelve).
+
+`smoke.js` holds it: every map has its spawns and objectives and a way on
+foot from a spawn to each of them; bodies stop at walls, walk up stairs and
+not up crates; the gun numbers move the way the armory says and never the
+table; heads, bodies and legs; armour, friendly fire and spawn protection; a
+bot match in every mode ends on its own terms with nobody inside a wall; a
+flag comes home somewhere; neither side wins every search and destroy; a
+match replays from its seed and inputs; the duel above; and the lobby's
+record is rebuilt, never adopted.
+
+Not built: online matches against people (a server), clans, leaderboards and
+the premium pass (a server, or money), the lucky wheel, and the reference's
+pick-up-and-throw back of a live grenade.

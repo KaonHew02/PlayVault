@@ -67,6 +67,8 @@ const FILES = [
   'js/games/worms/skins.js', 'js/games/worms/engine.js',
   'js/games/crowd/course.js', 'js/games/crowd/engine.js',
   'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js',
+  'js/games/fps/data.js', 'js/games/fps/maps.js', 'js/games/fps/world.js', 'js/games/fps/bots.js',
+  'js/games/fps/engine.js', 'js/games/fps/meta.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
   'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
@@ -1489,6 +1491,234 @@ section('crowd rush — ' + (2 * scale) + ' runs per course, and the levels', ()
   const was = lg.z;
   lg.advance();
   ok(lg.lastZ === was && lg.z > was && lg.pux.length === R.CAP, 'the last position was not kept for drawing between ticks');
+});
+
+/* ------------------------------------------------------------- strike squad */
+
+section('strike squad — maps, bodies, guns, and ' + (7 * scale) + ' bot matches a mode', () => {
+  const F = PV.FpsGame, W = PV.FpsWorld, D = PV.FpsData, MAPS = PV.FpsMaps;
+
+  /* Every map: square rows, both sides' spawns, the three points, the two
+     flags and the two sites, and a way on foot from every spawn to every
+     objective. A map nobody can walk across is a map the bots stand still on. */
+  for (const key of MAPS.KEYS) {
+    const w = new W(key);
+    ok(w.spawns.a.length >= 5 && w.spawns.b.length >= 5, key + ': too few spawns');
+    ok(w.dom.length === 3 && w.flags.length === 2 && w.sites.length === 2, key + ': objectives missing');
+    const marks = [].concat(w.spawns.a, w.spawns.b, w.spawns.s, w.dom, w.flags, w.sites);
+    ok(marks.every(p => w.navOK[p.cell]), key + ': a marker stands where nobody can');
+    const from = w.spawns.a[0];
+    for (const p of [].concat(w.spawns.b.slice(0, 2), w.dom, w.flags, w.sites)) {
+      ok(!!w.path(from.x, from.z, from.y, p.x, p.z, p.y), key + ': no way from the north spawn to ' + p.x + ',' + p.z);
+    }
+    // Rays: straight down lands on the ground, and a wall stops a shot.
+    ok(Math.abs(w.ray(2.5, 10, 2.5, 0, -1, 0, 50) - 10) < 1e-6 || w.ray(2.5, 10, 2.5, 0, -1, 0, 50) < 10, key + ': a ray down went through the floor');
+    ok(w.ray(0.5, 1.5, w.D / 2, 1, 0, 0, 0.1) < 0.1 || w.ray(-5, 1.5, w.D / 2, 1, 0, 0, 10) < 10, key + ': the outer wall let a ray through');
+  }
+
+  /* Bodies against the world: walls stop you, a stair is walked up, a
+     crate is jumped onto, a 2 m stack is not. On the yard, whose tower is
+     a flight of three half-metre steps up to a two-metre deck. */
+  {
+    const w = new W('yard');
+    const body = (x, z, y) => ({ x: x, y: y || 0, z: z, r: 0.35, h: 1.8, ground: true });
+    const a = body(1.5, 1.5);
+    for (let i = 0; i < 60; i++) w.move(a, -0.1, -0.2, 0);
+    ok(a.x >= 1.35 - 1e-6, 'walked into the outer wall: x ' + a.x.toFixed(3));
+    // Up the tower's stairs (x 15-16, z 12-14 climb south onto the deck).
+    const s = body(15.5, 11.2);
+    for (let i = 0; i < 80; i++) w.move(s, 0, -0.05, 0.05);
+    ok(Math.abs(s.y - 2) < 1e-6, 'the stairs did not lead up to the deck: y ' + s.y);
+    // A 1 m crate is not a stair: walking into it stops you at its face.
+    ok(w.floorAt(6.5, 11.5, 5) === 2 && w.floorAt(7.5, 11.5, 5) === 1, 'the crates are not where the map puts them');
+    const c = body(7.5, 13.5);
+    for (let i = 0; i < 40; i++) w.move(c, 0, -0.05, -0.05);
+    ok(c.y === 0 && c.z >= 12.35 - 1e-6, 'walked up a metre-high crate: y ' + c.y + ' z ' + c.z.toFixed(3));
+  }
+
+  /* Guns: upgrades and attachments change the numbers they should, and
+     never the table. Snipers keep their scopes; an 8x only fits a sniper. */
+  {
+    const base = D.stats('striker'), up = D.stats('striker', { up: { dmg: 5, acc: 5, rel: 5, mag: 5 }, att: { mag: 'ext', grip: 'vert', muzzle: 'supp' } });
+    ok(up.dmg > base.dmg * 1.19 && up.dmg < base.dmg * 1.21, 'five damage levels are not +20%');
+    ok(up.mag > base.mag && up.reload < base.reload && up.kick < base.kick && up.quiet, 'the fittings did nothing');
+    ok(D.W.striker.dmg === 26 && D.W.striker.mag === 30, 'stats() wrote to the table');
+    ok(!D.fits('longbow', 'optic', 'iron') && D.fits('longbow', 'optic', 'x8') && !D.fits('striker', 'optic', 'x8'), 'the scope rules are wrong');
+    ok(D.stats('longbow').zoom > 5 && D.stats('striker', { att: { optic: 'x8' } }).zoom < 2, 'an 8x reached a rifle, or the sniper lost its own');
+    for (const id of D.IDS) {
+      const s2 = D.stats(id);
+      ok(Number.isFinite(s2.interval) && s2.interval > 0 && s2.mag >= 0 && s2.model.length > 2, id + ': a broken gun');
+    }
+    ok(D.LADDER[D.LADDER.length - 1] === 'knife' && D.LADDER.every(id => !!D.W[id]), 'the gun race ladder is broken');
+  }
+
+  /* Damage: a head is worth more than a body, legs less; armour soaks half
+     until it runs out; your own side's bullets pass through you; a fresh
+     spawn cannot be hurt. Measured through hurt() and hitTest(), the only
+     ways a bullet does anything. */
+  {
+    const g = new F({ seed: 7, mode: 'tdm', map: 'yard', autostart: true });
+    while (g.phase !== 'live') g.advance();
+    const v = g.actors.find(a => a.team === 1), shooter = g.actors.find(a => a.team === 0 && a !== g.me);
+    v.protect = 0; v.x = 16; v.z = 20; v.y = 2; v.hp = 100; v.armor = 0;
+    const ox = 16, oz = 30, oy = v.y + 1.6;
+    ok(g.hitTest(v, ox, oy, oz, 0, 0, -1, 99) < 99 && g._zone === 1, 'a shot at head height missed the head');
+    ok(g.hitTest(v, ox, v.y + 1.0, oz, 0, 0, -1, 99) < 99 && g._zone === 0, 'a shot at the chest did not hit the body');
+    ok(g.hitTest(v, ox, v.y + 0.3, oz, 0, 0, -1, 99) < 99 && g._zone === 2, 'a shot at the knees did not hit the legs');
+    ok(g.hitTest(v, ox, v.y + 2.3, oz, 0, 0, -1, 99) === Infinity, 'a shot over the head hit');
+    v.armor = 20;
+    g.hurt(v, shooter, 30, { how: 'gun', w: 'striker' });
+    ok(Math.abs(v.hp - 85) < 1e-6 && Math.abs(v.armor - 5) < 1e-6, 'armour did not soak half: hp ' + v.hp + ' armour ' + v.armor);
+    const mate = g.actors.find(a => a.team === 1 && a !== v);
+    const before = v.hp;
+    g.hurt(v, mate, 50, { how: 'gun', w: 'striker' });
+    ok(v.hp === before, 'friendly fire hurt');
+    v.protect = 30;
+    g.hurt(v, shooter, 50, { how: 'gun', w: 'striker' });
+    ok(v.hp === before, 'spawn protection did not protect');
+    v.protect = 0;
+    g.hurt(v, shooter, 999, { how: 'gun', w: 'striker', head: true });
+    ok(!v.alive && shooter.stats.k === 1 && shooter.stats.hs === 1 && g.teamScore[0] === 1, 'a kill was not counted');
+  }
+
+  /* Whole matches, bots in every place (yours too): every mode ends, on
+     its own terms, with nobody at NaN and nobody inside a wall. */
+  const WON = { win: 1, lose: 1, draw: 1 };
+  function match(mode, map, seed, diff) {
+    const g = new F({ seed: seed, mode: mode, map: map, difficulty: diff || 'normal', autostart: true });
+    g.me.bot = new PV.FpsBot(g, g.me);
+    let lost = 0, walled = 0;
+    const cap = (g.rules.rounds ? g.rules.time * (g.rules.limit * 2) + 60 : g.rules.time + 30) * 60;
+    while (!g.isOver() && g.tick < cap) {
+      g.advance();
+      if (g.tick % 45) continue;
+      for (const a of g.actors) {
+        if (![a.x, a.y, a.z, a.yaw, a.pitch, a.hp].every(Number.isFinite)) lost++;
+        if (a.alive && g.world.blocked(a.x, a.y + 0.05, a.z, a.r - 0.02, a.h - 0.1)) walled++;
+      }
+    }
+    ok(g.isOver(), mode + '/' + map + ': never ended');
+    ok(WON[g.result], mode + '/' + map + ': ended with no result');
+    ok(lost === 0, mode + '/' + map + ': ' + lost + ' soldiers stood nowhere');
+    ok(walled === 0, mode + '/' + map + ': ' + walled + ' soldiers stood inside a wall');
+    return g;
+  }
+  const modes = D.MODE_KEYS;
+  let n = 0;
+  const flagCaps = [0, 0], sndSides = [0, 0];
+  for (const mode of modes) {
+    for (let k = 0; k < 7 * scale; k++) {
+      const map = MAPS.KEYS[(k + modes.indexOf(mode)) % MAPS.KEYS.length];
+      const g = match(mode, map, 100 + n++);
+      const lim = g.rules.limit;
+      if (mode === 'tdm') ok(g.teamScore.some(s => s >= lim) || g.timeLeft === 0, 'tdm ended short of its limit and its clock');
+      if (mode === 'ffa') ok(g.standings()[0].stats.k >= lim || g.timeLeft === 0, 'ffa ended short of its limit and its clock');
+      if (mode === 'gun') ok(g.standings()[0].gun >= D.LADDER.length || g.timeLeft === 0, 'the gun race ended with nobody through the ladder');
+      if (mode === 'dom') ok(g.teamScore.some(s => s >= lim) || g.timeLeft === 0, 'domination ended short');
+      if (mode === 'snd' || mode === 'elim') {
+        ok(g.roundWins.some(r => r >= lim) || g.round >= lim * 2 - 1, mode + ': ended before anybody had the rounds');
+        if (mode === 'snd') sndSides[g.roundWins[0] > g.roundWins[1] ? 0 : 1]++;
+      }
+      if (mode === 'ctf') { flagCaps[0] += g.teamScore[0]; flagCaps[1] += g.teamScore[1]; }
+    }
+  }
+  ok(flagCaps[0] + flagCaps[1] > 0, 'capture the flag: in ' + (7 * scale) + ' matches, not one flag was taken home');
+  ok(sndSides[0] > 0 && sndSides[1] > 0, 'search and destroy: one side won every match ' + sndSides);
+
+  /* A match replays from its seed and its inputs: the same scripted
+     player, twice, gives the same match to the tick. */
+  function scripted(seed) {
+    const g = new F({ seed: seed, mode: 'tdm', map: 'depot', autostart: true });
+    const H = F.HOLD;
+    for (let i = 0; i < 60 * 40; i++) {
+      if (i % 90 === 0) g.input({ hold: (i / 90) % 2 ? H.fwd | H.fire : H.left | H.ads });
+      if (i % 37 === 0) g.input({ look: [0.21, (i % 74 ? 0.02 : -0.02)] });
+      if (i % 240 === 0) g.input('jump');
+      if (i % 600 === 300) g.input('nade');
+      g.advance();
+    }
+    return JSON.stringify([g.tick, g.teamScore, g.actors.map(a => [a.x.toFixed(4), a.z.toFixed(4), a.hp.toFixed(3), a.stats.k, a.stats.d])]);
+  }
+  ok(scripted(424242) === scripted(424242), 'the same seed and inputs gave two different matches');
+
+  /* Difficulty is the bots' hands. One bot, facing a player who stands in
+     the open fifteen metres off, on Depot's clear strip: the median time
+     to the kill goes down from easy to normal to hard. */
+  function duel(diff, seed) {
+    const g = new F({ seed: seed, mode: 'tdm', map: 'depot', difficulty: diff, autostart: true });
+    while (g.phase !== 'live') g.advance();
+    const bot = g.actors.find(a => a.team === 1);
+    for (const a of g.actors) if (a !== g.me && a !== bot) { a.alive = false; a.respawnT = -1; }
+    Object.assign(g.me, { x: 28.5, z: 9.5, y: 0, protect: 0 });
+    Object.assign(bot, { x: 13.5, z: 9.5, y: 0, yaw: Math.PI / 2 + 0.3, protect: 0 });
+    bot.bot.reset();
+    const t0 = g.tick;
+    while (g.me.alive && g.tick - t0 < 60 * 20) g.advance();
+    return g.tick - t0;
+  }
+  const median = diff => { const ts = []; for (let s = 1; s <= 5 + 4 * scale; s++) ts.push(duel(diff, s * 31)); ts.sort((p, q) => p - q); return ts[ts.length >> 1]; };
+  const me = { easy: median('easy'), normal: median('normal'), hard: median('hard') };
+  ok(me.easy > me.normal && me.normal > me.hard, 'the bots were not quicker from easy to hard: ' + JSON.stringify(me));
+  ok(me.hard > 20 && me.easy < 60 * 6, 'a duel took an unreasonable time: ' + JSON.stringify(me));
+});
+
+section('strike squad — the lobby: coins, the armory, missions and crates', () => {
+  const M = PV.FpsMeta, D = PV.FpsData;
+  const m = M.fresh();
+  ok(m.weapons.join() === 'striker,p9,knife' && m.coins > 0, 'a fresh save is not the starter kit');
+  // Nothing is bought without the rank or the coins.
+  ok(!M.shop.buyWeapon(m, 'rail'), 'a rank-20 gun was bought at rank 1');
+  m.coins = 100;
+  ok(!M.shop.buyWeapon(m, 'viper'), 'a gun was bought without the coins');
+  m.xp = 1e6; m.coins = 1e6;
+  ok(M.rank(m).level > 20, 'a million XP is not past rank 20');
+  ok(M.shop.buyWeapon(m, 'rail') && M.shop.equip(m, 'rail') && m.kit.primary === 'rail', 'the rail could not be bought and carried');
+  ok(!M.shop.buyWeapon(m, 'rail'), 'a gun was bought twice');
+  for (let i = 0; i < 7; i++) M.shop.upgrade(m, 'rail', 'dmg');
+  ok(m.up.rail.dmg === D.UP_MAX, 'upgrades went past the top: ' + m.up.rail.dmg);
+  ok(!M.shop.fit(m, 'rail', 'muzzle', 'supp'), 'an attachment was fitted before it was bought');
+  ok(M.shop.buyAtt(m, 'muzzle', 'supp') && M.shop.fit(m, 'rail', 'muzzle', 'supp'), 'a bought suppressor would not fit');
+  ok(!M.shop.fit(m, 'striker', 'optic', 'x8'), 'an 8x scope went on a rifle');
+  ok(M.shop.buyCamo(m, 'gold') && M.shop.dress(m, 'rail', 'camo', 'gold'), 'the gold camo would not go on');
+  ok(M.shop.buySkill(m, 'radar') && M.shop.toggleSkill(m, 'radar') && m.kit.skills.length === 2, 'a skill would not go in the kit');
+  ok(M.shop.buyGear(m, 'body', 'plate') && M.shop.wear(m, 'body', 'plate'), 'the plate carrier would not go on');
+  const lo = M.loadout(m);
+  ok(lo.primary.id === 'rail' && lo.primary.own.att.muzzle === 'supp' && lo.primary.camo === 'gold' && lo.gear.body === 'plate', 'the loadout did not carry what was bought');
+  const race = M.raceKit(m);
+  ok(!race.primary.own.up.dmg && !race.primary.own.att.muzzle && !race.gear.body, 'a race kit kept its upgrades');
+
+  // The record is rebuilt, never adopted: a forged gun, a level past the
+  // top, a camo nobody sells, and coins past the ceiling.
+  const forged = JSON.parse(JSON.stringify(m));
+  forged.weapons.push('bfg9000'); forged.up.rail.dmg = 99; forged.camos.push('rainbow');
+  forged.coins = 1e15; forged.kit.primary = 'bfg9000'; forged.fit.striker = { optic: 'x8' };
+  forged.__proto__polluted = 1;
+  const c = M.clean(forged);
+  ok(c.weapons.indexOf('bfg9000') < 0 && c.up.rail.dmg === D.UP_MAX && c.camos.indexOf('rainbow') < 0, 'a forged record was believed');
+  ok(c.coins <= 1e9 && c.kit.primary === 'striker' && !c.fit.striker.optic, 'a forged kit or coin count survived');
+  ok(M.clean('nonsense') === undefined && M.clean(null) === undefined, 'a record that is not an object was rebuilt');
+
+  // Missions: three different ones a day and a week, the same all day.
+  const day = new Date(2026, 8, 25, 10), later = new Date(2026, 8, 25, 23), next = new Date(2026, 8, 26, 1);
+  const a = M.missions(M.fresh(), day), b = M.missions(M.fresh(), later), z = M.missions(M.fresh(), next);
+  ok(a.daily.length === 3 && new Set(a.daily.map(x => x.id)).size === 3, 'a day did not have three different missions');
+  ok(a.daily.map(x => x.id).join() === b.daily.map(x => x.id).join(), 'the missions changed within a day');
+  ok(a.weekly.map(x => x.id).join() === z.weekly.map(x => x.id).join(), 'the weekly missions changed overnight');
+  // A match banks coins, XP and progress; a race banks nothing.
+  const fake = { result: 'win', me: { stats: { k: 12, d: 3, a: 2, hs: 5, caps: 1, flags: 0, returns: 0, plants: 0, defuses: 0, score: 1900, melee: 1, nade: 0, dmg: 1500, best: 6, kc: { ar: 11 } } } };
+  const mm = M.fresh();
+  const before = mm.coins;
+  const got = M.bank(mm, fake, false, day);
+  ok(got.coins === M.rewards(fake).coins && mm.coins === before + got.coins && mm.xp === got.xp, 'the match was not banked');
+  ok(mm.life.kills === 12 && mm.life.wins === 1 && mm.dp.kills === 12 && mm.dp.streak === 6, 'mission progress was not counted');
+  ok(M.rewards(fake, true).coins === 0 && M.rewards(fake, true).xp === 0, 'a race paid out');
+  // Crates: one for every 25 kills, and what is in one is new to you.
+  mm.life.kills = 60;
+  ok(M.crates(mm).killer === 2, 'sixty kills did not make two crates');
+  let r = 0.3;
+  const prize = M.openCrate(mm, 'killer', () => (r = (r * 9301 + 49297) % 233280 / 233280));
+  ok(prize && (prize.kind === 'coins' || mm[prize.kind === 'camo' ? 'camos' : 'charms'].indexOf(prize.id) >= 0), 'a crate gave nothing');
+  ok(M.crates(mm).killer === 1, 'opening a crate did not use it up');
 });
 
 /* --------------------------------------------------------------- security */

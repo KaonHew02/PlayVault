@@ -654,6 +654,139 @@ main {
   .pchip .nm { max-width: 8ch; }
 }
 
+/* ---------------------------------------------------- strike squad (fps) */
+/* The lobby is the game's own glass over a 3D scene, like its HUD: dark in
+   both themes, so its colours are its own rather than the page's tokens. */
+
+.fps-box { position: relative; }
+.fps-box .fps-hud { position: relative; z-index: 1; cursor: crosshair; }
+.fps-gl { position: absolute; left: 1px; top: 1px; border-radius: 9px; pointer-events: none; }
+.fps-box:fullscreen { background: #000; align-items: center; justify-content: center; }
+.fps-box:fullscreen .fps-hud { border: 0; border-radius: 0; }
+.fps-box:fullscreen .fps-gl { left: 0; top: 0; border-radius: 0; }
+
+.fps-lobby {
+  position: absolute; inset: 1px; z-index: 2; overflow: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px;
+  border-radius: 9px; color: #EAF0F7;
+  background: linear-gradient(180deg, rgba(8, 11, 16, .72), rgba(8, 11, 16, .92));
+}
+.fps-lobby[hidden] { display: none; }
+.fps-lobby .muted { color: #A5B2C2; }
+.fps-lobby .btn { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .22); color: #EAF0F7; }
+.fps-lobby .btn.primary { background: #F97316; border-color: #F97316; color: #14100C; font-weight: 700; }
+.fps-lobby .btn:disabled { opacity: .45; cursor: default; }
+.fps-lobby .btn.sm { padding: 5px 10px; font-size: 12.5px; }
+
+.fps-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fps-rank { display: flex; align-items: center; gap: 10px; }
+.fps-rank .badge {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 40px; height: 40px; border-radius: 10px; background: #F97316; color: #14100C;
+  font-weight: 800; font-size: 18px;
+}
+.fps-rank .who { display: flex; flex-direction: column; gap: 3px; min-width: 150px; }
+.fps-rank small { color: #A5B2C2; font-size: 11.5px; }
+.fps-rank .xp, .fps-mis .xp { display: block; height: 6px; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, .12); }
+.fps-rank .xp i, .fps-mis .xp i { display: block; height: 100%; background: #F97316; }
+.fps-coins { font-weight: 800; font-size: 18px; color: #FFD35A; font-variant-numeric: tabular-nums; }
+
+.fps-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid rgba(255, 255, 255, .12); }
+.fps-tab {
+  position: relative; background: none; border: 0; border-bottom: 2px solid transparent;
+  color: #A5B2C2; padding: 8px 12px; font: inherit; font-weight: 600; cursor: pointer;
+}
+.fps-tab:hover { color: #fff; }
+.fps-tab.on { color: #fff; border-bottom-color: #F97316; }
+.fps-tab .dot {
+  display: inline-flex; align-items: center; justify-content: center; margin-left: 5px;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  background: #F0503E; color: #fff; font-size: 11px;
+}
+.fps-body { display: flex; flex-direction: column; gap: 12px; }
+.fps-sec h5 { margin: 0 0 7px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #A5B2C2; }
+
+.fps-mission .mode { font-size: 22px; font-weight: 800; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fps-mission .mode small { font-size: 14px; font-weight: 600; color: #FFD35A; }
+.fps-kit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fps-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fps-slot, .fps-card, .fps-item {
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 10px; padding: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.fps-slot { align-items: flex-start; }
+.fps-slot small, .fps-card small, .fps-item small { color: #A5B2C2; font-size: 11.5px; }
+.fps-slot:hover, .fps-card:hover, .fps-item:hover { border-color: rgba(249, 115, 22, .7); }
+.fps-card.on, .fps-item.on { border-color: #F97316; background: rgba(249, 115, 22, .15); }
+.fps-card.locked, .fps-item.locked, .fps-chip.locked, .fps-swatch.locked { opacity: .5; }
+.fps-slot .icons { display: flex; gap: 8px; flex-wrap: wrap; }
+.fps-slot .sk { font-weight: 700; }
+.fps-perks { margin: 0; color: #7FE0A0; font-size: 13px; }
+.fps-deploy { align-self: center; min-width: 220px; padding: 12px 30px; font-size: 18px; letter-spacing: .06em; }
+.fps-keys { text-align: center; margin: 0; }
+
+.fps-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.fps-guns { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.fps-card { align-items: center; text-align: center; }
+.fps-gun { display: block; max-width: 100%; }
+.fps-gun.dim { filter: grayscale(1) brightness(.75); }
+.fps-detail { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); }
+.fps-hero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.fps-hero h4 { margin: 0; font-size: 20px; }
+.fps-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+.fps-stat { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; font-size: 12.5px; color: #C7D1DC; }
+.fps-stat .track { position: relative; display: block; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255, 255, 255, .1); }
+.fps-stat .track i, .fps-stat .track b { position: absolute; left: 0; top: 0; bottom: 0; }
+.fps-stat .track b { z-index: 0; background: #F97316; }
+.fps-stat .track i { z-index: 1; background: #B9C6D4; }
+.fps-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.fps-up { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
+.fps-up .pips i { display: inline-block; width: 18px; height: 8px; margin-right: 4px; border-radius: 2px; background: rgba(255, 255, 255, .15); }
+.fps-up .pips i.on { background: #F97316; }
+.fps-up .max { color: #7FE0A0; font-weight: 700; font-size: 12px; }
+.fps-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 3px 0; }
+.fps-opts .k { width: 96px; color: #A5B2C2; font-size: 13px; }
+.fps-chip {
+  background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px;
+  color: #EAF0F7; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.fps-chip:hover { border-color: #F97316; }
+.fps-chip.on { background: #F97316; border-color: #F97316; color: #14100C; font-weight: 700; }
+.fps-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.fps-swatch {
+  display: inline-flex; align-items: flex-end; justify-content: flex-end;
+  width: 36px; height: 36px; padding: 2px; border-radius: 8px; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, .2); background: #2F3237; color: #fff; font-size: 10px;
+}
+.fps-swatch.on { border-color: #F97316; box-shadow: 0 0 0 2px rgba(249, 115, 22, .45); }
+.fps-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 8px; }
+.fps-item .sw { display: block; width: 22px; height: 22px; border-radius: 6px; }
+.fps-item .big { font-size: 24px; line-height: 1.1; }
+.fps-item .price { color: #FFD35A; font-weight: 700; font-size: 12.5px; }
+.fps-item.crate { cursor: default; }
+.fps-item.crate .btn { align-self: flex-start; margin-top: 4px; }
+.fps-mis { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.fps-mis .txt { display: flex; flex-direction: column; gap: 4px; }
+.fps-mis small { color: #A5B2C2; font-size: 11.5px; }
+.fps-mis.done { opacity: .6; }
+.fps-mis .ok { color: #7FE0A0; font-weight: 800; font-size: 18px; }
+.fps-set { display: grid; grid-template-columns: 150px 1fr 56px; align-items: center; gap: 10px; font-size: 13.5px; }
+.fps-set input { width: 100%; accent-color: #F97316; }
+.fps-set .v { color: #FFD35A; font-variant-numeric: tabular-nums; }
+.fps-toast {
+  position: sticky; bottom: 0; align-self: center; margin-top: auto;
+  padding: 8px 16px; border-radius: 999px; background: #F97316; color: #14100C; font-weight: 700;
+}
+
+@media (max-width: 759px) {
+  .fps-lobby { padding: 10px; }
+  .fps-kit, .fps-row, .fps-bars { grid-template-columns: 1fr; }
+  .fps-up { grid-template-columns: 90px 1fr auto; }
+  .fps-set { grid-template-columns: 1fr 56px; }
+  .fps-set .k { grid-column: 1 / -1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
