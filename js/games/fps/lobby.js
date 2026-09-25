@@ -63,7 +63,10 @@ window.PV = window.PV || {};
       else if (o.audio) o.audio.dry();
       render();
     }
-    function say(msg) { toast = msg; toastT = Date.now(); render(); }
+    function say(msg) {
+      toast = msg; toastT = Date.now(); render();
+      setTimeout(() => { if (Date.now() - toastT >= 3500) render(); }, 3600);
+    }
 
     function render() {
       PV.clear(root);
@@ -380,7 +383,10 @@ window.PV = window.PV || {};
     return {
       node: root,
       refresh(m) { if (m) meta = m; render(); },
-      show(on) { root.hidden = !on; if (on) render(); }
+      // Called every frame: redraw only when the panel comes back. Rebuilt
+      // each frame, a button was gone between press and release and no click
+      // ever landed — Deploy did nothing.
+      show(on) { const was = !root.hidden; root.hidden = !on; if (on && !was) render(); }
     };
   };
 
