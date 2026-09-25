@@ -14,6 +14,7 @@ what to do instead).
 node tools/serve.js 8099     # then open http://localhost:8099/index.dev.html
 node tools/smoke.js          # headless engine tests; [scale] for a longer run
 node tools/smoke.js --min    # ...the same tests against the minified source
+node tools/smoke.js --only "blend in"   # just the sections whose name has that in it
 node tools/build.js          # write js/playvault.min.js and the deployed index.html
 node tools/build-logo.mjs    # regenerate every logo asset
 ```
@@ -25,14 +26,14 @@ generated: it loads one bundle and is what GitHub Pages serves. Run
 
 ## What is built
 
-**All thirteen games on the roster are playable, alone or with friends.**
+**All fourteen games on the roster are playable, alone or with friends.**
 Nothing is a stub.
 
 | family | games |
 | --- | --- |
 | board | 五子棋 · 黑白棋 · Chess · 中国象棋 |
 | puzzle | Sudoku · Spider Solitaire · Mahjong Solitaire |
-| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush · Strike Squad |
+| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush · Strike Squad · Blend In |
 
 Strike Squad is a first-person shooter against bots: seven modes on eight
 maps, twenty-two guns with upgrades, attachments, camos and keychains,
@@ -40,6 +41,14 @@ clothes, skills, and daily and weekly missions. It is the biggest game here
 by a distance — fourteen files in `js/games/fps/`, raw WebGL like Crowd
 Rush — and `docs/GAMES.md` (phase 25) is the record of how it was built
 and measured.
+
+Blend In is paint-to-hide hide and seek: six hiders paint their bodies to
+match a wall, a floor or a shelf and hold still, two seekers hunt them with
+water guns. Everything a bot does goes through what it could see — its
+eyes compare each bit of a hider with what is behind it, lit as the screen
+lights it — so a good paint job hides you from the bots for the reason it
+hides you from a person. Fourteen files in `js/games/hide/`; `docs/GAMES.md`
+(phase 26) is the record.
 
 Each family sits on its own engine contract, and each contract has a shared
 harness so a game only writes its rules and its painting.
@@ -188,7 +197,8 @@ is the canonical note, and fixes to one copy belong in the other.
 
 ### Testing
 
-`node tools/smoke.js` runs ~185,000 checks in about five seconds. It drives
+`node tools/smoke.js` runs about 2.5 million checks in a minute or so (the
+bot matches and rounds of the two 3D shooters are most of it). It drives
 `apply()` and the ticker, never the internals — driving `handle()` directly
 walks past the legality gate and tests a path no player ever takes, which is
 how a green headless run and a broken browser happen at the same time.

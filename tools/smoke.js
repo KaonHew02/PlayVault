@@ -23,7 +23,11 @@ const ROOT = path.join(__dirname, '..');
 /* The scale is the first bare number on the command line, so flags such as
    --min can sit anywhere without turning it into NaN and quietly running
    every loop zero times. */
-const scaleArg = process.argv.slice(2).filter(a => a[0] !== '-')[0];
+/* `--only <text>` runs the sections whose name contains <text> and skips
+   the rest: a game's own tests while working on it, not the whole suite. */
+const onlyAt = process.argv.indexOf('--only');
+const ONLY = onlyAt >= 0 ? String(process.argv[onlyAt + 1] || '') : '';
+const scaleArg = process.argv.slice(2).filter((a, i, all) => a[0] !== '-' && all[i - 1] !== '--only')[0];
 const scale = Math.max(1, Number(scaleArg || 1) || 1);
 
 /* ------------------------------------------------------------------- shim */
@@ -69,6 +73,8 @@ const FILES = [
   'js/games/towerdef/maps.js', 'js/games/towerdef/engine.js',
   'js/games/fps/data.js', 'js/games/fps/maps.js', 'js/games/fps/world.js', 'js/games/fps/bots.js',
   'js/games/fps/engine.js', 'js/games/fps/meta.js',
+  'js/games/hide/data.js', 'js/games/hide/body.js', 'js/games/hide/maps.js', 'js/games/hide/world.js',
+  'js/games/hide/bots.js', 'js/games/hide/engine.js', 'js/games/hide/meta.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
   'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
@@ -99,6 +105,7 @@ function ok(cond, msg) {
   if (!cond) { failures++; console.error('  FAIL  ' + msg); }
 }
 function section(name, fn) {
+  if (ONLY && name.indexOf(ONLY) < 0) return;
   const t0 = Date.now();
   const before = failures;
   fn();
@@ -110,6 +117,7 @@ function section(name, fn) {
    fetch(). These run after every other section, in order, before the report. */
 const later = [];
 function sectionAsync(name, fn) {
+  if (ONLY && name.indexOf(ONLY) < 0) return;
   later.push(async () => {
     const t0 = Date.now();
     const before = failures;
@@ -1719,6 +1727,276 @@ section('strike squad — the lobby: coins, the armory, missions and crates', ()
   const prize = M.openCrate(mm, 'killer', () => (r = (r * 9301 + 49297) % 233280 / 233280));
   ok(prize && (prize.kind === 'coins' || mm[prize.kind === 'camo' ? 'camos' : 'charms'].indexOf(prize.id) >= 0), 'a crate gave nothing');
   ok(M.crates(mm).killer === 1, 'opening a crate did not use it up');
+});
+
+/* --------------------------------------------------------------- blend in */
+
+section('blend in — surfaces, the body and its paint, the maps', () => {
+  const D = PV.HideData, B = PV.HideBody, W = PV.HideWorld;
+
+  /* Every surface is a grid of real colours, and sample() reads the grid:
+     the colour the picker and the bots get is the texel the screen shows. */
+  for (const k of D.MAT_KEYS) {
+    const m = D.MATS[k], px = D.texels(k);
+    ok(px.length === m.res * m.res * 3 && px.every(v => v >= 0 && v <= 255), k + ': a broken texel grid');
+    const c = D.sample(k, 0.37, 0.61);
+    const i = Math.floor(0.37 * m.res), j = Math.floor(0.61 * m.res), o = (j * m.res + i) * 3;
+    ok(c[0] === px[o] && c[1] === px[o + 1] && c[2] === px[o + 2], k + ': sample() is not the texel');
+  }
+  ok(Math.abs(D.shade(0, 1, 0) - (0.7 + 0.22 * D.SUN[1] + 0.08)) < 1e-9, 'the light is not the one the shaders use');
+
+  /* The atlas: parts inside it, never on top of each other. */
+  const seenT = new Uint8Array(B.TN);
+  let clash = 0;
+  for (const p of B.PARTS) {
+    const r = p.rect;
+    ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= B.AT && r.y + r.h <= B.AT, 'a part runs off the atlas');
+    for (let j = 0; j < r.h; j++) for (let i = 0; i < r.w; i++) { const k = (r.y + j) * B.AT + r.x + i; if (seenT[k]) clash++; seenT[k] = 1; }
+  }
+  ok(clash === 0, clash + ' texels belong to two parts');
+  ok(B.ALL.length > 9000 && Array.from(B.T_REST).every(Number.isFinite), 'the texels are not all somewhere');
+
+  /* A dab paints what it touches and nothing it does not: not the back
+     through the chest, not beyond its radius. */
+  {
+    const paint = B.newPaint();
+    const hit = B.rayBody(B.REST, 0, 1.2, -3, 0, 0, 1, 10);
+    ok(hit && hit.part === 0 && Math.abs(hit.z + 0.14) < 0.02, 'a ray from in front did not hit the chest: ' + JSON.stringify(hit && [hit.part, hit.z]));
+    const q = hit.rest;
+    const n = B.dab(paint, q[0], q[1], q[2], q[3], q[4], q[5], 0.06, [200, 20, 30]);
+    ok(n > 20, 'a dab painted almost nothing: ' + n);
+    ok(paint[hit.texel * 3] === 200 && paint[hit.texel * 3 + 1] === 20, 'the texel under the dab is not the dab\'s colour');
+    let far = 0, back = 0;
+    for (const k of B.ALL) {
+      if (paint[k * 3] === 242) continue;
+      const o = k * 6, d = Math.hypot(B.T_REST[o] - q[0], B.T_REST[o + 1] - q[1], B.T_REST[o + 2] - q[2]);
+      if (d > 0.061) far++;
+      if (B.T_REST[o + 5] > 0.3) back++;
+    }
+    ok(far === 0 && back === 0, 'a dab reached ' + far + ' texels past its radius and ' + back + ' on the back');
+    B.dab(paint, q[0], q[1], q[2], q[3], q[4], q[5], 0.06, null, 1);
+    ok(paint[hit.texel * 3] === 242, 'water did not wash the paint off');
+  }
+
+  /* Every pose stands on the floor, and every one is finite. */
+  for (const p of D.POSES) {
+    const m = B.pose(B.newMats(), { x: 0, y: 0, z: 0, yaw: 0.3, pose: p.id, prev: p.id, blend: 1, still: true });
+    let lo = Infinity;
+    const o = [0, 0, 0, 0, 0, 0];
+    for (const k of B.ALL) { B.texelWorld(m, k, o); lo = Math.min(lo, o[1]); }
+    ok(Math.abs(lo) < 0.03, p.id + ': the pose floats or sinks: ' + lo.toFixed(3));
+    ok(Array.from(m).every(Number.isFinite), p.id + ': a bone went to NaN');
+  }
+
+  /* Maps: everybody starts somewhere they can stand, the seekers can walk
+     to where the hiders start, every hiding spot can be reached, and the
+     warm-up room is walled off from the map. */
+  for (const key of PV.HideMaps.KEYS) {
+    const w = new W(key);
+    const standable = p => { const y = w.floorAt(p[0], p[1], 4, 0.05); return y > -5 && !w.blocked(p[0], y + 0.03, p[1], 0.28, 1.7); };
+    ok(w.hide.length >= 6 && w.hide.every(standable), key + ': a hider starts inside something');
+    ok(w.seek.length >= 2 && w.seek.every(standable), key + ': a seeker starts inside something');
+    ok(w.lobbyRing.every(standable), key + ': somebody in the warm-up room starts inside something');
+    const h = w.hide[0], s = w.seek[0], l = w.lobbyRing[0];
+    ok(!!w.path(s[0], s[1], null, h[0], h[1], null), key + ': the seekers cannot walk to the hiders');
+    const lp = w.path(h[0], h[1], null, l[0], l[1], null);
+    ok(!lp || Math.hypot(lp[lp.length - 1].x - l[0], lp[lp.length - 1].z - l[1]) > 3, key + ': the warm-up room opens onto the map');
+    const spots = PV.HideBot.spots(w);
+    ok(spots.length > 60, key + ': only ' + spots.length + ' places to hide');
+    const kinds = new Set(spots.map(x => x.kind));
+    ok(kinds.has('wall') && kinds.has('floor') && kinds.has('low'), key + ': a kind of hiding place is missing: ' + Array.from(kinds));
+    let stuck = 0;
+    for (const sp of spots) if (!w.path(h[0], h[1], 0, sp.x, sp.z, sp.kind === 'climb' ? sp.base : sp.y)) stuck++;
+    ok(stuck === 0, key + ': ' + stuck + ' hiding places nobody can walk to');
+    // A ray hits a face, and the face has a colour.
+    const t0 = w.ray(h[0], 1.2, h[1], 1, 0, 0, 80);
+    ok(t0 < 80 && !!w.colourAt(h[0] + t0, 1.2, h[1], [0, 0, 0]), key + ': a ray across the map hit nothing with a colour');
+  }
+});
+
+section('blend in — paint, water, rounds and replays', () => {
+  const D = PV.HideData, B = PV.HideBody, G = PV.HideGame, H = G.HOLD;
+  const short = (o) => new G(Object.assign({ hideTicks: 60 * 30, huntTicks: 60 * 45 }, o));
+
+  /* The brush through the engine: a dab lands, a fill fills, reset whitens,
+     and nonsense is refused. A seeker cannot paint once the round is on. */
+  {
+    const g = short({ seed: 5, map: 'school', role: 'hider', autostart: true });
+    const me = g.me;
+    const hit = B.rayBody(B.REST, 0, 1.2, -3, 0, 0, 1, 10), q = hit.rest;
+    g.input({ paint: [q[0], q[1], q[2], q[3], q[4], q[5], 0.05, 10, 200, 30] });
+    g.advance();
+    ok(me.paint[hit.texel * 3 + 1] === 200, 'a dab through the engine did not land');
+    const v = me.paintVer;
+    g.input({ paint: [99, 0, 0, 0, 0, 1, 0.05, 1, 2, 3] });
+    g.input({ paint: [q[0], q[1], q[2], 0, 0, 0, 0.05, 1, 2, 3] });
+    g.input({ paint: 'lots' });
+    g.advance();
+    ok(me.paintVer === v, 'a dab off the body or with no facing was taken');
+    g.input({ fill: [40, 50, 60] }); g.advance();
+    ok(B.ALL.every(k => me.paint[k * 3] === 40 && me.paint[k * 3 + 2] === 60), 'fill did not cover the whole body');
+    g.input('reset'); g.advance();
+    ok(me.paint[hit.texel * 3] === 242, 'reset did not go back to white');
+    g.input({ fill: [999, -5, 'x'] }); g.advance();
+    ok(me.paint[0] >= 0 && me.paint[0] <= 255 && me.paint[hit.texel * 3 + 1] === 0 && me.paint[hit.texel * 3] === 255, 'a fill out of range was not clamped');
+    const s = short({ seed: 6, map: 'school', role: 'seeker', autostart: true });
+    while (s.phase !== 'hunt') s.advance();
+    const before = s.me.paintVer;
+    s.input({ fill: [1, 2, 3] }); s.advance();
+    ok(s.me.paintVer === before, 'a seeker painted during the hunt');
+    const l = new G({ seed: 7, map: 'park' });
+    ok(l.phase === 'lobby' && l.canPaint(l.me), 'nobody can paint in the lobby');
+    l.input({ role: 'seeker' }); l.input('start'); l.advance();
+    ok(l.phase === 'intro' && l.me.role === 'seeker', 'the lobby\'s choice of role was not kept');
+  }
+
+  /* Water: a hider out in the open, a seeker hosing them. Every droplet
+     that lands soaks and washes; enough of them and they are found. */
+  {
+    const g = short({ seed: 11, map: 'gallery', role: 'seeker', autostart: true });
+    for (const a of g.actors) a.bot = a === g.me ? null : a.bot;
+    while (g.phase !== 'hunt') g.advance();
+    const v = g.hiders()[0];
+    for (const a of g.actors) if (a !== g.me && a !== v) { a.bot = null; a.ctl.mx = a.ctl.mz = 0; }
+    v.bot = null; v.ctl.mx = v.ctl.mz = 0;
+    g.placeAt(v, 16, 18.5); g.placeAt(g.me, 16, 23.5);
+    for (const a of g.actors) if (a !== g.me && a !== v) g.placeAt(a, a.role === 'seeker' ? 3 : 30, 3);
+    B.fill(v.paint, [120, 80, 40]); v.paintVer++;
+    g.me.lookYaw = 0; g.me.lookPitch = -0.06;
+    g.input({ hold: H.fire });
+    let hits = 0, t = 0;
+    while (!v.found && t++ < 240) { g.advance(); hits = g.me.stats.hits; }
+    ok(v.found && g.foundCount === 1 && g.me.stats.finds === 1, 'a hider hosed from five metres was never found (hits ' + hits + ')');
+    ok(hits >= Math.ceil(1 / D.RULES.soakPerDrop) - 1, 'found after only ' + hits + ' drops');
+    ok(g.events.some(e => e.k === 'found' && e.v === v.id), 'no event for the find');
+    let washed = 0;
+    for (const k of B.ALL) if (v.paint[k * 3] !== 120) washed++;
+    ok(washed > 30, 'the water washed no paint off');
+    ok(g.me.tank < D.RULES.tank, 'the tank never ran down');
+    const w0 = g.me.tank;
+    g.input({ hold: 0 });
+    for (let i = 0; i < 120; i++) g.advance();
+    ok(g.me.tank > w0, 'the tank did not fill again');
+  }
+
+  /* Climbing: a hider pressed to a tall wall goes up it, holds on, and
+     comes off with a jump. */
+  {
+    const g = short({ seed: 12, map: 'gallery', role: 'hider', autostart: true });
+    while (g.phase !== 'hide') g.advance();
+    const me = g.me;
+    g.placeAt(me, 6, 0.85); me.yaw = me.lookYaw = 0;             // facing the north wall
+    g.input('jump'); g.advance();
+    ok(!!me.climb, 'a jump against a wall did not start a climb');
+    g.input({ hold: H.fwd });
+    for (let i = 0; i < 50; i++) g.advance();
+    ok(me.y > 1.3 && !!me.climb, 'did not climb: y ' + me.y.toFixed(2));
+    const y = me.y;
+    g.input({ hold: 0 });
+    for (let i = 0; i < 60; i++) g.advance();
+    ok(Math.abs(me.y - y) < 1e-6, 'a climber let go of a wall on its own');
+    g.input('jump');
+    for (let i = 0; i < 90; i++) g.advance();
+    ok(!me.climb && me.ground && me.y < 0.05, 'jumping off a wall did not bring the climber down');
+  }
+
+  /* A careful painter is harder to see than a white body: judged the way a
+     seeker judges, from out in the room. */
+  {
+    const g = short({ seed: 21, map: 'school', role: 'seeker', difficulty: 'hard', autostart: true });
+    while (g.phase !== 'hide') g.advance();
+    const v = g.hiders()[0];
+    const sp = PV.HideBot.spots(g.world).find(s => s.kind === 'wall' && s.busy < 0.05);
+    g.placeAt(v, sp.x, sp.z); v.yaw = sp.yaw; v.lock = true; B.pose(v.mats, v);
+    v.bot.spot = sp; v.bot.beginPaint(g);
+    while (!v.bot.paintSome(g)) { /* paint it all */ }
+    const judge = () => {
+      const seen = [];
+      const bot = g.actors.find(a => a.role === 'seeker' && a !== g.me).bot;
+      const hook = PV.HideBot.debug;
+      PV.HideBot.debug = (b, h, c) => { if (h === v) seen.push(c.m); };
+      const s = bot.a;
+      s.x = sp.x + sp.nx * 4.5; s.z = sp.z + sp.nz * 4.5; s.y = sp.y;
+      s.lookYaw = Math.atan2(sp.x - s.x, -(sp.z - s.z)); s.lookPitch = -0.1;
+      bot.perceive(g);
+      PV.HideBot.debug = hook;
+      return seen.length ? seen[0] : 0;
+    };
+    const painted = judge();
+    B.fill(v.paint, D.WHITE);
+    const white = judge();
+    ok(painted < 0.12 && white > painted * 3, 'paint that matches the wall did not hide: ' + painted.toFixed(3) + ' against white ' + white.toFixed(3));
+  }
+
+  /* Whole rounds, bots in every place (yours too), on every map: each one
+     ends on its own terms, with nobody at NaN and nobody inside a wall.
+     Half of them are sharp-eyed seekers against sloppy painters and half
+     the other way round, and the first half must find more: difficulty is
+     the bots' eyes and brushes, and it has to point the right way. */
+  const found = [0, 0];
+  let rounds = 0;
+  for (const key of PV.HideMaps.KEYS) for (const side of [0, 1]) {
+    const g = short({ seed: 300 + key.length * 7 + side, map: key, autostart: true });
+    g.seekDiff = side ? 0 : 2; g.hideDiff = side ? 2 : 0;
+    g.me.bot = new PV.HideBot(g, g.me);
+    let lost = 0, walled = 0;
+    while (!g.isOver() && g.tick < 60 * 120) {
+      g.advance();
+      if (g.tick % 45) continue;
+      for (const a of g.actors) {
+        if (![a.x, a.y, a.z, a.yaw, a.lookYaw].every(Number.isFinite)) lost++;
+        if (!a.found && !a.climb && g.world.blocked(a.x, a.y + 0.05, a.z, a.r - 0.04, 1.2)) walled++;
+      }
+    }
+    ok(g.isOver() && (g.result === 'hiders' || g.result === 'seekers'), key + ': the round never ended');
+    ok(lost === 0, key + ': ' + lost + ' players stood nowhere');
+    ok(walled === 0, key + ': ' + walled + ' players stood inside a wall');
+    ok(g.hiders().length === 6 && g.seekers().length === 2, key + ': not six hiders and two seekers');
+    ok(g.hiders().every(a => !a.bot || a.bot.state === 'hidden' || a.found || a.bot.state === 'flee' || a.bot.state === 'paint' || a.bot.state === 'go'), key + ': a hider bot lost its way');
+    rounds++;
+    found[side] += g.hiders().filter(a => a.found).length;
+    ok(g.myResult() === 'win' || g.myResult() === 'lose', key + ': no result for the player');
+  }
+  ok(found[0] > found[1] && found[0] > 0 && found[0] < rounds * 3, 'hard seekers against easy hiders found ' + found[0] + ', easy against hard ' + found[1] + ', of ' + rounds * 3);
+
+  /* A round replays from its seed and its inputs. */
+  function scripted(seed) {
+    const g = short({ seed: seed, map: 'market', role: 'hider', autostart: true });
+    for (let i = 0; i < 60 * 50; i++) {
+      if (i % 80 === 0) g.input({ hold: (i / 80) % 2 ? H.fwd : H.left | H.slow });
+      if (i % 33 === 0) g.input({ look: [0.17, 0.01] });
+      if (i % 200 === 0) g.input('jump');
+      if (i % 150 === 75) g.input({ paint: [0.05, 1.1, -0.14, 0, 0, -1, 0.08, i % 255, 90, 40] });
+      g.advance();
+    }
+    let sum = 0;
+    for (const a of g.actors) for (let k = 0; k < a.paint.length; k += 7) sum = (sum * 31 + a.paint[k]) >>> 0;
+    return JSON.stringify([g.tick, g.phase, sum, g.actors.map(a => [a.x.toFixed(4), a.z.toFixed(4), a.found, a.soak.toFixed(3)])]);
+  }
+  ok(scripted(4242) === scripted(4242), 'the same seed and inputs gave two different rounds');
+
+  /* What you keep: rewards never pay more for losing, the shop needs the
+     coins, and the record is rebuilt, never adopted. */
+  const M = PV.HideMeta;
+  const m = M.fresh();
+  ok(m.poses.join() === D.FREE_POSES.join() && m.blasters.join() === 'classic', 'a fresh save is not the free kit');
+  ok(!M.shop.buyPose(m, 'hero'), 'a pose was bought with no coins');
+  m.coins = 1000;
+  ok(M.shop.buyPose(m, 'hero') && m.poses.indexOf('hero') >= 0 && m.coins === 750, 'the hero pose could not be bought');
+  ok(!M.shop.buyPose(m, 'hero'), 'a pose was bought twice');
+  ok(M.shop.buyBlaster(m, 'gold') && m.blaster === 'gold' && M.shop.equip(m, 'classic') && m.blaster === 'classic', 'a water gun could not be bought and swapped');
+  const forged = JSON.parse(JSON.stringify(m));
+  forged.poses.push('moonwalk'); forged.blasters.push('laser'); forged.blaster = 'laser'; forged.coins = 1e15; forged.xp = -3;
+  const c = M.clean(forged);
+  ok(c.poses.indexOf('moonwalk') < 0 && c.blasters.indexOf('laser') < 0 && c.blaster === 'classic', 'a forged pose or gun was believed');
+  ok(c.coins <= 1e9 && c.xp === 0, 'forged coins or experience survived');
+  ok(M.clean('nope') === undefined && M.clean(null) === undefined, 'a record that is not an object was rebuilt');
+  const fakeWin = { diff: 1, huntT: 7200, huntTicks: 7200, result: 'hiders', me: { role: 'hider', found: false, stats: { finds: 0, survived: 0 } }, myResult: () => 'win' };
+  const fakeLose = { diff: 1, huntT: 1200, huntTicks: 7200, result: 'seekers', me: { role: 'hider', found: true, stats: { finds: 0, survived: 1200 } }, myResult: () => 'lose' };
+  ok(M.rewards(fakeWin).coins > M.rewards(fakeLose).coins && M.rewards(fakeWin).xp > M.rewards(fakeLose).xp, 'being found paid as well as surviving');
+  const mm = M.fresh();
+  const got = M.bank(mm, fakeWin);
+  ok(mm.xp === got.xp && mm.coins === got.coins && mm.life.rounds === 1 && mm.life.survived === 1 && mm.life.wins === 1, 'a round was not banked');
 });
 
 /* --------------------------------------------------------------- security */

@@ -7,7 +7,8 @@ dropped at the user's request, leaving one card solitaire on the roster.
 
 Spider Solitaire · Mahjong Solitaire · Sudoku · Tetris · Snake · Worm Arena ·
 Tower Defense · Chess · 象棋 · 五子棋 · 黑白棋 — plus Crowd Rush, added
-2026-09-22, and Strike Squad, a first-person shooter, added 2026-09-25.
+2026-09-22, Strike Squad, a first-person shooter, added 2026-09-25, and
+Blend In, paint-to-hide hide and seek, added the same day.
 Kart Racing was removed on 2026-09-22.
 
 ## Three families, three contracts
@@ -44,7 +45,7 @@ opponent, no turn order.
   solitaires need boards that can actually be finished, or players hit dead
   ones and blame the game.
 
-### 3. Real-time loop — Tetris, Snake, Worm Arena, Tower Defense, Crowd Rush, Strike Squad
+### 3. Real-time loop — Tetris, Snake, Worm Arena, Tower Defense, Crowd Rush, Strike Squad, Blend In
 
 A canvas and a fixed-timestep loop. Nothing here is turn-based, so nothing here
 uses the board contract.
@@ -85,6 +86,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **23** | Worm Arena redrawn | **2026-09-24** — "the worm look some ugly, redesign it and then the map i cant see the food clearly", with a screenshot. A new worm painter, and snacks that stand off the floor. No rule changed but how big the snacks are and how many. See below |
 | **24** | Five fixes to playing with friends | **2026-09-24** — found by walking every game through a room, asked for as "fix all four": Back froze or restarted a match, the board rematch card reset one board, a Snake race could never end, and Worm Arena's room opened with no mode picked. Then "fix the call it ranking too": a host who crashed first could call a race and take the medal. See below |
 | **25** | Strike Squad | **2026-09-25** — "i want add on game for fps shooter like this, just copy all the thing", with the crazygames *Hazmob FPS: Online Shooter* link. A new game: a first-person shooter against bots, with the reference's seven modes, eight maps, gun classes, upgrades, attachments, camos, keychains, clothes, skills, missions and crates. Hazmob's art, names and code are not copied. See below |
+| **26** | Blend In | **2026-09-25** — "and then oso add on paint to hide do like this linke, FULLY COPY IT", with the crazygames *Paint to Hide!* link. A new game: hide and seek in which hiders paint their bodies to match the map and seekers hunt them with water guns — the reference's colour wheel, Pick, Fill and Reset, brush sizes, poses, freecam, lock, wall climbing, first or third person seekers, six hiders against two seekers, 75 s to hide and 120 s to hunt, a table at the end, XP and coins. The reference's art, name and code are not copied. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -910,3 +912,110 @@ record is rebuilt, never adopted.
 Not built: online matches against people (a server), clans, leaderboards and
 the premium pass (a server, or money), the lucky wheel, and the reference's
 pick-up-and-throw back of a live grenade.
+
+### Phase 26 — Blend In
+
+The reference was played before a line was written: a live round on its
+web version, as a seeker, on its Subway and Cinema maps, with its paint
+panel, settings and end table opened. What it is, and where it is now:
+
+- **Hide and seek in paint.** Eight players: six hiders, two seekers. 75
+  seconds for the hiders to go into the map, paint themselves and hold
+  still while the seekers warm up in a walled-off room; then 120 seconds of
+  hunting with water guns. Seekers win if nobody is left. The warm-up room
+  is also the lobby before a round, as in the reference, with bots milling
+  about in splashes of colour.
+- **The paint panel is the reference's**: a colour wheel, a brightness bar,
+  the colour, then *Pick* (part colour), *Fill* (character) and *Reset*
+  (character), and the brush size with its dot. Click or drag on your own
+  body to paint it; the last few colours sit under the brush. *Pick* takes
+  the colour of whatever is clicked next — a wall, a floor, a poster, or
+  another player's paint.
+- **The reference's keys**: WASD, the mouse, Space to jump *or climb a wall*,
+  left click to paint or spray, E paint mode, V poses, Q freecam, F lock
+  position, O settings (mouse speed, a seeker's first- or third-person
+  view, volume, leave). Seekers are black with a red outline and hold a toy
+  water gun, first person by default.
+- **Six maps**: Subway, Cinema, School, Supermarket, Playground and Gallery,
+  each chosen for surfaces to match — plain walls, tiles with a green band,
+  a patterned carpet, shelves packed with product, grass, parquet, a
+  splattered studio floor — and places to be: against walls, curled by
+  counters, on the floor, up a wall.
+- **Fourteen poses** (six free, eight bought) and **eight water guns**
+  (one free), bought with coins; experience and a level, as the end card
+  shows them.
+
+Decisions:
+
+- **Surfaces are functions, sampled once.** Every material is a pure
+  function of (u, v) evaluated onto a small grid of texels (`data.js`). The
+  scene uploads that grid; the engine reads the same grid. So the colour
+  the picker gives you, the colour a bot paints itself, and the colour a
+  bot seeker compares you with are all the texel on screen.
+- **One light, no shadows.** `shade(normal)` in `data.js` is copied into the
+  shaders to the digit. A shadow that fell on the wall and not on you would
+  give you away through no fault of your paint; a body lit by the same rule
+  as the wall behind it, facing the same way, is the same colour on screen.
+- **The paint is a 128 × 128 atlas** of the body's ten capsules unrolled,
+  about 1.5 cm a texel, and a brush works in the body's REST pose, in three
+  dimensions: a dab paints every texel within its radius that faces the same
+  way. So a stroke runs across a sleeve's seam and a dab on the chest never
+  comes through on the back, whatever pose you are in. Water washes paint off
+  the same way, so a seeker's first hit shows as a white patch.
+- **Bots see; they never know.** A seeker bot looks at twenty points on
+  every hider in front of it and compares each with what is behind it from
+  its own eye, lit as the screen lights them; a bad match, movement, or a
+  body standing out from its background builds suspicion, faster close up
+  and in the middle of its view. A hiding bot paints itself with exactly
+  that: for each texel, what an eye out in the room sees behind it — so
+  stripes line up from there and are a little off from anywhere else, which
+  is what a seeker walking past can notice. Difficulty is the size of the
+  mismatch a seeker's eye can see, and how carefully a hider's brush works
+  (a careful one paints a shadowed side lighter to cancel the light).
+- **Hiding spots are found, not placed**: against every face tall enough to
+  cover a body, curled against the lower ones, clinging to walls, lying on
+  floors — each scored on how much of the map can see it and how busy the
+  background is. A poster of cans hides you from one angle only.
+- **The stream goes where the crosshair is.** Droplets leave the gun at the
+  hip and converge on the first thing along the line of sight: fired
+  parallel to it they passed 22 cm to the right of a side-on hider, who is
+  only 28 cm wide.
+
+What measuring found (bots in every place, `node`, the engine alone):
+
+- **Test sprays found everybody.** A seeker's "spray somewhere likely" was
+  aimed at the exact centre of a known hiding spot, and a quarter of a
+  second of water found whoever stood there: 41 of 55 finds. Test sprays
+  now sweep a random surface in view, and a find takes about nine droplets
+  instead of five, so a hit reveals you and you can still run.
+- **Nobody was hiding against walls.** A spot a third of a metre from a
+  wall always falls in a walking-grid cell whose centre is too close to the
+  wall, so every wall spot was thrown away and the Cinema and Gallery had
+  none. Spots are checked with the body now, and paths end at the spot.
+- **Hiders ran from seekers who had not seen them**, and running is what
+  gets you seen: most finds were of hiders moving. Hiders run when water
+  hits them; only easy bots lose their nerve when a seeker walks up.
+- **Climbers were never found**: seekers never looked up and never checked
+  the spots climbers use. They do both now.
+
+Balance, bots only, two rounds a map (twelve rounds a line), found of six:
+normal seekers against normal hiders 1.7, hard seekers 2.8, easy seekers
+0.3; normal seekers against easy hiders 4.1, against hard hiders 1.1.
+Played in the browser, a hider who stands in the open unpainted, or lies
+on a beige floor filled locker blue, is found in the first fifteen seconds
+of the hunt.
+
+`smoke.js` holds it (`--only "blend in"`): every surface's texel grid and
+that `sample()` reads it, the atlas and its parts, a dab that paints only
+what it touches and water that washes it off, every pose on the floor,
+every map's spawns, paths to every hiding spot and the warm-up room walled
+off, painting through the engine and the refusals, a hider hosed until
+found, climbing and letting go, a careful painter harder to see than a
+white body, whole rounds on every map with nobody inside a wall, sharp
+seekers against sloppy hiders finding more than the reverse, a round that
+replays from its seed and inputs, and the save rebuilt, never adopted.
+
+Not built: online rounds against people (a server — with friends it is a
+race on one seed, as every arcade game here is), the reference's ads, and
+its store of character skins, which would only cover the body you are
+meant to paint.
