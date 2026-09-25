@@ -7,19 +7,27 @@
 <meta name="description" content="PlayVault — one hub, endless games. Board, puzzle and arcade games that run entirely in your browser.">
 <meta name="theme-color" content="#0B0F14">
 <meta name="referrer" content="no-referrer">
-<!-- The page's own limits. Everything this app runs is its own file; the one
-     exception is the PeerJS broker client, which is named here and pinned by
-     hash below. No inline script, no eval, nowhere to post a form to, and
-     nothing loadable as a plugin. `frame-ancestors` is deliberately absent:
-     browsers ignore it in a meta tag, and a static host cannot send headers,
-     so that one is honestly out of reach rather than quietly listed. -->
+<!-- The page's own limits. Everything this app runs is its own file, with two
+     exceptions named here: the PeerJS broker client, pinned by hash below,
+     and Google's sign-in script for the Drive copy, which drive.js fetches
+     only when Drive is used — Google serves it unversioned, so it cannot be
+     pinned, and SECURITY.md says what that means. The Drive calls themselves
+     go to www.googleapis.com. That library also tries to add an inline
+     stylesheet for Google's own sign-in button, which PlayVault never shows;
+     `style-src` refuses it on purpose, so one console error when Drive loads
+     is expected and harmless. No inline script, no eval, nowhere to post a
+     form to, and nothing loadable as a plugin. `frame-ancestors` is
+     deliberately absent: browsers ignore it in a meta tag, and a static host
+     cannot send headers, so that one is honestly out of reach rather than
+     quietly listed. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' https://cdnjs.cloudflare.com;
+  script-src 'self' https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client;
   style-src 'self';
   img-src 'self' data:;
   font-src 'self';
-  connect-src 'self' https://0.peerjs.com wss://0.peerjs.com;
+  connect-src 'self' https://0.peerjs.com wss://0.peerjs.com https://www.googleapis.com https://accounts.google.com/gsi/;
+  frame-src https://accounts.google.com/gsi/;
   media-src 'none';
   object-src 'none';
   base-uri 'none';
@@ -75,11 +83,18 @@
 <!-- core -->
 <script src="js/core/safe.js"></script>
 <script src="js/core/util.js"></script>
+<script src="js/core/icons.js"></script>
 <script src="js/core/rng.js"></script>
 <script src="js/core/store.js"></script>
 <script src="js/core/i18n.js"></script>
 <script src="js/core/profile.js"></script>
 <script src="js/core/registry.js"></script>
+
+<!-- the Drive copy. Google's sign-in script is deliberately not tagged here:
+     drive.js fetches it when Drive is first needed, so a player who never
+     uses Drive never runs it -->
+<script src="js/core/drive-config.js"></script>
+<script src="js/core/drive.js"></script>
 
 <!-- playing with friends: the pipe, the room, the two ways to share a game,
      the room's pixels, and the screen that opens one -->

@@ -266,12 +266,31 @@ race holds its end card back until the table is in.
   cheaper and only possible because nothing on these boards is hidden.
 - `js/core/i18n.js` — English + 简体中文, one flat dict per language, `t()`
   looked up lazily. Half this roster has Chinese names already.
-- `drive.js` — copy CardVerse's, not FinSim's or MoneyFlow's. Check
-  `index.html` has the `accounts.google.com/gsi/client` script tag.
+- `js/core/drive.js` + `drive-config.js` — **ported 2026-09-25** from
+  CardVerse's, not FinSim's or MoneyFlow's. It had been listed here since the
+  first commit and was never wired, so the game shipped without a Drive
+  button until then. Nothing was lost by the wait: no PlayVault file existed
+  in anybody's Drive to orphan. What differs from CardVerse's copy:
+  - **No `gsi/client` tag in `index.html`.** `drive.js` fetches Google's
+    library itself — on the Settings screen, on a reach for the lobby's
+    "Load from Drive" offer, or when auto-save has something to send —
+    because it is the one script here that cannot be hash-pinned, and the
+    CSP (which CardVerse does not have) names it exactly. SECURITY.md.
+  - Every string goes through `PV.t()`; the buttons are built by `drive.js`
+    (`controls()`, `offer()`) and dropped into the shell's screens.
+  - File work is queued, so a press and an auto-save cannot both create the
+    file; a load never makes the folder; a 404 forgets the cached ids so the
+    next press writes a fresh file without a reload; a sign-in that leaves
+    Drive unticked is caught at the token, not at a 403 from the folder.
+  Worth porting back to CardVerse: the queue, the no-folder-on-load, the 404
+  reset and the scope check.
 - GameHub Drive identity: **nothing to do in Google Cloud.** One project, one
-  OAuth client, one origin. PlayVault needs only its own sub-folder id,
-  `playvault-data.json`, and envelope `format: 'playvault.backup'` — and those
-  must be wired **before the first push**, or the orphaning trap bites.
+  OAuth client, one origin. PlayVault needed only its own `filename`,
+  `playvault-data.json`, and envelope `format: 'playvault.backup'` — the
+  folder is `GameHub`, by name, made per player (sub-folder ids were dropped
+  from the convention). **Never rename either**: that is the orphaning trap.
+  The row for CardVerse's `docs/GAMEHUB.md` table: PlayVault ·
+  `playvault-data.json` · `playvault.backup`.
 
 ## What phase 7 actually fixed
 

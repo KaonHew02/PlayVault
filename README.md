@@ -42,7 +42,9 @@ index.html                  script order matters: core, contracts, harnesses, ga
 css/app.css                 one stylesheet, tokens for dark and light
 js/core/
   util.js rng.js store.js   helpers, seeded random, persistence
+  icons.js                  the few line icons (Bootstrap Icons, MIT), and the pill button
   i18n.js profile.js        English + 简体中文, the player and their records
+  drive-config.js drive.js  the optional copy in the player's own Google Drive
   registry.js               games register themselves; nothing else knows them
   cards.js                  a 52-card deck as integers
   board.js puzzle.js loop.js    the three engine contracts
@@ -150,6 +152,33 @@ And three that only show once a match is played through to its end and back:
   cannot kill has no way to end, so nobody finished and the host never got
   "Call it". A race on those rules runs against a three-minute clock.
 
+## Keeping a copy in Google Drive
+
+`Settings → Your data` has **Auto**, **To Drive** and **From Drive**, in one
+row with Export and Import — the same pills, icons and order as MoneyFlow,
+FinSim and PlanSphere, in PlayVault's brass. It is CardVerse's `drive.js`
+ported, on the shared **GameHub** OAuth client — CardVerse's `docs/GAMEHUB.md`
+is the canonical note, and fixes to one copy belong in the other.
+
+- It writes `GameHub/playvault-data.json` in the signed-in player's **own** My
+  Drive (envelope `format: 'playvault.backup'`, the same file Export writes).
+  **Never rename either** — a renamed file is a new file, and every copy
+  already written under the old name is orphaned.
+- It works only from **<https://kaonhew02.github.io/PlayVault/>**: Google signs
+  in only on a registered origin, and that origin (`https://kaonhew02.github.io`,
+  no path) already covers every Pages repo on the account, so nothing needed
+  setting up in Google Cloud. `localhost` is not a registered origin, so
+  Google will not sign in there; from a file on disk the buttons are off and
+  the line under them says why.
+- While the GameHub consent screen is in **Testing**, only accounts on its
+  test-user list can sign in — add friends there, or publish the consent
+  screen (`drive.file` needs no Google review).
+- Google's sign-in script is fetched only when Drive is about to be used,
+  never on every page — SECURITY.md says why.
+- A browser with no progress yet gets a "Load from Drive" offer on the Games
+  screen, because the person whose browser was just cleared is exactly the
+  one who does not know to look in Settings.
+
 ### Testing
 
 `node tools/smoke.js` runs ~185,000 checks in about five seconds. It drives
@@ -175,6 +204,12 @@ accept rules are under test rather than under review — only the WebRTC beneath
 the link is replaced. That is why the wire protocol lives in `boardnet.js`
 rather than inside the canvas-owning harness. It still does not replace two
 real browsers, which is what caught the two bugs above.
+
+**Drive is tested against a fake Google** — a sign-in library that answers the
+way Google's does, and a Drive behind `fetch()` that keeps files per account
+and shows each account only its own, as `drive.file` does. So the real
+queries, the real multipart upload, the restore, the sign-in failures and
+auto-save are all under test; only Google itself is not.
 
 ## Logo
 
@@ -219,8 +254,8 @@ game interiors and `#EAF0F7` / `#8494A8` for text. Alternate: **neon vault**,
   window.PV.t(k, p)` — never captured at module scope, because i18n.js may load
   after the file using it and a captured `undefined` never recovers.
 - A new persisted store that is not in `BACKUP_STORES` (`js/core/store.js`) is
-  silently left out of every export. Theme and language are excluded on
-  purpose: they belong to the device.
+  silently left out of every export and every Drive copy. Theme, language and
+  the Drive switches are excluded on purpose: they belong to the device.
 - Editing a JS file and then navigating by hash alone shows you the **old**
   code — a hash change does not reload scripts. Change the query string to
   force a real reload before believing a fix failed.

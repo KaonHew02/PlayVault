@@ -4,7 +4,9 @@ PlayVault is a static site. There is no server, no account, no password and no
 database — every game runs in the browser, and every save is in that browser's
 own `localStorage`.
 
-That one fact decides everything below.
+That one fact decides everything below. The single optional exception is a
+copy the player sends to **their own** Google Drive, and it has its own
+section further down.
 
 ## The thing people ask first: can the JavaScript be hidden?
 
@@ -60,7 +62,8 @@ on read and the walk is bounded, so the worst case is 4,500 steps.
 
 ### 2. A backup file from somewhere else
 
-`Settings → Import` takes a file. It is parsed, then **rebuilt from scratch**
+`Settings → Import` takes a file, and `From Drive` fetches one — both go
+through the same `PV.Store.importAll`. It is parsed, then **rebuilt from scratch**
 with `PV.Safe.plain`: plain objects and arrays only, no functions, no
 non-finite numbers, bounded depth, key count, array length and string length,
 and `__proto__` / `constructor` / `prototype` keys dropped on the way through.
@@ -68,6 +71,8 @@ Copying an own `__proto__` key into an object with `Object.assign` sets that
 object's prototype instead of adding a key, which is how a JSON file turns
 into an exploit; the per-game record is now built field by field for the same
 reason. Stores that fail their own validator are skipped, not restored badly.
+A Drive file over 4 MB is refused before it is parsed — a real save is a few
+kilobytes, and parsing a huge one would freeze the tab before anything asked.
 
 ### 3. Another person's browser, in a friends room
 
@@ -84,17 +89,59 @@ server, a patched client can claim a score it did not earn. That is inherent
 to peer-to-peer play without an authority, it is written here rather than
 pretended away, and the rooms are six digits read out loud to people you know.
 
+## The Drive copy
+
+`Settings → Your data` has **To Drive**, **From Drive** and an **Auto**
+switch (off by default). It is the only way a save leaves the
+browser, and only when the player asks. `js/core/drive.js` is a port of
+CardVerse's, which is the canonical copy for every GameHub game.
+
+- **What goes up** is exactly what Export writes, and only that — theme,
+  language and the Drive switches stay on the device. It lands in a `GameHub`
+  folder in the signed-in player's own My Drive, as `playvault-data.json`.
+- **The scope is `drive.file`**: only files this app created. It cannot list,
+  read or touch anything else in anybody's Drive. Every player gets their own
+  folder in their own Drive; nobody can reach anybody else's.
+- **The token lives in memory only.** It is never written to storage, and a
+  reload forgets it. The OAuth client ID in `js/core/drive-config.js` is
+  public by design; there is no client secret, and must never be one.
+- **An id from Drive is checked for shape** before it goes into the next
+  request's URL, so a strange answer cannot steer a request somewhere else.
+- **Coming back down, it is input #2 above**: rebuilt, validated, and only
+  after the player has seen what is in both copies and said yes.
+
+### Google's sign-in script, which cannot be pinned
+
+Signing in needs `https://accounts.google.com/gsi/client`. Google serves it
+unversioned and changes it without notice, so unlike PeerJS it **cannot** carry
+an `integrity` hash — whatever Google serves runs, with the same reach into
+this page as the app's own code, which includes reading every save in it.
+That is a trust extended to Google, and it is kept as small as it can be:
+
+- **It is not on the page.** `drive.js` fetches it only when Drive is about to
+  be used: when the Settings screen is opened (so the first press can open
+  its sign-in window straight away — Safari blocks a window opened after a
+  network wait), when a hand reaches for the Games screen's "Load from Drive"
+  offer, or when auto-save is on and has something to send. A player who
+  never opens Settings and never turns auto-save on never runs it.
+- The Content-Security-Policy names exactly that file, plus the two Google
+  origins the Drive calls and the sign-in library need.
+- It tries to insert an inline stylesheet for Google's own sign-in button,
+  which PlayVault never shows. `style-src` refuses it on purpose; the one
+  console error that leaves is expected.
+
 ## Page-level hardening
 
 - **Content-Security-Policy** (in `index.html`): `default-src 'self'`, no
   inline script, no `eval`, no plugins, no form posts, `base-uri 'none'`, and
-  exactly one third-party origin allowed for scripts.
-- **Subresource Integrity** on that third party. PeerJS is the only code in
-  this app that is not ours, and it is pinned by `sha384` hash with
+  two third-party script sources: PeerJS's CDN, and the one Google sign-in
+  file above.
+- **Subresource Integrity** on PeerJS, pinned by `sha384` hash with
   `crossorigin="anonymous"`. If the CDN ever serves different bytes the
   browser refuses to run them — playing with friends stops working and nothing
-  else does, which is the right way round.
-- **`referrer: no-referrer`**, so no URL of yours leaks to the CDN.
+  else does, which is the right way round. Google's sign-in script is the one
+  thing that cannot be pinned; see the section above.
+- **`referrer: no-referrer`**, so no URL of yours leaks to the CDN or to Google.
 - No `eval`, no `new Function`, no `document.write`, no string timers.
 - The only `innerHTML` in the app writes the game icons, which are static SVG
   strings in this repo. No text from a player, a peer or a file is ever
@@ -112,9 +159,10 @@ listed apart from the section above for that reason.
 ### The deployed site is one stripped bundle
 
 `node tools/build.js` reads the script list from `index.dev.html`, strips the
-comments and indentation out of all 65 files and writes `js/playvault.min.js`
-plus the `index.html` that loads it. 482 kB of commented source becomes one
-282 kB file, and the deployed page has exactly two script tags.
+comments and indentation out of all 71 files and writes `js/playvault.min.js`
+plus the `index.html` that loads it. 751 kB of commented source becomes one
+446 kB file, and the deployed page has exactly two script tags (Google's
+sign-in script is added only when Drive needs it).
 
 What it buys: someone opening Sources on the live site sees one dense file
 instead of a tour of the codebase with the reasoning written in.
@@ -153,5 +201,6 @@ while the records mean something only on that machine.
 
 Found something? Open an issue on the repository. Since there is no server and
 no user data, the interesting reports are: a way to get HTML or script into
-the page from a file or a peer, a way to make the app unusable from stored
-data, or anything that reaches beyond this app's own origin.
+the page from a file, a Drive copy or a peer, a way to make the app unusable
+from stored data, or anything that reaches beyond this app's own origin and
+the player's own Drive file.

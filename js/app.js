@@ -99,6 +99,10 @@ window.PV = window.PV || {};
   function screenLobby() {
     const wrap = el('div', { class: 'screen' });
 
+    /* a browser with nothing in it is offered its Drive copy */
+    const offer = PV.Drive.offer({ restored: () => setTimeout(route, 900) });
+    if (offer) wrap.appendChild(offer);
+
     /* profile strip */
     const lv = PV.Profile.level();
     const pct = Math.round(lv.into / lv.need * 100);
@@ -462,14 +466,21 @@ window.PV = window.PV || {};
         e.target.value = '';
       }
     });
-    function say(m) { msg.textContent = m; msg.hidden = false; }
+    function say(m) { msg.textContent = m; msg.hidden = !m; }
 
+    /* One row, in the order MoneyFlow, FinSim and PlanSphere use: the Drive
+       copy first, then the file you keep — two groups, so a phone breaks the
+       row between them rather than in the middle of either. */
+    const drive = PV.Drive.controls({ say: say, restored: () => setTimeout(route, 900) });
     wrap.appendChild(el('section', { class: 'panel' },
       el('h3', {}, t('settings.data')),
       el('p', { class: 'muted small' }, t('settings.dataHint')),
       el('div', { class: 'row-btns' },
-        el('button', { class: 'btn ghost', onclick: doExport }, t('settings.export')),
-        el('button', { class: 'btn ghost', onclick: () => file.click() }, t('settings.import'))),
+        el('div', { class: 'pill-group' }, drive.buttons),
+        el('div', { class: 'pill-group' },
+          PV.pill('download', t('settings.export'), { onclick: doExport }),
+          PV.pill('upload', t('settings.import'), { onclick: () => file.click() }))),
+      drive.line,
       file, msg
     ));
 

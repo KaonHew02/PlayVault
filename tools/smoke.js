@@ -50,6 +50,9 @@ global.document = {
 
 const FILES = [
   'js/core/safe.js', 'js/core/util.js', 'js/core/rng.js', 'js/core/store.js', 'js/core/profile.js',
+  // The Drive copy. Nothing here reaches Google: the Drive section at the end
+  // swaps in a fake sign-in library and a fake Drive behind fetch().
+  'js/core/drive-config.js', 'js/core/drive.js',
   'js/core/registry.js', 'js/core/board.js', 'js/core/puzzle.js', 'js/core/loop.js',
   'js/core/cards.js',
   'js/games/gomoku/engine.js', 'js/games/gomoku/ai.js',
@@ -99,6 +102,19 @@ function section(name, fn) {
   fn();
   const tag = failures === before ? 'ok  ' : 'FAIL';
   console.log(`[${tag}] ${name}  (${Date.now() - t0}ms)`);
+}
+
+/* A section that has to wait on promises — Drive, which talks through
+   fetch(). These run after every other section, in order, before the report. */
+const later = [];
+function sectionAsync(name, fn) {
+  later.push(async () => {
+    const t0 = Date.now();
+    const before = failures;
+    try { await fn(); } catch (e) { ok(false, name + ' threw: ' + ((e && e.stack) || e)); }
+    const tag = failures === before ? 'ok  ' : 'FAIL';
+    console.log(`[${tag}] ${name}  (${Date.now() - t0}ms)`);
+  });
 }
 
 /* ------------------------------------------------------------------ gomoku */
@@ -2107,8 +2123,462 @@ section('race — every puzzle reports its progress', () => {
   }
 });
 
+/* ------------------------------------------------------------------ drive */
+
+/* A fake Google, in two halves. The sign-in library answers the way Google's
+   does — a token, or an OAuth refusal, through `callback`; a window that
+   failed through `error_callback` — and the Drive behind fetch() keeps real
+   files per account, and shows an account only the files made under its own
+   tokens, which is what `drive.file` means. So what is under test is the real
+   queries, the real multipart create and the real restore; only Google is
+   replaced. */
+function fakeGoogle() {
+  const FOLDER = 'application/vnd.google-apps.folder';
+  const G = {
+    account: 'a',          // who the next sign-in window signs in as
+    grant: true,           // whether a silent (prompt: 'none') request succeeds
+    expires: 3599,         // seconds each new token claims to last
+    next: [],              // answers queued for the next pressed requests
+    requests: [],          // every requestAccessToken() option object
+    files: new Map(),      // id -> { id, name, mimeType, parents, owner, body, modified }
+    tokens: new Map(),     // token -> account
+    calls: [],             // 'METHOD /path?query' for every Drive call
+    fail: [],              // for the next calls: { status, message } | { reply } | 'network'
+    seq: 0
+  };
+  let client = null;
+
+  G.lib = {
+    initTokenClient(cfg) {
+      client = cfg;
+      return {
+        requestAccessToken(o) {
+          G.requests.push(o || {});
+          const silent = !!o && o.prompt === 'none';
+          const answer = silent ? (G.grant ? 'token' : 'interaction_required') : (G.next.shift() || 'token');
+          queueMicrotask(() => {
+            if (answer === 'token' || answer === 'noscope') {
+              const tok = 'tok' + (++G.seq);
+              G.tokens.set(tok, G.account);
+              client.callback({
+                access_token: tok, expires_in: G.expires, token_type: 'Bearer',
+                scope: answer === 'noscope' ? 'openid' : 'https://www.googleapis.com/auth/drive.file'
+              });
+            } else if (answer === 'popup_closed' || answer === 'popup_failed_to_open') {
+              client.error_callback({ type: answer });
+            } else {
+              client.callback({ error: answer });
+            }
+          });
+        }
+      };
+    },
+    hasGrantedAllScopes(resp, scope) { return String(resp.scope || '').split(' ').indexOf(scope) >= 0; }
+  };
+
+  const json = (o, status) => new Response(JSON.stringify(o),
+    { status: status || 200, headers: { 'Content-Type': 'application/json' } });
+  const miss = what => json({ error: { code: 404, message: 'File not found: ' + what } }, 404);
+  function make(owner, name, mimeType, parents, body) {
+    const f = { id: 'f' + (++G.seq) + '_x', name, mimeType, parents: parents || [], owner, body,
+      modified: new Date().toISOString() };
+    G.files.set(f.id, f);
+    return f;
+  }
+
+  G.fetch = async (url, init) => {
+    const u = new URL(url);
+    const method = (init && init.method) || 'GET';
+    G.calls.push(method + ' ' + u.pathname + u.search);
+    const failure = G.fail.shift();
+    if (failure === 'network') throw new TypeError('Failed to fetch');
+    if (failure && failure.reply) return json(failure.reply);
+    if (failure) return json({ error: { code: failure.status, message: failure.message || '' } }, failure.status);
+
+    const auth = String((init && init.headers && init.headers.Authorization) || '');
+    const who = G.tokens.get(auth.replace(/^Bearer /, ''));
+    if (!who) return json({ error: { code: 401, message: 'Invalid Credentials' } }, 401);
+    const visible = f => f.owner === who;
+
+    if (method === 'GET' && u.pathname === '/drive/v3/files') {
+      const q = u.searchParams.get('q') || '';
+      let m, hits;
+      if ((m = /^name = '([^']*)' and mimeType = 'application\/vnd\.google-apps\.folder' and trashed = false$/.exec(q))) {
+        hits = [...G.files.values()].filter(f => visible(f) && f.name === m[1] && f.mimeType === FOLDER);
+      } else if ((m = /^'([\w-]+)' in parents and name = '([^']*)' and trashed = false$/.exec(q))) {
+        hits = [...G.files.values()].filter(f => visible(f) && f.parents.indexOf(m[1]) >= 0 && f.name === m[2]);
+      } else {
+        return json({ error: { code: 400, message: 'Invalid query: ' + q } }, 400);
+      }
+      return json({ files: hits.slice(0, Number(u.searchParams.get('pageSize')) || 100).map(f => ({ id: f.id })) });
+    }
+    if (method === 'POST' && u.pathname === '/drive/v3/files') {
+      const meta = JSON.parse(init.body);
+      return json({ id: make(who, meta.name, meta.mimeType, meta.parents, null).id });
+    }
+    if (method === 'POST' && u.pathname === '/upload/drive/v3/files') {
+      const boundary = /boundary=(\S+)$/.exec(init.headers['Content-Type'] || '');
+      const parts = boundary ? init.body.split('--' + boundary[1]) : [];
+      if (u.searchParams.get('uploadType') !== 'multipart' || parts.length !== 4 || parts[0] !== '' || parts[3] !== '--') {
+        return json({ error: { code: 400, message: 'Malformed multipart body' } }, 400);
+      }
+      const inner = p => p.slice(p.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, '');
+      const meta = JSON.parse(inner(parts[1]));
+      // drive.file: a parent this account cannot see is a parent that is not there.
+      if (!(meta.parents || []).every(id => G.files.has(id) && visible(G.files.get(id)))) return miss('parent');
+      return json({ id: make(who, meta.name, meta.mimeType, meta.parents, inner(parts[2])).id });
+    }
+    const up = /^\/upload\/drive\/v3\/files\/([\w-]+)$/.exec(u.pathname);
+    if (method === 'PATCH' && up) {
+      const f = G.files.get(up[1]);
+      if (!f || !visible(f) || u.searchParams.get('uploadType') !== 'media') return miss(up[1]);
+      f.body = init.body;
+      f.modified = new Date().toISOString();
+      return json({ id: f.id });
+    }
+    const one = /^\/drive\/v3\/files\/([\w-]+)$/.exec(u.pathname);
+    if (method === 'GET' && one) {
+      const f = G.files.get(one[1]);
+      if (!f || !visible(f)) return miss(one[1]);
+      if (u.searchParams.get('alt') === 'media') {
+        const headers = G.sendLength ? { 'Content-Length': String(Buffer.byteLength(f.body)) } : {};
+        return new Response(f.body, { status: 200, headers: headers });
+      }
+      return json({ modifiedTime: f.modified });
+    }
+    return json({ error: { code: 400, message: 'No route for ' + method + ' ' + u.pathname } }, 400);
+  };
+  return G;
+}
+
+sectionAsync('drive — save, load and auto-save against a fake Google', async () => {
+  const G = fakeGoogle();
+  const doc = global.document;
+  const real = { fetch: global.fetch, t: PV.t, setTimeout: global.setTimeout, clearTimeout: global.clearTimeout };
+  const kept = new Map(mem);
+  const FILE = PV.DriveConfig.filename;
+  const ours = who => [...G.files.values()].filter(f => f.owner === who && f.name === FILE);
+  const said = [];
+  const last = () => said[said.length - 1] || '';
+  const ui = extra => Object.assign({ say: m => said.push(m) }, extra || {});
+  const fresh = () => PV.Drive._reset();                // a reload: token and cached ids gone
+  const install = () => { global.google = { accounts: { oauth2: G.lib } }; };
+
+  install();
+  global.fetch = G.fetch;
+  // Keys, with their parameters, so a message can be checked for its reason.
+  PV.t = (k, p) => k + (p ? ' ' + JSON.stringify(p) : '');
+
+  try {
+    /* The GameHub convention: CardVerse's docs/GAMEHUB.md keeps the table. */
+    ok(FILE === 'playvault-data.json', 'the Drive file is ' + FILE);
+    ok(PV.DriveConfig.folderName === 'GameHub', 'the Drive folder is ' + PV.DriveConfig.folderName);
+    ok(PV.Store.FORMAT === 'playvault.backup', 'the envelope format changed');
+    ok(PV.Drive.configured() && PV.Drive.unusable() === null, 'Drive is not usable with a filled-in config');
+    ok(PV.Store.BACKUP_STORES.indexOf('drive.auto') < 0 && PV.Store.BACKUP_STORES.indexOf('drive.lastPush') < 0,
+      'a device switch travels in the backup');
+
+    /* A fresh browser. The empty profile made on first sight is not progress. */
+    for (const k of PV.Store.BACKUP_STORES) PV.Store.del(k);
+    PV.Store.del('drive.auto');
+    PV.Store.del('drive.lastPush');
+    ok(PV.Drive.blank(), 'an empty browser is not blank');
+    PV.Profile.data();
+    PV.Profile.stats();
+    ok(PV.Drive.blank(), 'the empty profile made on first sight counted as progress');
+    ok(PV.Drive.status().text.indexOf('drive.never') === 0, 'with no copy the status says ' + PV.Drive.status().text);
+    ok(PV.Drive.summary(PV.Store.exportAll()) === 'drive.holdsNothing', 'an empty browser was summed up as something');
+
+    /* The first press makes the folder and the file, in that folder. */
+    PV.Profile.setName('Kaon');
+    PV.Profile.record('chess', { result: 'win', timeMs: 1000, xp: 250 });
+    ok(!PV.Drive.blank(), 'a browser with a recorded game is blank');
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved', 'the first save said ' + last());
+    ok(G.requests.length === 1 && G.requests[0].prompt === undefined, 'a press did not open a plain sign-in window');
+    const folders = [...G.files.values()].filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+    ok(folders.length === 1 && folders[0].name === 'GameHub' && folders[0].parents.length === 0,
+      'the GameHub folder was not made once, at the top of My Drive');
+    ok(ours('a').length === 1 && ours('a')[0].parents[0] === folders[0].id, 'the save is not in the GameHub folder');
+    const first = JSON.parse(ours('a')[0].body);
+    ok(first.format === 'playvault.backup' && first.data.profile.name === 'Kaon', 'what went up is not the export');
+    ok(first.data['drive.lastPush'] === undefined, 'a device switch went up with the save');
+    ok(PV.Drive.status().tone === 'ok', 'after a save the status is ' + PV.Drive.status().tone);
+
+    /* The second press overwrites that file, with one call and no window. */
+    PV.Profile.record('chess', { result: 'win', timeMs: 1000, xp: 250 });
+    G.calls.length = 0;
+    await PV.Drive.push(ui());
+    ok(ours('a').length === 1, 'a second save made a second file');
+    ok(JSON.parse(ours('a')[0].body).data.stats.games.chess.played === 2, 'the second save did not overwrite the first');
+    ok(G.calls.length === 1 && G.calls[0].indexOf('PATCH ') === 0, 'a second save cost ' + G.calls.join(', '));
+    ok(G.requests.length === 1, 'a second save opened another sign-in window');
+
+    /* After a reload, two saves at once: one window, one file. */
+    fresh();
+    for (const f of ours('a')) G.files.delete(f.id);
+    await Promise.all([PV.Drive.push(ui()), PV.Drive.push(ui())]);
+    ok(ours('a').length === 1, 'two saves at once made ' + ours('a').length + ' files');
+    ok(G.requests.length === 2, 'two presses at once opened ' + (G.requests.length - 1) + ' sign-in windows');
+
+    /* Another Google account sees none of the first one's, and a load leaves
+       nothing behind in its Drive. Tokens here are stale the moment they
+       arrive, so every press goes back through the sign-in window. */
+    G.expires = 1;
+    G.account = 'b';
+    fresh();
+    await PV.Drive.pull(ui({ confirm: () => { ok(false, 'asked to restore from an account with no save'); return false; } }));
+    ok(last() === 'drive.nothing', 'an account with no save said ' + last());
+    ok([...G.files.values()].every(f => f.owner !== 'b'), 'a load made a folder in an empty Drive');
+    await PV.Drive.push(ui());
+    ok(ours('b').length === 1 && ours('a').length === 1, "the second account's save touched the first's");
+    const folderB = G.files.get(ours('b')[0].parents[0]);
+    ok(folderB.owner === 'b' && folderB.name === 'GameHub', "the second account's save is not in its own folder");
+    // The other account picked in the window mid-session, with no reload: the
+    // ids kept from before would point into the wrong Drive.
+    G.account = 'a';
+    const beforeSwitch = ours('a')[0].body;
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved', 'switching accounts in the sign-in window said ' + last());
+    ok(ours('a').length === 1 && ours('b').length === 1 && ours('a')[0].body !== beforeSwitch,
+      'after switching accounts the save did not go to the account now signed in');
+    G.expires = 3599;
+    fresh();
+
+    /* An id out of Drive goes into the next URL, so an odd one is not used. */
+    const had = new Set(G.files.keys());
+    G.calls.length = 0;
+    G.fail.push({ reply: { files: [{ id: '../../evil?alt=media&x=' }] } });
+    await PV.Drive.push(ui());
+    ok(G.calls.every(c => c.indexOf('evil') < 0), 'an id from Drive went into a URL unchecked: ' + G.calls.join(' | '));
+    // Taken as "no folder there", so a second folder and file were made. Drop them.
+    for (const id of [...G.files.keys()]) if (!had.has(id)) G.files.delete(id);
+    fresh();
+
+    /* A restore says what is in both copies, and asks, and only a yes changes anything. */
+    const driveCopy = JSON.parse(ours('a')[0].body);
+    PV.Store.set('profile', { name: '', xp: 0, created: '' });
+    PV.Store.set('stats', { games: {} });
+    let asked = '';
+    await PV.Drive.pull(ui({ confirm: q => { asked = q; return false; } }));
+    ok(asked.indexOf('drive.replaceAsk') === 0, 'a restore did not ask first');
+    ok(asked.indexOf('Kaon') > 0 && asked.indexOf('drive.holdsNothing') > 0,
+      'the question did not say what is in each copy: ' + asked);
+    ok(PV.Store.get('profile', null).name === '', 'a declined restore changed this browser');
+    let restored = null;
+    await PV.Drive.pull(ui({ confirm: () => true, restored: r => { restored = r; } }));
+    ok(!!restored && restored.ok && restored.restored >= 2, 'an accepted restore did not report back');
+    ok(PV.Store.get('profile', null).name === 'Kaon'
+      && PV.Profile.forGame('chess').played === driveCopy.data.stats.games.chess.played,
+      'the restore did not bring the Drive copy back');
+
+    /* What comes down is a file from somewhere else. */
+    const file = ours('a')[0];
+    const good = file.body;
+    file.body = JSON.stringify({ format: 'cardverse.backup', version: 1, data: { profile: { name: 'x', xp: 5 } } });
+    await PV.Drive.pull(ui({ confirm: () => { ok(false, "asked to restore another game's file"); return true; } }));
+    ok(last() === 'drive.notOurs', "another game's file said " + last());
+    file.body = 'not json at all';
+    await PV.Drive.pull(ui({ confirm: () => true }));
+    ok(last() === 'drive.notOurs', 'a file that is not JSON said ' + last());
+    // A real save, but 5 MB of one: refused before it is parsed, let alone offered.
+    file.body = good.replace(/\}\s*$/, ', "pad": "' + 'x'.repeat(5 * 1024 * 1024) + '"}');
+    ok(JSON.parse(file.body).format === 'playvault.backup', 'the padded save is not a save');
+    await PV.Drive.pull(ui({ confirm: () => { ok(false, 'offered a 5 MB file as a restore'); return false; } }));
+    ok(last() === 'drive.notOurs', 'a 5 MB file said ' + last());
+    // ...and when Drive declares its size, refused on that, before it is read.
+    G.sendLength = true;
+    await PV.Drive.pull(ui({ confirm: () => { ok(false, 'offered a 5 MB file of declared size'); return false; } }));
+    ok(last() === 'drive.notOurs', 'a 5 MB file of declared size said ' + last());
+    file.body = good;
+    await PV.Drive.pull(ui({ confirm: () => false }));
+    ok(last() === '', 'a declared size stopped a normal save from being offered: ' + last());
+    G.sendLength = false;
+    file.body = '{"format":"playvault.backup","version":1,"data":{"profile":{"name":"Evil\\u202e","xp":1e308},'
+      + '"__proto__":{"polluted":1},"stats":{"games":{"__proto__":{"played":5}}}}}';
+    await PV.Drive.pull(ui({ confirm: () => true }));
+    ok(({}).polluted === undefined && ({}).played === undefined, 'a Drive file polluted Object.prototype');
+    ok(PV.Store.get('profile', null).xp <= 5e8, 'the xp in a Drive file was not clamped');
+    ok(PV.Store.get('profile', null).name.indexOf('‮') < 0, 'a bidi override came down into the name');
+    file.body = good;
+
+    /* Sign-in failures, in words a person can act on. */
+    fresh();
+    G.next.push('popup_closed');
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.popupClosed') > 0, 'a closed window said ' + last());
+    G.next.push('access_denied');
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.denied') > 0, 'a refused account said ' + last());
+    G.next.push('noscope');
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.noScope') > 0, 'a sign-in without Drive access said ' + last());
+    G.next.push('popup_failed_to_open');
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.popupBlocked') > 0, 'a blocked window said ' + last());
+
+    /* Drive's own failures. */
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved', 'signing in again said ' + last());
+    G.fail.push({ status: 401 });
+    const windows = G.requests.length;
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved', 'a token that went stale in flight was not renewed: ' + last());
+    ok(G.requests.length === windows + 1 && G.requests[windows].prompt === 'none',
+      'a stale token was renewed with a window rather than silently');
+    G.fail.push({ status: 403, message: "The user's Drive storage quota has been exceeded." });
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.full') > 0, 'a full Drive said ' + last());
+    G.fail.push('network');
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.offline') > 0, 'no network said ' + last());
+    // Deleted in Drive behind the app's back: say so, then the next press writes a fresh one.
+    for (const f of ours('a')) G.files.delete(f.id);
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.gone') > 0, 'a deleted file said ' + last());
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved' && ours('a').length === 1, 'the save after a deletion did not write a fresh file');
+
+    /* The sign-in library is only fetched when it is needed, and a press that
+       had to wait for it is told to press again, not to allow pop-ups. */
+    const tags = [];
+    let arrives = true;
+    doc.createElement = tag => ({ tagName: tag, remove() { this.removed = true; } });
+    doc.head = {
+      appendChild(n) {
+        tags.push(n);
+        real.setTimeout(() => { if (arrives) { install(); n.onload(); } else n.onerror(); }, 2);
+      }
+    };
+    fresh();
+    delete global.google;
+    arrives = false;
+    await PV.Drive.push(ui());
+    ok(last().indexOf('drive.noLibrary') > 0 && tags.length === 1 && tags[0].removed,
+      'a library that never came said ' + last());
+    arrives = true;
+    G.next.push('popup_failed_to_open');
+    await PV.Drive.push(ui());
+    ok(tags.length === 2 && tags[1].src === 'https://accounts.google.com/gsi/client',
+      'the sign-in library was not fetched again after it failed');
+    ok(last().indexOf('drive.pressAgain') > 0, 'a window blocked after a late fetch said ' + last());
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved' && tags.length === 2, 'the press after the library arrived did not work');
+    delete doc.createElement;
+    delete doc.head;
+
+    /* Auto-save: off by default, one save a minute after the last change,
+       only for what a backup carries, and never a sign-in window. */
+    const timers = [];
+    global.setTimeout = (fn, ms) => (ms === 60000 ? timers.push(fn) : real.setTimeout(fn, ms));
+    global.clearTimeout = id => {
+      if (typeof id === 'number' && id > 0 && id <= timers.length) timers[id - 1] = null;
+      else real.clearTimeout(id);
+    };
+    const due = () => timers.filter(Boolean);
+    const play = () => PV.Profile.record('gomoku', { result: 'win', timeMs: 1, xp: 1 });
+    const upWins = () => JSON.parse(ours('a')[0].body).data.stats.games.gomoku.won;
+
+    ok(!PV.Drive.auto(), 'auto-save was on by default');
+    play();
+    ok(due().length === 0, 'a change was queued for Drive with auto-save off');
+    PV.Drive.setAuto(true);
+    ok(PV.Store.get('drive.auto', false) === true, 'the auto-save switch did not stick');
+    timers.length = 0;
+    PV.Store.set('theme', 'light');
+    ok(due().length === 0, 'a theme change was queued for Drive');
+    play();
+    play();
+    ok(due().length === 1, 'two games were not folded into one save: ' + due().length);
+    let windowsNow = G.requests.length;
+    await due()[0]();
+    ok(upWins() === PV.Profile.forGame('gomoku').won, 'auto-save did not send the latest record');
+    ok(G.requests.length === windowsNow, 'auto-save asked for a token it already had');
+
+    // After a reload, where the grant stands, it signs in silently.
+    fresh();
+    timers.length = 0;
+    play();
+    windowsNow = G.requests.length;
+    await due()[0]();
+    ok(G.requests.length === windowsNow + 1 && G.requests[windowsNow].prompt === 'none',
+      'auto-save after a reload did not ask silently');
+    ok(upWins() === PV.Profile.forGame('gomoku').won, 'auto-save after a reload did not send');
+
+    // Where it does not, it stands down, says so, and stops asking.
+    fresh();
+    G.grant = false;
+    timers.length = 0;
+    play();
+    windowsNow = G.requests.length;
+    await due()[0]();
+    ok(G.requests.slice(windowsNow).every(o => o.prompt === 'none'), 'auto-save opened a sign-in window');
+    ok(PV.Drive.status().tone === 'warn' && PV.Drive.status().text.indexOf('drive.autoNeedsPress') === 0,
+      'a refused silent sign-in left the status at ' + PV.Drive.status().text);
+    windowsNow = G.requests.length;
+    timers.length = 0;
+    play();
+    await due()[0]();
+    ok(G.requests.length === windowsNow, 'auto-save kept asking Google after it said no');
+    // One press puts it right.
+    G.grant = true;
+    await PV.Drive.push(ui());
+    ok(last() === 'drive.saved' && PV.Drive.status().tone === 'ok', 'a press did not put auto-save right');
+
+    // A tab in the background never asks for a token.
+    fresh();
+    doc.visibilityState = 'hidden';
+    timers.length = 0;
+    play();
+    windowsNow = G.requests.length;
+    await due()[0]();
+    ok(G.requests.length === windowsNow, 'a background tab asked Google for a token');
+    delete doc.visibilityState;
+
+    PV.Drive.setAuto(false);
+    ok(due().length === 0, 'switching auto-save off left a save queued');
+
+    /* The status line. */
+    PV.Store.set('drive.lastPush', new Date(Date.now() - 8 * 86400000).toISOString());
+    ok(PV.Drive.status().tone === 'warn' && PV.Drive.status().text.indexOf('drive.stale') === 0,
+      'a week-old copy did not warn: ' + PV.Drive.status().text);
+    PV.Store.set('drive.lastPush', new Date().toISOString());
+    ok(PV.Drive.status().tone === 'ok' && PV.Drive.status().text.indexOf('drive.today') > 0,
+      "today's copy said " + PV.Drive.status().text);
+    PV.Store.del('drive.lastPush');
+    PV.Drive.setAuto(true);
+    ok(PV.Drive.status().text.indexOf('drive.autoFirst') === 0, 'auto-save with no first copy said '
+      + PV.Drive.status().text);
+    PV.Drive.setAuto(false);
+    localStorage.setItem('playvault.drive.lastPush', '"sometime"');
+    ok(PV.Drive.status().text.indexOf('drive.never') === 0, 'a hand-edited stamp was believed');
+
+    /* What a backup holds, whatever shape it arrives in. */
+    ok(PV.Drive.summary(null) === 'drive.holdsNothing', 'null was summed up as something');
+    ok(PV.Drive.summary({ data: [] }) === 'drive.holdsNothing', 'an array was summed up as something');
+    const sum = PV.Drive.summary({ data: { profile: { name: 'A', xp: 100 }, stats: { games: { chess: { played: 3 } } } } });
+    ok(sum.indexOf('A — drive.holds') === 0 && sum.indexOf('"level":2') > 0 && sum.indexOf('"games":"3"') > 0,
+      'a backup was summed up as ' + sum);
+  } finally {
+    delete global.google;
+    delete doc.createElement;
+    delete doc.head;
+    delete doc.visibilityState;
+    global.fetch = real.fetch;
+    global.setTimeout = real.setTimeout;
+    global.clearTimeout = real.clearTimeout;
+    PV.t = real.t;
+    PV.Drive._reset();
+    mem.clear();
+    for (const [k, v] of kept) mem.set(k, v);
+  }
+});
+
 /* ------------------------------------------------------------------ report */
 
-console.log('');
-console.log(`${checks} checks, ${failures} failure(s), ${Date.now() - started}ms`);
-process.exit(failures ? 1 : 0);
+(async () => {
+  for (const run of later) await run();
+  console.log('');
+  console.log(`${checks} checks, ${failures} failure(s), ${Date.now() - started}ms`);
+  process.exit(failures ? 1 : 0);
+})();

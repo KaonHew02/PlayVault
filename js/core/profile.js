@@ -106,6 +106,10 @@ window.PV = window.PV || {};
 
     level() { return levelFromXp(load().xp || 0); },
 
+    /** The level any xp is worth — for a record that is not this one yet,
+        such as a Drive copy being offered in place of this browser's. */
+    levelOf: xp => levelFromXp(xp),
+
     addXp(n) {
       const p = load();
       const before = levelFromXp(p.xp || 0).level;

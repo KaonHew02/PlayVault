@@ -126,6 +126,27 @@ main {
 .btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line-2)); }
 .btn.back { padding: 6px 11px; }
 
+/* A pill with a line icon (js/core/icons.js) — the Settings data row, drawn
+   the way MoneyFlow, FinSim and PlanSphere draw theirs. The icon is filled
+   with the text colour, so hover and "on" recolour both at once. */
+.btn.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  border-radius: 999px; padding: 8px 15px 8px 13px;
+}
+.btn.pill:hover:not(:disabled) { color: var(--accent); }
+/* A switch rather than an action: on, it is filled. */
+.btn.pill.on,
+.btn.pill.on:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ico { width: 15px; height: 15px; flex: none; fill: currentColor; }
+/* Pills that belong together wrap as one, and only split when even the
+   group alone is wider than the screen. */
+.pill-group { display: flex; flex-wrap: wrap; gap: 8px; }
+/* On a phone the three Drive pills have to share one line at 360px. */
+@media (max-width: 480px) {
+  .btn.pill { padding: 7px 11px 7px 10px; gap: 6px; font-size: 13px; }
+  .pill-group { gap: 6px; }
+}
+
 /* Still wraps as a last resort on a very narrow phone, but an option with
    more than three choices is given the card grid below instead — a segmented
    bar that wraps leaves a ragged hole at the end of every row. */
@@ -532,6 +553,26 @@ main {
   background: var(--accent-soft); border: 1px solid var(--line-2);
   border-radius: 10px; padding: 9px 12px; font-size: 13.5px;
 }
+
+/* ------------------------------------------------------------------ drive */
+
+/* Under the Auto / To Drive / From Drive / Export / Import row, one status
+   line: quiet when all is well, red only when something needs a press. */
+.drive-when { margin: 10px 0 0; color: var(--muted); }
+.drive-when.ok::before { content: "\2713\00a0"; color: var(--good); font-weight: 700; }
+.drive-when.warn { color: var(--bad); }
+
+/* A browser with nothing in it, asked on the Games screen whether its Drive
+   copy should come back. */
+.drive-offer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px 14px; flex-wrap: wrap;
+  background: var(--accent-soft); border: 1px solid var(--line-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px; padding: 12px 15px; margin-bottom: 16px;
+}
+.drive-offer > p { margin: 0; flex: 1 1 240px; }
+.drive-offer > .msg { flex-basis: 100%; }
 
 /* the game picker in the friends screen */
 .pick-grid {
