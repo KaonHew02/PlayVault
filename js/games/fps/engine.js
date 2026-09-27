@@ -240,28 +240,30 @@ window.PV = window.PV || {};
     }
 
     /** What a bot carries: its class drawn from the seed, harder bots
-        with better-kept guns and more armour. */
+        with better-kept guns and more armour. Easy is dressed like a new
+        player — stock guns, no armour, one heal — and normal not far past
+        one: a level or so on its guns, a vest at most, two skills. */
     botKit(a) {
       const r = this.rng, diff = this.diff;
       const cats = ['ar', 'ar', 'ar', 'smg', 'smg', 'smg', 'lmg', 'shotgun', 'sniper', 'ar', 'smg', 'sniper'];
       const cat = r.pick(cats);
       const pid = r.pick(D.byCat(cat));
       const up = () => {
-        const lv = diff === 0 ? 0 : diff === 1 ? r.int(3) : 1 + r.int(4);
+        const lv = diff === 0 ? 0 : diff === 1 ? r.int(2) : 1 + r.int(4);
         return { dmg: lv, acc: lv, rel: r.int(lv + 1), mag: r.int(lv + 1) };
       };
       const att = {};
       for (const slot of D.ASLOTS) {
         const opts = D.ATTACH[slot].filter(x => D.fits(pid, slot, x.id));
-        if (opts.length && r.chance(0.45)) att[slot] = r.pick(opts).id;
+        if (opts.length && r.chance([0.2, 0.35, 0.45][diff])) att[slot] = r.pick(opts).id;
       }
-      const g = s => D.GEAR[s][Math.min(D.GEAR[s].length - 1, diff === 0 ? r.int(2) : diff === 1 ? r.int(3) : 1 + r.int(3))].id;
+      const g = s => D.GEAR[s][Math.min(D.GEAR[s].length - 1, diff === 0 ? 0 : diff === 1 ? r.int(2) : 1 + r.int(3))].id;
       const camo = r.pick(D.CAMOS).id;
       return {
         primary: { id: pid, own: { up: up(), att: att }, camo: camo, charm: 'none' },
         secondary: { id: r.pick(D.byCat('pistol')), own: { up: up() } },
         melee: { id: r.pick(['knife', 'knife', 'machete', 'axe']) },
-        skills: r.shuffle(['medkit', 'stim', 'radar', 'shield']).slice(0, 2 + (diff > 0 ? 1 : 0)),
+        skills: diff === 0 ? [r.pick(['medkit', 'stim'])] : r.shuffle(['medkit', 'stim', 'radar', 'shield']).slice(0, 1 + diff),
         gear: { head: g('head'), body: g('body'), hands: g('hands'), feet: g('feet') }
       };
     }

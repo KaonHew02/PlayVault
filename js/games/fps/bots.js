@@ -12,15 +12,17 @@
 
    Difficulty changes the hands, not the rules:
 
-                reaction   turn       first error   head aim
-     easy       0.63 s     195°/s     7°            8%
-     normal     0.40 s     320°/s     4.5°          18%
-     hard       0.20 s     490°/s     2°            30%
+                reaction   turn       first error   head aim   bursts past
+     easy       1.1 s      150°/s     12°           3%         5 m
+     normal     0.7 s      240°/s     8°            10%        8 m
+     hard       0.20 s     490°/s     2°            30%        22 m
 
    and each bot is up to fifteen per cent either side of its level, so a
    squad is not five copies of one player. Measured, one bot against a
-   player standing in the open fifteen metres away: easy takes about two
-   seconds to kill, hard under one.
+   rank-one player standing in the open fifteen metres away: easy takes
+   about four seconds to kill, normal about two, hard under one. Easy once
+   took 1.4 s and normal 1.1, less time than a new player needs to find
+   the bot on the screen at all (docs/GAMES.md, phase 27).
 
    Everything a bot does goes through the controls a player has — move,
    look, fire, aim, jump, crouch, reload, switch, throw, use — and every
@@ -37,20 +39,24 @@ window.PV = window.PV || {};
   /* The range each class likes to fight at. */
   const PREFER = { ar: 18, smg: 9, shotgun: 6, sniper: 34, lmg: 20, pistol: 11, melee: 1.2 };
 
+  /* How an automatic is held, by difficulty: past `from` metres it fires
+     `on` ticks of every `every` and waits out the rest. */
+  const BURST = [{ from: 5, every: 46, on: 11 }, { from: 8, every: 40, on: 14 }, { from: 22, every: 34, on: 17 }];
+
   class Bot {
     constructor(game, a) {
       this.g = game;
       this.a = a;
       const d = game.diff, r = game.rng;
       const v = 0.85 + r.next() * 0.3;
-      this.react = Math.round([38, 24, 12][d] * v);
-      this.turn = [3.4, 5.6, 8.5][d] / v;
-      this.err0 = [7, 4.5, 2][d] * v;
-      this.decay = [0.972, 0.965, 0.94][d];
-      this.shake = [1.3, 0.85, 0.35][d];   // the error that never settles
-      this.head = [0.08, 0.18, 0.3][d];
-      this.nadeRate = [0.004, 0.009, 0.014][d];
-      this.jumpy = [0, 0.004, 0.008][d];
+      this.react = Math.round([66, 42, 12][d] * v);
+      this.turn = [2.6, 4.2, 8.5][d] / v;
+      this.err0 = [12, 8, 2][d] * v;
+      this.decay = [0.982, 0.974, 0.94][d];
+      this.shake = [2.2, 1.4, 0.35][d];   // the error that never settles
+      this.head = [0.03, 0.1, 0.3][d];
+      this.nadeRate = [0.002, 0.005, 0.014][d];
+      this.jumpy = [0, 0.003, 0.008][d];
       this.role = a.id % 3;
       // One guard a side stays home in capture the flag: the last of its
       // squad. Everyone else goes for the other flag.
@@ -199,9 +205,10 @@ window.PV = window.PV || {};
       if (s.cat === 'sniper' && a.adsT < 0.85) shoot = false;
 
       // Auto guns fire in bursts at range, so the bloom has time to settle.
-      if (s.fire === 'auto' && d > 22) {
-        this.burstT = (this.burstT + 1) % 34;
-        if (this.burstT > 16) shoot = false;
+      const B = BURST[g.diff];
+      if (s.fire === 'auto' && d > B.from) {
+        this.burstT = (this.burstT + 1) % B.every;
+        if (this.burstT >= B.on) shoot = false;
       }
       if (shoot && gunHas) {
         if (s.fire === 'auto' || s.fire === 'burst' || s.fire === 'melee') c.fire = true;

@@ -39,8 +39,8 @@ Strike Squad is a first-person shooter against bots: seven modes on eight
 maps, twenty-two guns with upgrades, attachments, camos and keychains,
 clothes, skills, and daily and weekly missions. It is the biggest game here
 by a distance — fourteen files in `js/games/fps/`, raw WebGL like Crowd
-Rush — and `docs/GAMES.md` (phase 25) is the record of how it was built
-and measured.
+Rush — and `docs/GAMES.md` (phases 25 and 27) is the record of how it was
+built and measured.
 
 Blend In is paint-to-hide hide and seek: six hiders paint their bodies to
 match a wall, a floor or a shelf and hold still, two seekers hunt them with

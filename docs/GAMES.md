@@ -87,6 +87,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **24** | Five fixes to playing with friends | **2026-09-24** — found by walking every game through a room, asked for as "fix all four": Back froze or restarted a match, the board rematch card reset one board, a Snake race could never end, and Worm Arena's room opened with no mode picked. Then "fix the call it ranking too": a host who crashed first could call a race and take the medal. See below |
 | **25** | Strike Squad | **2026-09-25** — "i want add on game for fps shooter like this, just copy all the thing", with the crazygames *Hazmob FPS: Online Shooter* link. A new game: a first-person shooter against bots, with the reference's seven modes, eight maps, gun classes, upgrades, attachments, camos, keychains, clothes, skills, missions and crates. Hazmob's art, names and code are not copied. See below |
 | **26** | Blend In | **2026-09-25** — "and then oso add on paint to hide do like this linke, FULLY COPY IT", with the crazygames *Paint to Hide!* link. A new game: hide and seek in which hiders paint their bodies to match the map and seekers hunt them with water guns — the reference's colour wheel, Pick, Fill and Reset, brush sizes, poses, freecam, lock, wall climbing, first or third person seekers, six hiders against two seekers, 75 s to hide and 120 s to hunt, a table at the end, XP and coins. The reference's art, name and code are not copied. See below |
+| **27** | Strike Squad: easy and normal eased | **2026-09-28** — "for the fps shooter game the bot normal mode or easy mode 太厉害了 降低下power" (too strong, turn the power down). Measured before anything was changed: easy killed a player standing in the open in 1.4 s and normal in 1.1 s, hard in 0.7. Now about four seconds and two; hard is untouched. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -898,7 +899,8 @@ What measuring found (bots in every place, `node` with the engine alone):
   23–29% of their shots, which is about what people do.
 - **Difficulty is the bots' hands**, measured as one bot facing a player who
   stands in the open fifteen metres away: easy takes about 2.2 s to kill,
-  normal 1.2 s, hard 0.9 s (median of twelve).
+  normal 1.2 s, hard 0.9 s (median of twelve). Too close together, and too
+  quick for a new player: phase 27 slowed easy and normal down.
 
 `smoke.js` holds it: every map has its spawns and objectives and a way on
 foot from a spawn to each of them; bodies stop at walls, walk up stairs and
@@ -1019,3 +1021,56 @@ Not built: online rounds against people (a server — with friends it is a
 race on one seed, as every arcade game here is), the reference's ads, and
 its store of character skins, which would only cover the body you are
 meant to paint.
+
+### Phase 27 — Strike Squad: easy and normal eased by measurement
+
+"For the fps shooter game the bot normal mode or easy mode 太厉害了 降低下power"
+— too strong, turn the power down. Measured before anything was changed: one
+bot against a rank-one player — the starting kit, no armour — on Depot's
+clear strip, the median of 81 matches.
+
+| time to the kill | 15 m, standing | 15 m, strafing | 8 m, standing |
+| --- | --- | --- | --- |
+| easy | 1.38 s → 3.93 s | 3.95 s → 5.48 s | 1.30 s → 3.83 s |
+| normal | 1.13 s → 2.17 s | 3.53 s → 4.97 s | 1.15 s → 2.10 s |
+| hard | 0.73 s (unchanged) | 2.68 s | 0.78 s |
+
+Easy and normal were a quarter of a second apart and not far off hard, and a
+second and a bit is less than a new player needs to find the bot on the
+screen at all, let alone turn and shoot back. Easy now takes about four
+seconds and normal about two, and a player who keeps moving buys another
+second or two on each.
+
+It is still the hands, not the rules — a bot's bullets do what yours do:
+
+- **Slower eyes and hands** (`bots.js`). Reaction 0.63 → 1.1 s on easy and
+  0.40 → 0.7 s on normal; turning 195 → 150°/s and 320 → 240°/s; the first
+  shots' error 7 → 12° and 4.5 → 8°, settling more slowly, with the wobble
+  that never settles about two-thirds larger; head aim 8 → 3% and 18 → 10%;
+  grenades half as often.
+- **Bursts.** Every difficulty held an automatic's trigger down inside 22 m,
+  so at fighting range easy and normal emptied a magazine just as hard does.
+  Easy now fires 11 ticks in 46 past 5 m and normal 14 in 40 past 8 m; hard
+  still fires 17 in 34 past 22 m.
+- **The kit** (`engine.js`, `botKit`). Easy is dressed like a new player:
+  stock guns, no armour (it could wear a 15-point vest), fittings on one
+  slot in five rather than about half, and one skill — a heal or a stim —
+  where it had two of four, radar and shield among them. Normal has one
+  upgrade level or none on its guns (it had up to two), fittings on about a
+  third of its slots, a vest at most (it could stack a helmet on a plate
+  for 40 armour, which soaks half of every hit until it is gone) and two
+  skills where it had three.
+
+Hard is untouched: the same code path and the same draws from the RNG, so a
+hard match replays exactly as it did, and it measures the same to the
+hundredth. Your own squad's bots are the same bots, so they are eased too:
+on easy the match leans harder on what you do.
+
+`smoke.js` holds it: the duel now also asks that easy take at least three
+seconds and normal at least 1.6 — the old bots took 2.8 and 1.2 in the
+suite's own duel, so either would trip it — and the bot-only matches it
+plays in every mode, on normal, still end on their own terms, bring flags
+home and split search and destroy. Played in the browser on the built
+bundle: an easy team deathmatch deploys and runs with no console errors,
+and the same duel run inside the page gives the headless numbers to the
+tick.

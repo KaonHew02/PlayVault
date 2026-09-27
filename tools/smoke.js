@@ -1651,7 +1651,9 @@ section('strike squad — maps, bodies, guns, and ' + (7 * scale) + ' bot matche
 
   /* Difficulty is the bots' hands. One bot, facing a player who stands in
      the open fifteen metres off, on Depot's clear strip: the median time
-     to the kill goes down from easy to normal to hard. */
+     to the kill goes down from easy to normal to hard, and easy and normal
+     leave a new player the seconds it takes to find the bot at all (phase
+     27: they had killed in 2.2 s and 1.2 s, about as fast as hard). */
   function duel(diff, seed) {
     const g = new F({ seed: seed, mode: 'tdm', map: 'depot', difficulty: diff, autostart: true });
     while (g.phase !== 'live') g.advance();
@@ -1668,6 +1670,7 @@ section('strike squad — maps, bodies, guns, and ' + (7 * scale) + ' bot matche
   const me = { easy: median('easy'), normal: median('normal'), hard: median('hard') };
   ok(me.easy > me.normal && me.normal > me.hard, 'the bots were not quicker from easy to hard: ' + JSON.stringify(me));
   ok(me.hard > 20 && me.easy < 60 * 6, 'a duel took an unreasonable time: ' + JSON.stringify(me));
+  ok(me.easy >= 60 * 3 && me.normal >= 60 * 1.6, 'easy or normal bots kill a player in the open too fast: ' + JSON.stringify(me));
 });
 
 section('strike squad — the lobby: coins, the armory, missions and crates', () => {
