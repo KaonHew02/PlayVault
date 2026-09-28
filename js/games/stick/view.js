@@ -94,6 +94,7 @@ window.PV = window.PV || {};
 
     const spec = {
       hz: 60,
+      fullscreen: false,             // its own ⛶: the canvas alone, not the host
       get keymap() { return mode === 'two' ? KEYS2 : KEYS1; },
       sustained: ['l1', 'r1', 'd1', 'l2', 'r2', 'd2'],
       pad: [

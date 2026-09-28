@@ -226,22 +226,43 @@ main {
 .play-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .play-head h2 { margin: 0; font-size: 19px; }
 .game-host { display: block; }
-/* A game on the whole screen (Street Chef's ⛶): its bar on top, and the
-   stage takes the rest, centred either way — the game reads the stage's
-   size to fit its canvas in it. */
+/* A game on the whole screen (PV.fullscreen, the ⛶ that ends its bar): the
+   bar on top, and the stage takes the rest, centred either way — the game
+   reads its stage's size to fit itself in it. A race's table keeps its place
+   above the game, and the end card lies over the lot. The page's gutter,
+   and like the page (viewport-fit=cover) it keeps clear of a phone's notch. */
 .game-host:fullscreen {
   display: flex; flex-direction: column; overflow: auto;
-  padding: 12px 16px; background: var(--page);
+  padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: var(--page);
 }
-.game-host:fullscreen > .g-loop { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.game-host:fullscreen .loop-stage { flex: 1; min-height: 0; align-items: center; }
+.game-host:fullscreen > :not(.room-bar, .over-layer) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.game-host:fullscreen :is(.loop-stage, .board-box, .tetris-stage, .cards-box, .tiles-box) {
+  flex: 1; min-height: 0; align-items: center; align-content: center;
+}
+/* Auto margins centre too, and unlike align-items they give way to the
+   top edge in the one case a table outgrows its box: a spider column
+   twenty cards deep. */
+.game-host:fullscreen :is(.cards-box, .tiles-box) > canvas { margin: auto; }
+/* A toast floats over the foot of the screen, rather than taking a row
+   the stage was measured without. */
+.game-host:fullscreen .game-toast {
+  position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); z-index: 4; transform: translateX(-50%);
+  max-width: calc(100% - 32px); margin: 0; box-shadow: var(--shadow);
+}
+/* The game has the room: a line of help under it waits for the page. */
+.game-host:fullscreen .loop-below > p { display: none; }
+.game-host:fullscreen .loop-below:not(:has(> :not(p))) { display: none; }
 
 .game-bar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
 }
 .game-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.bar-actions { display: flex; gap: 8px; margin-left: auto; }
+/* Wraps, right-aligned, rather than push a 360px page sideways: five
+   buttons and a ⛶ are more than a phone's width. */
+.bar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 .turn-label { font-weight: 600; }
 .stone-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
 .stone-dot.black { background: #10151C; border: 1px solid var(--line-2); }
@@ -315,6 +336,13 @@ main {
 .num:hover:not(:disabled) { border-color: var(--accent); }
 .num:disabled { opacity: .3; cursor: default; }
 .sudoku-tools { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+/* On the whole screen the view sets --grid, the biggest square the room
+   under the bar holds: the grid takes it, the pad under it matches it, and
+   the digits grow with it. */
+.game-host:fullscreen .sudoku-grid,
+.game-host:fullscreen .sudoku-pad { width: var(--grid, min(100%, 620px)); }
+.game-host:fullscreen .sq { font-size: calc(var(--grid, 620px) * .052); }
+.game-host:fullscreen .sq .marks { font-size: calc(var(--grid, 620px) * .018); }
 
 /* ------------------------------------------------------------------ tetris */
 
@@ -559,6 +587,9 @@ main {
   .loop-stage { flex-direction: column; align-items: center; }
   .loop-side { flex-direction: row; width: 100%; justify-content: center; flex-wrap: wrap; }
   .panel-mini.stats { flex: 1 1 auto; min-width: 92px; }
+  /* On the whole screen a side panel taller than the room under the canvas
+     (Worm Arena's wardrobe) scrolls in the stage, from the top of it. */
+  .game-host:fullscreen .loop-stage { justify-content: safe center; overflow-y: auto; }
 }
 
 /* ------------------------------------------------------- playing together

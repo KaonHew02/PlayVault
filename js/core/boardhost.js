@@ -2,8 +2,8 @@
 
    五子棋, 黑白棋, Chess and 象棋 differ in their rules and in how they are
    drawn. Everything AROUND that is identical: a canvas that resizes with the
-   window, a status line, undo, restart, an AI that answers after a beat, and
-   the end-of-game record. That part lives here once.
+   window, a status line, undo, restart, full screen, an AI that answers after
+   a beat, and the end-of-game record. That part lives here once.
 
    A game supplies a spec — create(), draw(), hit(), status(), outcome() — and
    gets the rest. It never manages the ticker, the canvas, or the profile.
@@ -84,11 +84,14 @@ window.PV = window.PV || {};
     btnNew.hidden = online && !room.isHost;
     if (online) btnNew.textContent = t('room.rematch');
 
+    // On the whole screen the board is as big as the room under the bar.
+    const full = PV.fullscreen(ctx.host, () => draw());
+
     const roomBar = online ? PV.RoomUI.gameBar(room) : null;
     boardBox.appendChild(canvas);
     if (roomBar) wrap.appendChild(roomBar.node);
     wrap.appendChild(PV.el('div', { class: 'game-bar' }, status,
-      PV.el('div', { class: 'bar-actions' }, btnUndo, btnNew)));
+      PV.el('div', { class: 'bar-actions' }, btnUndo, btnNew, full.node)));
     wrap.appendChild(boardBox);
     wrap.appendChild(extra);
     ctx.host.appendChild(wrap);
@@ -284,9 +287,15 @@ window.PV = window.PV || {};
 
     function draw() {
       const box = boardBox.getBoundingClientRect();
-      const avail = Math.max(200, Math.min(box.width || 320, maxWidth, PV.stage().w));
-      const maxH = PV.stage().h;
-      const w = Math.min(avail, maxH / aspect);
+      let w;
+      if (full.on) {
+        // The box is what the bar leaves of the screen, and maxWidth is a
+        // page's cap: the board fills the box's short side.
+        w = Math.max(200, Math.min(box.width, box.height / aspect));
+      } else {
+        const avail = Math.max(200, Math.min(box.width || 320, maxWidth, PV.stage().w));
+        w = Math.min(avail, PV.stage().h / aspect);
+      }
       const h = w * aspect;
       const dpr = window.devicePixelRatio || 1;
       canvas.style.width = w + 'px';
@@ -301,6 +310,7 @@ window.PV = window.PV || {};
     function relabel() {
       btnUndo.textContent = t('common.undo');
       btnNew.textContent = online ? t('room.rematch') : t('common.restart');
+      full.relabel();
       render();
     }
 
@@ -310,6 +320,7 @@ window.PV = window.PV || {};
         window.removeEventListener('resize', onResize);
         document.removeEventListener('pv:lang', relabel);
         canvas.removeEventListener('pointerdown', onPoint);
+        full.destroy();
         if (net) net.destroy();
         if (spec.onDestroy) spec.onDestroy();
         wrap.remove();

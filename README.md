@@ -115,10 +115,18 @@ Engines never touch the DOM, the profile, or `Math.random()`. Everything random
 comes from a seeded `PV.RNG` — which is what makes "race a friend on this seed"
 possible later without a server.
 
-The harnesses own the canvas, resizing, undo, pause, the computer's turn, key
-repeat, the thumb pad and the end-of-game card. A board game supplies
-`create/draw/hit/status/outcome`; a real-time game supplies
+The harnesses own the canvas, resizing, full screen, undo, pause, the
+computer's turn, key repeat, the thumb pad and the end-of-game card. A board
+game supplies `create/draw/hit/status/outcome`; a real-time game supplies
 `create/draw/keymap/pad/outcome`.
+
+Every game's bar ends in the same ⛶ Fullscreen, from `PV.fullscreen` in
+`util.js`: the harnesses add it, and the games that draw their own bar (Tetris
+and the puzzles) add it themselves. The game's host goes on the whole screen,
+bar and all, and the game measures the room its stage has there instead of
+`PV.stage()`'s page caps.
+Strike Squad, Blend In, Stick Clash and Street Chef bring their own
+(`fullscreen: false` to the harness).
 
 ## Playing with friends
 

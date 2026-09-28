@@ -35,9 +35,10 @@ window.PV = window.PV || {};
     const btnNew = PV.el('button', { class: 'btn ghost', onclick: () => newGame() }, t('common.newGame'));
     const btnUndo = PV.el('button', { class: 'btn ghost', onclick: undo }, t('common.undo'));
     const btnHint = PV.el('button', { class: 'btn ghost', onclick: showHint }, t('common.hint'));
+    const full = PV.fullscreen(ctx.host, () => layout());
 
     wrap.appendChild(PV.el('div', { class: 'game-bar' }, meta,
-      PV.el('div', { class: 'bar-actions' }, btnHint, btnUndo, btnNew)));
+      PV.el('div', { class: 'bar-actions' }, btnHint, btnUndo, btnNew, full.node)));
     wrap.appendChild(PV.el('div', { class: 'cards-box' }, canvas));
     wrap.appendChild(toast);
     ctx.host.appendChild(wrap);
@@ -162,7 +163,13 @@ window.PV = window.PV || {};
 
     function layout() {
       const box = canvas.parentElement.getBoundingClientRect();
-      const avail = Math.max(280, Math.min(box.width || 320, PV.stage().w, 1240));
+      // On the whole screen the table is the room under the bar, uncapped;
+      // but ten cards as wide as a wide screen allows would leave no height
+      // to fan a column in, so there the width answers to the height too,
+      // about as a laptop's page does.
+      const roomH = full.on ? box.height : PV.stage().h;
+      const avail = full.on ? Math.max(280, Math.min(box.width, box.height * 1.9))
+        : Math.max(280, Math.min(box.width || 320, PV.stage().w, 1240));
       const pad = Math.max(6, avail * 0.012);
       const gap = Math.max(3, avail * 0.008);
 
@@ -184,14 +191,17 @@ window.PV = window.PV || {};
       // player scrolling to see their own tableau — the fan tightens until the
       // deepest column fits the screen, never past six and a half cards.
       const spread = deepest(fanUp, fanDown) - ch;
-      const room = Math.max(ch * 2.2, Math.min(ch * 6.4, PV.stage().h - top - pad));
+      const room = Math.max(ch * 2.2, Math.min(full.on ? Infinity : ch * 6.4, roomH - top - pad));
       if (spread > 0 && ch + spread > room) {
         const k = PV.clamp((room - ch) / spread, 0.40, 1);
         fanUp *= k;
         fanDown *= k;
       }
 
-      const H = top + Math.max(ch, deepest(fanUp, fanDown)) + pad;
+      // On the whole screen the felt runs to the bottom of it, so the table
+      // does not jump about as its columns grow and shrink.
+      const H = Math.max(full.on ? Math.floor(roomH) : 0,
+        top + Math.max(ch, deepest(fanUp, fanDown)) + pad);
       geom = { W: W, H: H, cw: cw, ch: ch, gap: gap, pad: pad,
                head: head, top: top, fanUp: fanUp, fanDown: fanDown };
 
@@ -586,6 +596,7 @@ window.PV = window.PV || {};
       btnNew.textContent = t('common.newGame');
       btnUndo.textContent = t('common.undo');
       btnHint.textContent = t('common.hint');
+      full.relabel();
       render();
     }
 
@@ -604,6 +615,7 @@ window.PV = window.PV || {};
         canvas.removeEventListener('dblclick', onDouble);
         window.removeEventListener('resize', layout);
         document.removeEventListener('pv:lang', relabel);
+        full.destroy();
         wrap.remove();
       }
     };

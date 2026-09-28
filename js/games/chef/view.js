@@ -538,6 +538,7 @@ window.PV = window.PV || {};
       hz: D.HZ,
       keymap: {},
       pad: null,
+      fullscreen: false,             // it brings its own ⛶
       pct: g => g.progress,
 
       create: () => {

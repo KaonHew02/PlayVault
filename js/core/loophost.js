@@ -1,8 +1,9 @@
 /* PlayVault — the shared harness for real-time games.
 
    Snake, Racing and Tower Defense all need the same scaffolding: a canvas that
-   resizes, a fixed-timestep ticker, pause and restart, keyboard bindings, a
-   thumb pad on phones, and the end-of-run record. That lives here once.
+   resizes, a fixed-timestep ticker, pause and restart, full screen, keyboard
+   bindings, a thumb pad on phones, and the end-of-run record. That lives here
+   once.
 
    Key repeat stays in the harness, not in the engine: the engine keeps seeing
    one discrete action per tick, which is what keeps a run reproducible from its
@@ -30,7 +31,11 @@ window.PV = window.PV || {};
    * spec: {
    *   create()                     -> game (a PV.LoopGame)
    *   hz                           default 60
-   *   fit(availW, availH)          -> {w, h}; default a square
+   *   fit(availW, availH)          -> {w, h}; default a square. On the whole
+   *                                screen it is asked for the room the stage
+   *                                has, and what it answers is drawn as big
+   *                                as fits there, in its own shape
+   *   fullscreen                   false: the game brings its own ⛶
    *   draw(c, game, geom, api)
    *   keymap                       { 'ArrowLeft': 'left', ... }
    *   repeatable                   ['left','right'] actions that auto-repeat
@@ -54,9 +59,11 @@ window.PV = window.PV || {};
     const below = PV.el('div', { class: 'loop-below' });
     const btnPause = PV.el('button', { class: 'btn ghost', onclick: togglePause });
     const btnNew = PV.el('button', { class: 'btn ghost', onclick: () => reset() }, t('common.restart'));
+    // Last in the bar, where a game's own buttons (put first) leave it be.
+    const full = spec.fullscreen === false ? null : PV.fullscreen(ctx.host, () => sizeCanvas());
     const bar = PV.el('div', { class: 'game-bar' },
       PV.el('div', { class: 'game-status' }),
-      PV.el('div', { class: 'bar-actions' }, btnPause, btnNew));
+      PV.el('div', { class: 'bar-actions' }, btnPause, btnNew, full && full.node));
     const status = bar.querySelector('.game-status');
 
     const pad = PV.el('div', { class: 'loop-pad' });
@@ -221,11 +228,29 @@ window.PV = window.PV || {};
       // pinned every real-time game to its floor size on a phone.
       const sideW = (!stage.phone && side.childNodes.length)
         ? side.getBoundingClientRect().width : 0;
-      const availW = Math.max(140,
-        Math.min(box.width || 320, stage.w) - sideW - (sideW ? 14 : 0));
-      const availH = stage.h;
-      const size = spec.fit ? spec.fit(availW, availH)
-        : { w: Math.min(availW, availH), h: Math.min(availW, availH) };
+      const fit = (w, h) => (spec.fit ? spec.fit(w, h) : { w: Math.min(w, h), h: Math.min(w, h) });
+      let size;
+      if (full && full.on) {
+        /* The stage is what the bar and the thumb pad leave of the screen,
+           and it is all the game's: the caps a fit keeps are for a page. So
+           the game picks its shape for this room and is drawn as big as fits
+           in it — up or down, since a fit may lean on a page that scrolls.
+           A phone's side panel sits under the canvas and takes its height,
+           up to the point where the canvas would be a postage stamp: past
+           that (Worm Arena's wardrobe) the panel runs on below, and the
+           stage scrolls to it. */
+        const sideH = (stage.phone && side.childNodes.length)
+          ? side.getBoundingClientRect().height + 14 : 0;
+        const availW = Math.max(140, box.width - sideW - (sideW ? 14 : 0));
+        const availH = Math.max(140, box.height - sideH, box.height * 0.6);
+        const want = fit(availW, availH);
+        const k = Math.min(availW / want.w, availH / want.h);
+        size = { w: Math.floor(want.w * k), h: Math.floor(want.h * k) };
+      } else {
+        const availW = Math.max(140,
+          Math.min(box.width || 320, stage.w) - sideW - (sideW ? 14 : 0));
+        size = fit(availW, stage.h);
+      }
       geom = { w: size.w, h: size.h, unit: Math.min(size.w, size.h) };
       const dpr = window.devicePixelRatio || 1;
       canvas.style.width = size.w + 'px';
@@ -288,6 +313,7 @@ window.PV = window.PV || {};
     function relabel() {
       btnPause.textContent = paused ? t('common.resume') : t('common.pause');
       btnNew.textContent = t('common.restart');
+      if (full) full.relabel();
       if (spec.onRelabel) spec.onRelabel(api);
     }
 
@@ -309,6 +335,7 @@ window.PV = window.PV || {};
         window.removeEventListener('resize', sizeCanvas);
         window.removeEventListener('blur', releaseAll);
         canvas.removeEventListener('pointerdown', onPointer);
+        if (full) full.destroy();
         if (spec.onDestroy) spec.onDestroy();
         wrap.remove();
       }

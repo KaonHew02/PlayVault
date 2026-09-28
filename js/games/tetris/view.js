@@ -68,14 +68,17 @@ window.PV = window.PV || {};
       padBtn('◀', 'left', 'left'), padBtn('▼', 'softDrop', 'soft drop'), padBtn('▶', 'right', 'right'),
       padBtn('⟳', 'rotateCW', 'rotate'), padBtn('⤓', 'hardDrop', 'hard drop'), padBtn('⇄', 'hold', 'hold'));
 
+    // On the whole screen the well is as tall as the room under the bar.
+    const full = PV.fullscreen(ctx.host, () => sizeCanvas());
     const bar = PV.el('div', { class: 'game-bar' },
       PV.el('div', { class: 'game-status' },
         PV.el('span', { class: 'chip hide-sm' }, t('tetris.controls'))),
-      PV.el('div', { class: 'bar-actions' }, btnPause, btnNew));
+      PV.el('div', { class: 'bar-actions' }, btnPause, btnNew, full.node));
 
+    const stageEl = PV.el('div', { class: 'tetris-stage' },
+      sideL, PV.el('div', { class: 'well-box' }, canvas), sideR);
     wrap.appendChild(bar);
-    wrap.appendChild(PV.el('div', { class: 'tetris-stage' },
-      sideL, PV.el('div', { class: 'well-box' }, canvas), sideR));
+    wrap.appendChild(stageEl);
     wrap.appendChild(pad);
     ctx.host.appendChild(wrap);
 
@@ -176,15 +179,26 @@ window.PV = window.PV || {};
       // asking it how wide it is gives back last frame's answer (or zero).
       const visRows = game ? game.visibleRows() : 20;
       const stage = PV.stage();
-      const rowW = Math.min(wrap.getBoundingClientRect().width || 320, stage.w);
       // Below the stacking breakpoint the panels sit under the well, so their
       // width is not the well's to give up.
       const sideW = stage.phone ? 0
         : sideL.getBoundingClientRect().width + sideR.getBoundingClientRect().width + 28;
+      let rowW, maxH;
+      if (full.on) {
+        // The stage is what the bar and the pad leave of the screen — less,
+        // on a phone, the row of panels under the well — and none of it is
+        // a page's to cap.
+        const r = stageEl.getBoundingClientRect();
+        rowW = r.width;
+        maxH = r.height - (stage.phone ? Math.max(sideL.getBoundingClientRect().height,
+          sideR.getBoundingClientRect().height) + 14 : 0);
+      } else {
+        rowW = Math.min(wrap.getBoundingClientRect().width || 320, stage.w);
+        maxH = stage.h;
+      }
       const availW = Math.max(120, rowW - sideW);
-      const maxH = stage.h;
       cell = Math.floor(Math.min(availW / PV.Tetris.COLS, maxH / visRows));
-      cell = PV.clamp(cell, 10, 46);
+      cell = PV.clamp(cell, 10, full.on ? 96 : 46);
       const dpr = window.devicePixelRatio || 1;
       const w = cell * PV.Tetris.COLS, h = cell * visRows;
       canvas.style.width = w + 'px';
@@ -359,6 +373,7 @@ window.PV = window.PV || {};
     function relabel() {
       btnPause.textContent = paused ? t('common.resume') : t('common.pause');
       btnNew.textContent = t('common.restart');
+      full.relabel();
     }
 
     return {
@@ -377,6 +392,7 @@ window.PV = window.PV || {};
         document.removeEventListener('pv:lang', relabel);
         window.removeEventListener('resize', sizeCanvas);
         window.removeEventListener('blur', releaseAll);
+        full.destroy();
         wrap.remove();
       }
     };

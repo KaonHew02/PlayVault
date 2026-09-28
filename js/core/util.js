@@ -118,4 +118,47 @@ window.PV = window.PV || {};
   PV.cancelRaf = id => (typeof cancelAnimationFrame === 'function'
     ? cancelAnimationFrame(id) : clearTimeout(id));
 
+  /**
+   * The ⛶ at the end of a game's bar, the same in every game: the two
+   * harnesses put it there, and the games that draw their own bar (Tetris
+   * and the puzzles) do.
+   *
+   * `target` is what goes on the whole screen — the game's host, bar and
+   * all, so Undo, Pause and New game come along, and so does a race's
+   * table. While it is there the game measures the room its stage has
+   * rather than PV.stage(): the page's caps keep a board readable on a
+   * page, and there is no page. `changed` runs when it goes and when it
+   * comes back, because not every browser fires a resize on the way in —
+   * none does in a window that already fills the screen.
+   *
+   * The label says which way it goes, a browser that cannot (an iPhone's)
+   * never shows it, and a game taken down leaves the full screen with it.
+   */
+  PV.fullscreen = function (target, changed) {
+    const quiet = p => { if (p && p.catch) p.catch(() => {}); };
+    const on = () => !!document.fullscreenElement && document.fullscreenElement === target;
+    const btn = PV.el('button', {
+      class: 'btn ghost fs-btn', hidden: !document.fullscreenEnabled,
+      onclick: () => {
+        if (document.fullscreenElement) quiet(document.exitFullscreen());
+        else if (target.requestFullscreen) quiet(target.requestFullscreen());
+      }
+    });
+    function relabel() {
+      btn.textContent = '⛶ ' + window.PV.t(on() ? 'common.fullscreenExit' : 'common.fullscreen');
+    }
+    function onChange() { relabel(); if (changed) changed(); }
+    document.addEventListener('fullscreenchange', onChange);
+    relabel();
+    return {
+      node: btn,
+      get on() { return on(); },
+      relabel: relabel,
+      destroy() {
+        document.removeEventListener('fullscreenchange', onChange);
+        if (on()) quiet(document.exitFullscreen());
+      }
+    };
+  };
+
 })(window.PV);

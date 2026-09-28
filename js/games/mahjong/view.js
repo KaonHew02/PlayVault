@@ -60,9 +60,10 @@ window.PV = window.PV || {};
     const btnHint = PV.el('button', { class: 'btn ghost', onclick: showHint }, t('common.hint'));
     const btnShuffle = PV.el('button', { class: 'btn ghost', onclick: reshuffle }, t('mahjong.shuffle'));
     const toast = PV.el('div', { class: 'game-toast', hidden: true });
+    const full = PV.fullscreen(ctx.host, () => layout());
 
     wrap.appendChild(PV.el('div', { class: 'game-bar' }, meta,
-      PV.el('div', { class: 'bar-actions' }, btnUndo, btnHint, btnShuffle, btnNew)));
+      PV.el('div', { class: 'bar-actions' }, btnUndo, btnHint, btnShuffle, btnNew, full.node)));
     wrap.appendChild(PV.el('div', { class: 'tiles-box' }, canvas));
     wrap.appendChild(toast);
     ctx.host.appendChild(wrap);
@@ -143,9 +144,12 @@ window.PV = window.PV || {};
 
     function layout() {
       const box = canvas.parentElement.getBoundingClientRect();
-      const W = Math.max(280, Math.min(box.width || 320, PV.stage().w, 1120));
+      // On the whole screen the room under the bar is the turtle's, uncapped.
+      const W = full.on ? Math.max(280, box.width)
+        : Math.max(280, Math.min(box.width || 320, PV.stage().w, 1120));
+      const roomH = full.on ? box.height : PV.stage().h;
       // The turtle spans 16 tiles across and 8 down, plus room for the stack offset.
-      const tw = Math.floor(Math.min(W / 16.6, PV.stage().h / 9.4 / 1.32));
+      const tw = Math.floor(Math.min(W / 16.6, roomH / 9.4 / 1.32));
       const size = Math.max(18, tw);
       const th = Math.round(size * 1.32);
       const dx = Math.max(2, Math.round(size * 0.13));
@@ -375,6 +379,7 @@ window.PV = window.PV || {};
       btnUndo.textContent = t('common.undo');
       btnHint.textContent = t('common.hint');
       btnShuffle.textContent = t('mahjong.shuffle');
+      full.relabel();
       render();
     }
 
@@ -388,6 +393,7 @@ window.PV = window.PV || {};
         canvas.removeEventListener('pointerdown', onPoint);
         window.removeEventListener('resize', layout);
         document.removeEventListener('pv:lang', relabel);
+        full.destroy();
         wrap.remove();
       }
     };

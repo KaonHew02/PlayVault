@@ -461,6 +461,7 @@ window.PV = window.PV || {};
       hz: 60,
       keymap: {},
       pad: null,
+      fullscreen: false,             // its own ⛶: the canvas alone, not the host
 
       create: () => {
         meta = PV.HideMeta.load();

@@ -23,8 +23,9 @@ window.PV = window.PV || {};
     const meta = PV.el('div', { class: 'game-status' });
     const btnNew = PV.el('button', { class: 'btn ghost', onclick: () => newGame(true) },
       t('common.newGame'));
+    const full = PV.fullscreen(ctx.host, fit);
     bar.appendChild(meta);
-    bar.appendChild(PV.el('div', { class: 'bar-actions' }, btnNew));
+    bar.appendChild(PV.el('div', { class: 'bar-actions' }, btnNew, full.node));
 
     const grid = PV.el('div', { class: 'sudoku-grid', role: 'grid' });
     const cells = [];
@@ -54,9 +55,10 @@ window.PV = window.PV || {};
     const btnCheck = PV.el('button', { class: 'btn ghost', onclick: check }, t('sudoku.check'));
     const tools = PV.el('div', { class: 'sudoku-tools' }, btnNotes, btnErase, btnUndo, btnHint, btnCheck);
     const toast = PV.el('div', { class: 'game-toast', hidden: true });
+    const gridBox = PV.el('div', { class: 'board-box' }, grid);
 
     wrap.appendChild(bar);
-    wrap.appendChild(PV.el('div', { class: 'board-box' }, grid));
+    wrap.appendChild(gridBox);
     wrap.appendChild(pad);
     wrap.appendChild(tools);
     wrap.appendChild(toast);
@@ -64,6 +66,7 @@ window.PV = window.PV || {};
 
     document.addEventListener('keydown', onKey);
     document.addEventListener('pv:lang', relabel);
+    window.addEventListener('resize', fit);
 
     // Dealing yourself a new board mid-race restarts your clock on the same
     // deal, which is a second attempt at everyone else's first.
@@ -169,6 +172,15 @@ window.PV = window.PV || {};
 
     /* ---- render ---- */
 
+    /** On the page the stylesheet sizes the grid. On the whole screen it is
+        the biggest square the room under the bar holds: --grid, which the
+        grid takes, the pad matches and the digits grow with. */
+    function fit() {
+      if (!full.on) { wrap.style.removeProperty('--grid'); return; }
+      const r = gridBox.getBoundingClientRect();
+      wrap.style.setProperty('--grid', Math.floor(Math.min(r.width, r.height)) + 'px');
+    }
+
     function render(markWrong) {
       const selR = sel >= 0 ? (sel / 9) | 0 : -1;
       const selC = sel >= 0 ? sel % 9 : -1;
@@ -261,6 +273,7 @@ window.PV = window.PV || {};
       btnErase.textContent = t('sudoku.erase');
       btnUndo.textContent = t('common.undo');
       btnCheck.textContent = t('sudoku.check');
+      full.relabel();
       render();
     }
 
@@ -272,6 +285,8 @@ window.PV = window.PV || {};
         save();
         document.removeEventListener('keydown', onKey);
         document.removeEventListener('pv:lang', relabel);
+        window.removeEventListener('resize', fit);
+        full.destroy();
         wrap.remove();
       }
     };

@@ -479,6 +479,7 @@ window.PV = window.PV || {};
       keymap: {},
       pad: null,
       pauseVeil: false,
+      fullscreen: false,             // its own ⛶: the canvas alone, not the host
 
       create: () => new PV.FpsGame({
         seed: ctx.seed(), mode: opts.mode, map: opts.map, difficulty: opts.difficulty,
