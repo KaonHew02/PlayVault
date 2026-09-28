@@ -1218,3 +1218,99 @@ Played in the browser at a laptop's size and a phone's: the select, a
 purchase, a tournament fight with a timed combo, the ultimate's cut-in in
 training, a two-player match to its end card, the thumb pad, the move
 list pausing the fight, no console errors.
+
+### Phase 30 — Street Chef
+
+The reference is Nukebox Studios' food-truck cooking game on CrazyGames
+and the app stores: cook and serve at a truck's window against the clock,
+on street after street of levels, with coins spent on the kitchen. Its
+name and its art are its own, so this is a game of the same kind under
+its own name, drawn from scratch. What it has, and where it is:
+
+- **Five trucks, a hundred levels.** Pasta, Burger, Pizza, Taco and Sushi
+  Street, twenty levels each, a new dish or drink every level or two.
+  A truck opens when the one before is cleared to level 8 and its price is
+  paid, as the reference sells its next location.
+- **The kitchen is stations, plates, bins and a hot plate.** Tap an empty
+  pot and it cooks; when it rings, tap the food and it goes onto the plate
+  that wants it; tap a topping and it goes on; tap a finished plate or a
+  drink and it goes to whoever ordered it. Food left on the heat burns,
+  the reference's white sauce fastest. A drag says where instead: this
+  plate, that customer, the hot plate, the bin.
+- **Customers** stand at four places at the window with their order in a
+  bubble — up to three things — and a patience bar under it. Everything
+  handed over buys a little patience back; the whole order pays the bill
+  and a tip that shrinks as they wait. **The coins stay on the counter and
+  hold the place** until they are picked up, the reference's rule. A
+  coffee left to go cold pays half.
+- **Levels ask for coins** (and every fifth for a number served); one,
+  two and three stars at rising takings; some add *don't burn anything* or
+  *don't lose a customer*, which end the level the moment they are broken.
+- **The kitchen shop**, per truck: more and faster pots, pans, grills,
+  ovens and fryers; more plates; a hot plate where nothing burns; a secret
+  recipe that raises every price; an awning, lights and music that make
+  customers wait longer; a tip jar that picks up the coins.
+- **Gems** from a level's first three stars and from chef level-ups buy
+  three boosters before a level: quick cook, patience, no burning.
+- **A chef level** with experience from every customer served.
+- **On a truck's first level a hand points at the next step** with a line
+  saying why, until three customers have been served.
+
+Decisions:
+
+- **A plate may only hold what some dish on today's menu has.** That one
+  rule stops two sauces going on a pasta, and it is also what lets a tap
+  work: a topping goes to the first plate somebody is waiting for that
+  can take it, then to the first that can take it at all.
+- **A kitchen is whatever today's menu needs.** Stations and bins are not
+  listed per level; a pot is in the kitchen when something on the menu is
+  cooked in it, so no level can ask for what cannot be made.
+- **A level is a pure function of its truck and number**: who comes, when,
+  what they order and how patient they are come from the level's own seed
+  (`data.js` roster), so the level card can say what it asks before it
+  starts, the same level is the same level on a retry, and a race with
+  friends is the same queue for everybody.
+- **The bot is also the tutorial.** `bot.js` plays a level the way a good
+  cook does; the tests run every level with it, and the first level's
+  pointing hand is whatever it would do next.
+- **The kitchen packs itself.** Plates, drink machines, the hot plate,
+  cookers, bins and the rubbish bin are one row of boxes split into two
+  rows on a laptop and four on an upright phone where the widest row is
+  narrowest, so an upgraded kitchen is the same kitchen, fuller.
+
+What measuring found (the bot, the engine alone, `node`):
+
+- **The bot burned the food on no-burn levels.** It started the white
+  sauce for a plate whose pasta a more urgent order then took, and ranked
+  orders by patience left, so a newcomer with three things (and more
+  patience) reshuffled the queue every time somebody arrived. It serves
+  first come, first served now, starts a cooked topping only once the
+  plate's base is there, takes food off the heat before anything else, and
+  puts a spare cooked base on a plate before it burns.
+- **The first prices were a gift.** A casual player (a decision every
+  0.9 s, sharper on each retry) finished Pasta Street with everything
+  bought and 6,500 coins over, and nearly every level gave three stars.
+  Upgrades cost about twice as much now, the next trucks cost 2,500 to
+  12,000, and the star lines are 0.8, 1.1 and 1.38 of what the level's
+  customers would pay at list price — tips and the recipe are how the
+  third star is earned.
+- The same casual career now clears all hundred levels in about 150 tries,
+  a few boosters and some forty replays to save for the next truck; with
+  the base kitchen the later levels of each street are lost, and with the
+  middle one a quick cook three-stars every level.
+
+`smoke.js` holds it: every dish makeable in its kitchen on every level, the
+queue the same from the same seed, star lines rising; every box inside the
+canvas and clear of the others, wide and tall, for every truck fully
+upgraded, and a tap on every thing landing on it; cooking, plating, the
+coins holding the place, burning, a no-burn and a no-loss level failing,
+the hot plate, drags to a named plate and to the bin, a cold coffee, the
+tip jar, the recipe, junk inputs changing nothing, and a level replaying
+exactly from its inputs; a quick cook with the middle kitchen three-starring
+all hundred levels and a casual career never stuck; and the save — rebuilt
+from junk, sealed, boosters paid for at the start, coins kept for a loss,
+stars only rising, the shop, and trucks opening in order at their price.
+Played in the browser at a laptop's size and a phone's: the lobby, the
+how-to card, level 1 by taps and drags on the canvas through to its end
+card, Continue opening level 2's card, fully upgraded kitchens on the taco
+and sushi trucks, and the deployed bundle with no console errors.

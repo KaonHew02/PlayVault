@@ -1195,6 +1195,142 @@ main {
   .loop-pad .tpad { font-size: 22px; padding: 16px 0; }
 }
 
+/* ------------------------------------------------------ street chef (chef) */
+/* The lobby is the game's own card over the street — cream paper and dark
+   ink in both themes, like a menu board — so its colours are its own and
+   not the page's tokens, as Strike Squad's glass is. */
+.chef-box { position: relative; }
+.chef-menu {
+  position: absolute; inset: 1px; z-index: 2; overflow: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;
+  border-radius: 9px; color: #2A1E14;
+  background: rgba(255, 248, 234, .92);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.chef-menu[hidden] { display: none; }
+.chef-menu > .chef-top, .chef-menu > .chef-tabs, .chef-menu > .chef-body { width: 100%; max-width: 980px; margin-left: auto; margin-right: auto; }
+.chef-menu .muted { color: #7A6552; }
+.chef-menu .btn { background: #FFFFFF; border-color: #E2CFAF; color: #2A1E14; }
+.chef-menu .btn.primary { background: #F07A26; border-color: #D8631A; color: #FFFFFF; font-weight: 800; }
+.chef-menu .btn.sm { padding: 5px 10px; font-size: 12.5px; }
+.chef-menu .btn:disabled { opacity: .5; cursor: default; }
+
+.chef-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chef-rank { display: flex; align-items: center; gap: 10px; }
+.chef-rank .badge {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 40px; height: 40px; border-radius: 50%; background: #F07A26; color: #FFFFFF;
+  font-weight: 900; font-size: 18px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18);
+}
+.chef-rank .who { display: flex; flex-direction: column; gap: 3px; min-width: 140px; }
+.chef-rank .xp { display: block; height: 7px; border-radius: 4px; overflow: hidden; background: #EADBC2; }
+.chef-rank .xp i { display: block; height: 100%; background: #3DBE74; }
+.chef-rank small { color: #7A6552; font-size: 11.5px; }
+.chef-purse { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chef-purse .coins, .chef-purse .gems {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px;
+  background: #FFFFFF; border: 1px solid #E2CFAF; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+.chef-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #F3E4C9; }
+.chef-tab { flex: 1; background: none; border: 0; border-radius: 9px; padding: 7px 14px; font: inherit; font-weight: 700; color: #7A6552; cursor: pointer; }
+.chef-tab.on { background: #FFFFFF; color: #2A1E14; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.chef-body { display: flex; flex-direction: column; gap: 12px; }
+
+.chef-trucks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.chef-truck {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
+  padding: 6px 4px 8px; border-radius: 12px; background: #FFFFFF; border: 2px solid #EADBC2;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.chef-truck canvas { max-width: 100%; height: auto !important; }
+.chef-truck b { font-size: 13px; line-height: 1.2; text-align: center; }
+.chef-truck small { display: inline-flex; align-items: center; gap: 2px; font-size: 11.5px; color: #7A6552; text-align: center; }
+.chef-truck small.poor { color: #C0392B; }
+.chef-truck small.ok { color: #1E8A4C; font-weight: 700; }
+.chef-truck.on { border-color: #F07A26; box-shadow: 0 0 0 2px rgba(240, 122, 38, .25); }
+.chef-truck.locked { background: #F6EEDF; }
+
+.chef-levels { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
+.chef-level {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  min-height: 52px; padding: 4px 2px; border-radius: 10px; border: 2px solid #EADBC2; background: #FFFFFF;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.chef-level .n { font-weight: 900; font-size: 16px; }
+.chef-level .st { font-size: 11px; color: #F2A900; letter-spacing: -1px; }
+.chef-level .mk { position: absolute; top: -7px; right: -4px; font-size: 11px; }
+.chef-level.next { border-color: #F07A26; background: #FFF1E3; }
+.chef-level.locked { background: #F1E7D6; color: #B7A58A; cursor: default; }
+
+.chef-kit { display: flex; flex-direction: column; gap: 6px; }
+.chef-kit p { margin: 0; }
+.chef-up {
+  display: grid; grid-template-columns: 46px 1fr auto; gap: 10px; align-items: center;
+  padding: 6px 10px; border-radius: 12px; background: #FFFFFF; border: 1px solid #EADBC2;
+}
+.chef-up .what { display: flex; flex-direction: column; min-width: 0; }
+.chef-up small { color: #7A6552; font-size: 12px; }
+.chef-up .pips { display: inline-flex; gap: 3px; margin-left: 4px; vertical-align: middle; }
+.chef-up .pips i { width: 9px; height: 9px; border-radius: 50%; background: #EADBC2; }
+.chef-up .pips i.on { background: #3DBE74; }
+.chef-up .buy { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-weight: 800; }
+.chef-max { font-size: 12px; font-weight: 800; color: #1E8A4C; }
+
+/* The level card and the help, over the lobby. */
+.chef-layer {
+  position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center;
+  padding: 12px; background: rgba(42, 30, 20, .45); border-radius: 9px;
+}
+.chef-layer[hidden] { display: none; }
+.chef-card {
+  display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 420px; max-height: 100%; overflow: auto;
+  padding: 14px 16px; border-radius: 16px; background: #FFFCF5; box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+}
+.chef-card .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.chef-card h3 { margin: 0; font-size: 18px; }
+.chef-card p { margin: 0; }
+.chef-card .goals { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.chef-card .goals .warn { list-style: none; margin-left: -18px; color: #C0392B; font-weight: 700; }
+.chef-card .stars { display: flex; gap: 6px; flex-wrap: wrap; }
+.chef-card .stars .line {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px 8px; border-radius: 999px;
+  background: #F3E4C9; color: #9A6B00; font-weight: 800; font-size: 13px;
+}
+.chef-card .stars .line.got { background: #FFE7A3; }
+.chef-card .fresh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; background: #EAF7EE; }
+.chef-card .fresh b { width: 100%; font-size: 13px; color: #1E8A4C; }
+.chef-card .fresh .dish { display: inline-flex; align-items: center; gap: 6px; }
+.chef-card .fresh small { font-size: 12px; }
+.chef-card .boosts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.chef-card .boosts b { grid-column: 1 / -1; font-size: 13px; }
+.chef-boost {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
+  border-radius: 12px; border: 2px solid #EADBC2; background: #FFFFFF; font: inherit; color: inherit; cursor: pointer;
+}
+.chef-boost .ic { font-size: 20px; line-height: 1; }
+.chef-boost .nm { font-size: 12px; font-weight: 700; text-align: center; }
+.chef-boost small { display: inline-flex; align-items: center; gap: 2px; font-size: 11.5px; color: #1E8A4C; font-weight: 800; }
+.chef-boost.on { border-color: #3DBE74; background: #EAF7EE; }
+.chef-boost:disabled { opacity: .45; cursor: default; }
+.chef-card.help ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+.chef-toast {
+  position: absolute; left: 50%; bottom: 14px; z-index: 4; transform: translateX(-50%); max-width: 90%;
+  padding: 8px 14px; border-radius: 999px; background: #2A1E14; color: #FFF8EA;
+  font-weight: 700; font-size: 13px; box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
+}
+.chef-toast[hidden] { display: none; }
+.chef-hint { text-align: center; }
+
+/* On a phone the trucks scroll sideways rather than shrink past reading. */
+@media (max-width: 759px) {
+  .chef-menu { padding: 10px; }
+  .chef-trucks { grid-template-columns: repeat(5, minmax(88px, 1fr)); overflow-x: auto; padding-bottom: 4px; }
+  .chef-levels { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .chef-up { grid-template-columns: 40px 1fr auto; gap: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

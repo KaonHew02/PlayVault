@@ -26,14 +26,14 @@ generated: it loads one bundle and is what GitHub Pages serves. Run
 
 ## What is built
 
-**All fifteen games on the roster are playable, alone or with friends.**
+**All sixteen games on the roster are playable, alone or with friends.**
 Nothing is a stub.
 
 | family | games |
 | --- | --- |
 | board | 五子棋 · 黑白棋 · Chess · 中国象棋 |
 | puzzle | Sudoku · Spider Solitaire · Mahjong Solitaire |
-| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush · Strike Squad · Blend In · Stick Clash |
+| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush · Strike Squad · Blend In · Stick Clash · Street Chef |
 
 Strike Squad is a first-person shooter against bots: seven modes on eight
 maps, twenty-two guns with upgrades, attachments, camos and keychains,
@@ -59,6 +59,17 @@ fighters of its own (one free, six bought with coins, a boss won in the
 tournament), six stages, an eight-fight ladder of smarter bots, versus the
 computer, two players on one keyboard, and training. Plain 2D canvas, ten
 files in `js/games/stick/`; `docs/GAMES.md` (phase 29) is the record.
+
+Street Chef is a food-truck cooking game: customers at the window order
+plates, sides and drinks; tap a pot to cook, tap the food to plate it, tap
+a topping to add it, tap the finished plate to serve it — or drag any of
+it where you want — before patience runs out or the food burns, and pick
+up the coins, which hold the place until you do. Five trucks (pasta,
+burgers, pizza, tacos, sushi) of twenty levels each, a kitchen per truck to
+upgrade with coins, boosters bought with gems, and a chef level. A bot in
+`bot.js` plays every level in the tests and points the way on a truck's
+first level. Plain 2D canvas, ten files in `js/games/chef/`;
+`docs/GAMES.md` (phase 30) is the record.
 
 Each family sits on its own engine contract, and each contract has a shared
 harness so a game only writes its rules and its painting.

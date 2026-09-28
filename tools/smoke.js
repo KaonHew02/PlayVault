@@ -76,6 +76,7 @@ const FILES = [
   'js/games/hide/data.js', 'js/games/hide/body.js', 'js/games/hide/maps.js', 'js/games/hide/world.js',
   'js/games/hide/bots.js', 'js/games/hide/engine.js', 'js/games/hide/meta.js',
   'js/games/stick/data.js', 'js/games/stick/bot.js', 'js/games/stick/engine.js', 'js/games/stick/meta.js',
+  'js/games/chef/data.js', 'js/games/chef/engine.js', 'js/games/chef/bot.js', 'js/games/chef/meta.js', 'js/games/chef/layout.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
   'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
@@ -2306,6 +2307,414 @@ section('stick clash — combos, guards, breakers, ultimates and the save', () =
   }
 });
 
+/* ------------------------------------------------------------ street chef */
+
+section('street chef — the catalogue, the levels and where things sit', () => {
+  const D = PV.ChefData;
+  ok(D.TRUCKS.length === 5 && D.LEVELS === 20, 'not five trucks of twenty levels');
+  const seeds = new Set();
+  for (const tr of D.TRUCKS) {
+    const makes = new Set(tr.stations.map(s => s.makes).concat(tr.bins));
+    const keys = new Set();
+    for (const m of tr.menu) {
+      ok(m.parts.every(p => D.PARTS[p]), tr.key + ': a part not in the catalogue: ' + m.parts);
+      ok(m.parts.every(p => makes.has(p)), tr.key + ': nothing in the kitchen makes ' + m.parts);
+      const first = D.partKind(m.parts[0]);
+      ok(first === 'base' ? m.parts.slice(1).every(p => D.partKind(p) === 'add') : m.parts.length === 1,
+        tr.key + ': not one base and its adds, or one side or drink: ' + m.parts);
+      const key = D.keyOf(m.parts);
+      ok(!keys.has(key), tr.key + ': the same dish twice on the menu: ' + key);
+      keys.add(key);
+    }
+    ok(tr.menu.some(m => m.at === 1), tr.key + ': nothing on the menu at level 1');
+    for (let L = 1; L <= D.LEVELS; L++) {
+      const spec = D.levelSpec(tr.key, L);
+      const kitchen = D.kitchenAt(tr.key, L);
+      const can = new Set(kitchen.stations.map(s => s.makes).concat(kitchen.bins));
+      ok(spec.menu.every(i => tr.menu[i].parts.every(p => can.has(p))), tr.key + ' ' + L + ': the menu asks for what the kitchen lacks');
+      const seed = D.seedFor(tr.key, L);
+      seeds.add(seed);
+      const a = D.roster(spec, seed);
+      ok(JSON.stringify(a) === JSON.stringify(D.roster(spec, seed)), tr.key + ' ' + L + ': one seed, two different queues');
+      ok(a.length === spec.count, tr.key + ' ' + L + ': ' + a.length + ' customers, not ' + spec.count);
+      ok(a.every(c => c.items.length >= 1 && c.items.length <= spec.orderMax && c.items.every(i => spec.menu.indexOf(i) >= 0)),
+        tr.key + ' ' + L + ': an order off the menu, or too long');
+      ok(a.every((c, i) => i === 0 || c.at > a[i - 1].at), tr.key + ' ' + L + ': customers out of order');
+      if (spec.fresh.length) ok(a[0].items.indexOf(spec.fresh[0]) >= 0, tr.key + ' ' + L + ': the first customer did not order the new dish');
+      const tg = D.targets(spec, a).stars;
+      ok(tg[0] > 0 && tg[0] < tg[1] && tg[1] < tg[2], tr.key + ' ' + L + ': star lines not rising: ' + tg);
+      ok(spec.time * D.HZ > a[a.length - 1].at + 20 * D.HZ, tr.key + ' ' + L + ': the clock stops before the last customer can be served');
+    }
+  }
+  ok(seeds.size === D.TRUCKS.length * D.LEVELS, 'two levels share a seed');
+  ok(D.levelOf(0).level === 1 && D.levelOf(79).level === 1 && D.levelOf(80).level === 2, 'the first chef level is not 80 XP');
+  let prev = 1;
+  for (let xp = 0; xp < 60000; xp += 997) { const l = D.levelOf(xp).level; ok(l >= prev, 'chef level went down at ' + xp); prev = l; }
+
+  // Every box inside the canvas and clear of every other, wide and tall, for
+  // every truck fully upgraded — and a tap on anything lands on that thing.
+  for (const tr of D.TRUCKS) {
+    const kit = {};
+    for (const u of D.upgrades(tr.key)) kit[u.key] = u.max;
+    for (const shape of ['wide', 'tall']) {
+      const g = new PV.ChefGame({ plan: { truck: tr.key, level: D.LEVELS, kit: kit } });
+      const L = PV.ChefLayout.build(g, shape);
+      const tag = tr.key + ' ' + shape;
+      for (const b of L.boxes) {
+        ok(b.x >= 0 && b.y >= L.kitchen.y && b.x + b.w <= L.W + 0.01 && b.y + b.h <= L.H + 0.01, tag + ': a ' + b.kind + ' box is off the canvas');
+      }
+      for (let i = 0; i < L.boxes.length; i++) {
+        for (let j = i + 1; j < L.boxes.length; j++) {
+          const p = L.boxes[i], q = L.boxes[j];
+          const clear = p.x + p.w <= q.x + 0.5 || q.x + q.w <= p.x + 0.5 || p.y + p.h <= q.y + 0.5 || q.y + q.h <= p.y + 0.5;
+          ok(clear, tag + ': ' + p.kind + ' and ' + q.kind + ' overlap');
+        }
+      }
+      const hit = (x, y) => PV.ChefLayout.hit(L, g, x, y);
+      g.stations.forEach((st, s) => st.slots.forEach((sl, i) => {
+        const r = L.stations[s].slots[i];
+        const h = hit(r.cx, r.cy);
+        ok(h && h.k === 'slot' && h.s === s && h.i === i, tag + ': a tap on ' + st.id + ' slot ' + i + ' landed on ' + JSON.stringify(h));
+      }));
+      L.plates.forEach(p => { const h = hit(p.cx, p.cy); ok(h && h.k === 'plate' && h.i === p.i, tag + ': a tap on plate ' + p.i + ' missed'); });
+      L.warm.forEach(w => { const h = hit(w.cx, w.cy); ok(h && h.k === 'warm' && h.i === w.i, tag + ': a tap on the hot plate missed'); });
+      L.bins.forEach(b => { const h = hit(b.cx, b.cy); ok(h && h.k === 'bin' && h.b === b.b, tag + ': a tap on the ' + b.part + ' bin missed'); });
+      ok((hit(L.trash.cx, L.trash.cy) || {}).k === 'trash', tag + ': a tap on the bin missed');
+      L.spots.forEach(sp => { const h = hit(sp.cx, L.counter.y - 60); ok(h && h.k === 'spot' && h.i === sp.i, tag + ': a drop on customer ' + sp.i + ' missed'); });
+    }
+  }
+});
+
+section('street chef — cooking, burning, plating, serving and the till', () => {
+  const D = PV.ChefData, G = PV.ChefGame, HZ = D.HZ;
+  const run = (g, n) => { for (let i = 0; i < n && !g.isOver(); i++) g.advance(); };
+  const act = (g, a) => { g.input(a); g.advance(); };
+  const waitFor = (g, f, cap) => { let n = 0; while (!f() && !g.isOver() && n++ < (cap || 60 * HZ)) g.advance(); return f(); };
+  const start = plan => { const g = new G({ plan: plan }); run(g, G.READY + 1); return g; };
+
+  // The menu phase: nothing happens until a level begins.
+  const idle = new G({});
+  ok(idle.phase === 'menu', 'a game with no plan did not start at the menu');
+  run(idle, 30);
+  ok(idle.phase === 'menu' && !idle.isOver(), 'the menu went somewhere on its own');
+  act(idle, { a: 'begin', plan: { truck: 'pasta', level: 1 } });
+  ok(idle.phase === 'ready' && idle.spec.level === 1, 'begin did not start the level');
+  act(idle, { a: 'begin', plan: { truck: 'sushi', level: 9 } });
+  ok(idle.truck.key === 'pasta', 'a second begin replaced a level in progress');
+  act(idle, { a: 'quit' });
+  ok(idle.phase === 'menu' && !idle.isOver(), 'quit did not go back to the menu');
+
+  // Level 1: cook, plate, sauce, serve, and the coins that hold the place.
+  const g = start({ truck: 'pasta', level: 1 });
+  ok(g.phase === 'play', 'the count-in never ended');
+  const pot = g.stations[0];
+  act(g, { a: 'slot', s: 0, i: 0 });
+  ok(pot.slots[0].st === 'cook', 'a tap on an empty pot did not start it');
+  act(g, { a: 'slot', s: 0, i: 0 });
+  ok(!g.plates[0].parts.length, 'pasta still cooking went onto a plate');
+  run(g, pot.work);
+  ok(pot.slots[0].st === 'done', 'the pasta never cooked');
+  ok(waitFor(g, () => g.spots.some(s => s.c && s.c.st === 'wait')), 'nobody came to the window');
+  const spot = g.spots.findIndex(s => s.c && s.c.st === 'wait');
+  act(g, { a: 'bin', b: 0 });
+  ok(!g.plates.some(p => p.parts.length), 'sauce went onto an empty plate');
+  act(g, { a: 'slot', s: 0, i: 0 });
+  ok(g.plates[0].parts.join() === 'pasta' && pot.slots[0].st === 'empty', 'a tap on cooked pasta did not plate it');
+  act(g, { a: 'plate', i: 0 });
+  ok(g.plates[0].parts.length === 1 && g.served === 0, 'plain pasta went to somebody who ordered it with sauce');
+  act(g, { a: 'bin', b: 0 });
+  act(g, { a: 'bin', b: 0 });
+  ok(D.keyOf(g.plates[0].parts) === D.keyOf(['pasta', 'redsauce']), 'the sauce went on twice, or not at all');
+  act(g, { a: 'plate', i: 0 });
+  ok(g.served === 1 && !g.plates[0].parts.length, 'the finished plate was not served');
+  const paid = g.spots[spot].coins;
+  ok(paid >= 10 && paid <= 15, 'a 10-coin pasta paid ' + paid);
+  ok(g.earned === 0, 'coins counted before they were picked up');
+  run(g, G.WALK + 2);
+  ok(!g.spots[spot].c && g.spots[spot].coins === paid, 'the coins left with the customer');
+  run(g, 20 * HZ);
+  ok(!g.spots[spot].c && g.spots[spot].coins === paid, 'somebody stood where the coins are');
+  act(g, { a: 'coins', spot: spot });
+  ok(g.earned === paid && g.score === paid && !g.spots[spot].coins, 'picking up the coins did not bank them');
+
+  // Burning, and throwing it out.
+  const b = start({ truck: 'pasta', level: 1 });
+  const bp = b.stations[0];
+  act(b, { a: 'slot', s: 0, i: 1 });
+  run(b, bp.work + bp.burn + 1);
+  ok(bp.slots[1].st === 'burnt' && b.burned === 1, 'food left on the heat did not burn');
+  act(b, { a: 'slot', s: 0, i: 1, to: { k: 'plate', i: 0 } });
+  ok(bp.slots[1].st === 'burnt' && !b.plates[0].parts.length, 'burnt food went onto a plate');
+  act(b, { a: 'slot', s: 0, i: 1 });
+  ok(bp.slots[1].st === 'empty' && b.wasted === 0, 'a tap on burnt food did not throw it out');
+
+  // A level that says "don't burn anything" ends the moment something does,
+  // unless the booster is on.
+  const nbL = Array.from({ length: D.LEVELS }, (x, i) => i + 1).find(L => D.levelSpec('pasta', L).noBurn);
+  const nb = start({ truck: 'pasta', level: nbL });
+  act(nb, { a: 'slot', s: 0, i: 0 });
+  run(nb, nb.stations[0].work + nb.stations[0].burn + 2);
+  ok(nb.isOver() && nb.result.failed === 'burn' && nb.result.stars === 0 && !nb.result.passed, 'a burn did not fail a no-burn level');
+  const safe = start({ truck: 'pasta', level: nbL, boost: { noburn: true } });
+  act(safe, { a: 'slot', s: 0, i: 0 });
+  run(safe, safe.stations[0].work + safe.stations[0].burn * 4);
+  ok(safe.stations[0].slots[0].st === 'done' && !safe.burned, 'the no-burn booster let something burn');
+  const quick = start({ truck: 'pasta', level: 1, boost: { fast: true } });
+  ok(quick.stations[0].work < g.stations[0].work, 'the quick-cook booster did not speed anything up');
+
+  // The hot plate holds cooked food without burning; a drag names where things go.
+  const w = start({ truck: 'pasta', level: 8, kit: { warmer: 1, plates: 1 } });
+  ok(w.warm.length === 2, 'a level-1 hot plate does not have two places');
+  act(w, { a: 'slot', s: 0, i: 0 });
+  run(w, w.stations[0].work);
+  act(w, { a: 'slot', s: 0, i: 0, to: { k: 'warm', i: 1 } });
+  ok(w.warm[1] === 'pasta' && w.stations[0].slots[0].st === 'empty', 'dragging cooked pasta to the hot plate did not put it there');
+  run(w, 60 * HZ);
+  ok(w.warm[1] === 'pasta', 'food on the hot plate went off');
+  act(w, { a: 'bin', b: 0, to: { k: 'warm', i: 0 } });
+  ok(w.warm[0] === null, 'a topping from a bin went onto the hot plate');
+  act(w, { a: 'warm', i: 1, to: { k: 'plate', i: 1 } });
+  ok(w.warm[1] === null && w.plates[1].parts.join() === 'pasta' && !w.plates[0].parts.length, 'dragging to plate 2 did not land on plate 2');
+  act(w, { a: 'bin', b: 0, to: { k: 'plate', i: 0 } });
+  ok(!w.plates[0].parts.length, 'sauce dragged onto an empty plate stuck');
+  act(w, { a: 'plate', i: 1, to: { k: 'trash' } });
+  ok(!w.plates[1].parts.length && w.wasted === 1, 'a plate dragged to the bin was not thrown out');
+  const sauce = w.stations.findIndex(s => s.makes === 'whitesauce');
+  ok(sauce >= 0, 'no sauce pan on the level that brings cream sauce');
+  act(w, { a: 'station', s: sauce });
+  ok(w.stations[sauce].slots[0].st === 'cook', 'a tap on the pan did not start the sauce');
+  const seq = w.seq;
+  act(w, { a: 'plate', i: 0, to: { k: 'spot', i: 9 } });
+  ok(w.events.some(e => e.seq > seq && e.k === 'nope'), 'a drop on a place that is not there was not refused');
+
+  // Patience runs out: the customer walks, and a no-loss level is over.
+  const nlL = Array.from({ length: D.LEVELS }, (x, i) => i + 1).find(L => D.levelSpec('burger', L).noLoss);
+  const nl = start({ truck: 'burger', level: nlL });
+  ok(waitFor(nl, () => nl.isOver(), 200 * HZ) && nl.result.failed === 'lost', 'a customer walking off did not fail a no-loss level');
+  const lp = start({ truck: 'burger', level: 2 });
+  ok(waitFor(lp, () => lp.lost > 0, 200 * HZ) && !lp.isOver(), 'an ignored customer never walked off, or it ended the level');
+  const patient = start({ truck: 'burger', level: 2, boost: { calm: true }, kit: { awning: 1 } });
+  waitFor(patient, () => patient.spots.some(s => s.c));
+  const c1 = patient.spots.find(s => s.c).c;
+  ok(c1.max >= Math.round(D.roster(patient.spec, patient.plan.seed || D.seedFor('burger', 2))[0].patience * 1.5), 'the patience booster and the awning did not add up');
+
+  // Ignored, a level ends when the last customer has walked off, and fails;
+  // with somebody still waiting, it ends when the clock does.
+  const idleLv = start({ truck: 'pasta', level: 3 });
+  run(idleLv, idleLv.limit + 10);
+  ok(idleLv.isOver() && !idleLv.result.passed && idleLv.result.served === 0 && idleLv.result.lost === idleLv.spec.count, 'an ignored level did not end with everybody gone');
+  const clock = start({ truck: 'pasta', level: 3 });
+  waitFor(clock, () => clock.spots.some(s => s.c && s.c.st === 'wait'));
+  clock.limit = clock.t + 3;
+  run(clock, 5);
+  ok(clock.isOver() && clock.result.reason === 'time' && clock.left === 0, 'the clock running out did not end the level');
+
+  // A cold coffee is worth half; the tip jar picks up coins by itself.
+  function coffeeFor(hot) {
+    const k = start({ truck: 'pasta', level: 2, kit: { jar: 1 } });
+    const m = k.truck.menu.findIndex(x => x.parts[0] === 'coffee');
+    const max = 60 * HZ;
+    k.queue = [];
+    k.spots[0].c = { id: 99, look: 0, st: 'wait', t: 0, pat: max, max: max, mood: 1, items: [{ m: m, key: 'coffee', done: false, cold: false }] };
+    const s = k.stations.findIndex(x => x.makes === 'coffee');
+    act(k, { a: 'station', s: s });
+    run(k, k.stations[s].work + (hot ? 1 : k.stations[s].cools + 2));
+    act(k, { a: 'slot', s: s, i: 0 });
+    const coins = k.spots[0].coins;
+    run(k, Math.round(1.25 * HZ));
+    return { coins: coins, earned: k.earned, left: k.spots[0].coins, over: k.isOver() };
+  }
+  const hot = coffeeFor(true), cold = coffeeFor(false);
+  ok(hot.coins > 0 && cold.coins > 0 && cold.coins < hot.coins * 0.75, 'a cold coffee paid ' + cold.coins + ' against ' + hot.coins);
+  ok(hot.earned === hot.coins && hot.left === 0 && !hot.over, 'the tip jar did not pick up the coins');
+
+  // The recipe raises prices.
+  const r0 = PV.ChefBot.play({ truck: 'pizza', level: 4 }, 12), r3 = PV.ChefBot.play({ truck: 'pizza', level: 4, kit: { recipe: 3 } }, 12);
+  ok(r3.result.earned > r0.result.earned * 1.25, 'the secret recipe did not raise the takings');
+
+  // Garbage in: nothing throws, nothing changes.
+  const junk = start({ truck: 'taco', level: 5 });
+  const kitchenOf = x => JSON.stringify([x.plates, x.warm, x.stations.map(st => st.slots.map(sl => sl.st))]);
+  const snap = kitchenOf(junk);
+  for (const a of [null, 7, 'slot', { a: 'slot', s: 99, i: 0 }, { a: 'slot', s: -1 }, { a: 'plate', i: 1e9 }, { a: 'bin', b: 'x' },
+    { a: 'warm', i: 0 }, { a: 'coins', spot: 44 }, { a: 'plate', i: 0, to: { k: 'plate', i: 77 } }, { a: 'x' }, { a: 'slot', s: 0, i: 0.5 }]) {
+    let threw = false;
+    try { junk.input(a); junk.advance(); } catch (e) { threw = true; }
+    ok(!threw, 'a junk input threw: ' + JSON.stringify(a));
+  }
+  ok(kitchenOf(junk) === snap, 'a junk input changed the kitchen');
+
+  // A level replays from its seed: the same plan and the same inputs, the same result.
+  const rec = [];
+  const first = new G({ plan: { truck: 'taco', level: 9, kit: { grill: 2, plates: 2 } } });
+  while (!first.isOver()) {
+    if (first.phase === 'play' && first.t % 20 === 0) { const a = PV.ChefBot.next(first); if (a) { first.input(a); rec.push([first.tick, a]); } }
+    first.advance();
+  }
+  const again = new G({ plan: { truck: 'taco', level: 9, kit: { grill: 2, plates: 2 } } });
+  let q = 0;
+  while (!again.isOver()) {
+    while (q < rec.length && rec[q][0] === again.tick) again.input(rec[q++][1]);
+    again.advance();
+  }
+  ok(JSON.stringify(first.result) === JSON.stringify(again.result), 'a replay of the same inputs came out different');
+  ok(first.result.served > 0, 'the replayed level served nobody');
+
+  // A race hands everybody the room's seed: one queue for all, not the level's own.
+  const r1 = new G({ plan: { truck: 'pizza', level: 6, seed: 12345 } });
+  const r2 = new G({ plan: { truck: 'pizza', level: 6, seed: 12345 } });
+  const own = new G({ plan: { truck: 'pizza', level: 6 } });
+  ok(JSON.stringify(r1.queue) === JSON.stringify(r2.queue) && JSON.stringify(r1.queue) !== JSON.stringify(own.queue),
+    'a race seed did not make one shared queue of its own');
+});
+
+section('street chef — every level, played', () => {
+  const D = PV.ChefData, M = PV.ChefMeta;
+  // Every level can be three-starred: a quick cook with the middle kitchen does it.
+  const mid = key => { const kit = {}; for (const u of D.upgrades(key)) kit[u.key] = u.kind === 'station' || u.kind === 'plates' ? 2 : (u.kind === 'warmer' || u.kind === 'recipe' ? 1 : 0); return kit; };
+  let three = 0;
+  for (const tr of D.TRUCKS) {
+    for (let L = 1; L <= D.LEVELS; L++) {
+      const g = PV.ChefBot.play({ truck: tr.key, level: L, kit: mid(tr.key) }, 18);
+      ok(g.isOver() && g.result.stars === 3, tr.key + ' ' + L + ': a quick cook with a middle kitchen got ' + g.result.stars + ' stars');
+      if (g.result.stars === 3) three++;
+    }
+  }
+
+  // A whole career at a person's pace: every level in order, a little quicker
+  // on each retry and a booster on the third, coins banked after every try
+  // and spent on the cheapest upgrade, a level replayed for the price of the
+  // next truck. Nobody gets stuck.
+  const m = M.fresh();
+  const shop = key => {
+    for (;;) {
+      let best = null, bp = Infinity;
+      for (const u of D.upgrades(key)) { const p = M.priceOf(m, key, u); if (p != null && p <= m.coins && p < bp) { bp = p; best = u; } }
+      if (!best || !M.buy(m, key, best.key)) return;
+    }
+  };
+  const PACES = [54, 46, 38, 30];
+  let tries = 0, stuck = 0, farmed = 0;
+  for (const tr of D.TRUCKS) {
+    if (!m.trucks[tr.key].open) {
+      const prev = D.TRUCKS[tr.index - 1].key;
+      let n = 0;
+      while (M.openBlock(m, tr.key) && M.openBlock(m, tr.key).why === 'coins' && n++ < 60) {
+        M.bank(m, PV.ChefBot.play(M.begin(m, prev, D.LEVELS, {}), PACES[0]));
+        farmed++;
+      }
+      ok(M.openTruck(m, tr.key), 'the career could not open ' + tr.key + ': ' + JSON.stringify(M.openBlock(m, tr.key)));
+    }
+    for (let L = 1; L <= D.LEVELS; L++) {
+      let got = 0;
+      for (let i = 0; i < PACES.length && !got; i++) {
+        const spec = D.levelSpec(tr.key, L);
+        const want = i >= 2 ? (spec.noBurn ? { noburn: true } : { calm: true }) : {};
+        const plan = M.begin(m, tr.key, L, M.boostCost(want) <= m.gems ? want : {});
+        ok(!!plan, tr.key + ' ' + L + ': the career found the level shut');
+        if (!plan) break;
+        const g = PV.ChefBot.play(plan, PACES[i]);
+        M.bank(m, g);
+        shop(tr.key);
+        got = g.result.stars;
+        tries++;
+      }
+      if (!got) stuck++;
+      ok(got > 0, 'the career got stuck on ' + tr.key + ' level ' + L);
+      if (!got) break;
+    }
+  }
+  ok(stuck === 0, stuck + ' levels stopped the career');
+  ok(tries < 100 * 1.8, 'the career took ' + tries + ' tries for 100 levels');
+  ok(M.totalStars(m) >= 180, 'the career ended on only ' + M.totalStars(m) + ' stars');
+  ok(farmed < 80, 'the career replayed ' + farmed + ' levels to afford the trucks');
+});
+
+section('street chef — the save: coins, gems, stars, the kitchen and the trucks', () => {
+  const D = PV.ChefData, M = PV.ChefMeta;
+  const f = M.fresh();
+  ok(f.trucks.pasta.open && !f.trucks.burger.open && f.gems === 5 && f.coins === 0, 'a fresh save is not one open truck and five gems');
+  ok(M.levelOpen(f, 'pasta', 1) && !M.levelOpen(f, 'pasta', 2) && !M.levelOpen(f, 'burger', 1), 'the wrong levels are open on a fresh save');
+
+  // Rebuilt from anything.
+  ok(M.clean(null) === undefined && M.clean('x') === undefined && M.clean([1]) === undefined, 'junk became a save');
+  const c = M.clean({
+    coins: 1e12, gems: -4, xp: 'lots', truck: 'nope',
+    trucks: { pasta: { stars: [3, 9, -1, '2'], best: [100], kit: { pot: 99, plates: 0, warmer: 7, bogus: 3 } }, burger: { open: true }, zzz: { open: true } }
+  });
+  ok(c.coins === 1e9 && c.gems === 0 && c.xp === 0, 'numbers were not clamped');
+  ok(c.trucks.pasta.stars.slice(0, 4).join() === '3,3,0,2', 'stars were not clamped: ' + c.trucks.pasta.stars.slice(0, 4));
+  ok(c.trucks.pasta.kit.pot === 3 && c.trucks.pasta.kit.plates === 1 && c.trucks.pasta.kit.warmer === 2 && !('bogus' in c.trucks.pasta.kit), 'the kitchen was not rebuilt');
+  ok(!c.trucks.burger.open, 'a truck opened behind a level that was never cleared');
+  ok(!('zzz' in c.trucks) && c.truck === 'pasta', 'a truck not in the catalogue survived');
+  const ok8 = M.clean({ trucks: { pasta: { stars: [1, 1, 1, 1, 1, 1, 1, 1] }, burger: { open: true } } });
+  ok(ok8.trucks.burger.open, 'a truck opened properly was closed again');
+
+  // Sealed: an edited record is not believed.
+  const m = M.fresh();
+  m.coins = 500;
+  M.save(m);
+  ok(M.load().coins === 500, 'the save did not come back');
+  const raw = JSON.parse(localStorage.getItem('playvault.' + M.KEY));
+  raw.d.coins = 999999;
+  localStorage.setItem('playvault.' + M.KEY, JSON.stringify(raw));
+  ok(M.load().coins === 0, 'an edited save was believed');
+
+  // Boosters are paid for at the start, and not without the gems.
+  const s = M.fresh();
+  ok(M.begin(s, 'pasta', 2, {}) === null, 'a shut level began');
+  ok(M.begin(s, 'burger', 1, {}) === null, 'a level on a shut truck began');
+  const p = M.begin(s, 'pasta', 1, { fast: true, calm: true });
+  ok(p && p.boost.fast && p.boost.calm && !p.boost.noburn && s.gems === 1, 'two boosters did not cost four gems');
+  ok(M.begin(s, 'pasta', 1, { noburn: true }) === null && s.gems === 1, 'a booster was sold without the gems');
+  ok(p.kit.pot === 1 && p.kit.plates === 1, 'the plan did not carry the kitchen');
+
+  // Banking: coins even for a loss, stars only ever go up, a gem for the first three.
+  const ended = (stars, earned, served) => ({ truck: { key: 'pasta' }, spec: { level: 1 },
+    result: { passed: stars > 0, stars: stars, earned: earned, served: served, lost: 0, burned: 0 } });
+  const b1 = M.bank(s, ended(0, 30, 2));
+  ok(b1.coins === 30 && s.coins === 30 && s.xp === 6, 'a lost level did not keep its coins and experience');
+  ok(s.trucks.pasta.stars[0] === 0 && !M.levelOpen(s, 'pasta', 2) && !b1.opens, 'a lost level opened the next');
+  const b2 = M.bank(s, ended(3, 90, 6));
+  ok(s.trucks.pasta.stars[0] === 3 && s.trucks.pasta.best[0] === 90 && b2.firstClear && b2.opens === 2 && M.levelOpen(s, 'pasta', 2), 'a won level was not recorded');
+  ok(b2.gems === 1 && s.gems === 2, 'the first three stars gave no gem');
+  const b4 = M.bank(s, ended(1, 40, 0));
+  ok(s.trucks.pasta.stars[0] === 3 && s.trucks.pasta.best[0] === 90 && b4.gems === 0, 'a worse run took stars away, or paid a gem again');
+  s.xp = 79;
+  const g0 = s.gems, co0 = s.coins;
+  const b3 = M.bank(s, ended(1, 20, 1));
+  ok(b3.levelUp === 2 && s.gems === g0 + 2 && s.coins === co0 + 20 + 80, 'a chef level-up paid ' + JSON.stringify(b3));
+  ok(s.life.levels === 4 && s.life.served === 9, 'the lifetime tally is wrong: ' + JSON.stringify(s.life));
+
+  // The kitchen shop.
+  const k = M.fresh();
+  const pot = D.upgrades('pasta').find(u => u.key === 'pot');
+  ok(!M.buy(k, 'pasta', 'pot'), 'an upgrade was bought with no coins');
+  k.coins = 100000;
+  ok(M.buy(k, 'pasta', 'pot') && k.trucks.pasta.kit.pot === 2 && k.coins === 100000 - pot.cost(2), 'buying the pot did not cost ' + pot.cost(2));
+  ok(M.buy(k, 'pasta', 'pot') && !M.buy(k, 'pasta', 'pot') && k.trucks.pasta.kit.pot === 3, 'the pot went past its top level');
+  ok(M.priceOf(k, 'pasta', pot) === null, 'a maxed upgrade still has a price');
+  ok(!M.buy(k, 'pasta', 'nonsense') && !M.buy(k, 'burger', 'grill'), 'a bogus or shut-truck upgrade was sold');
+  for (let i = 1; i < D.TRUCKS.length; i++) {
+    const was = D.upgrades(D.TRUCKS[i - 1].key), now = D.upgrades(D.TRUCKS[i].key);
+    for (const u of now) {
+      const v = was.find(x => x.key === u.key);
+      if (v && u.kind !== 'station') ok(u.cost(u.min + 1) >= v.cost(v.min + 1), D.TRUCKS[i].key + ': ' + u.key + ' is cheaper than on the truck before');
+    }
+  }
+
+  // Trucks: the level before, then the price.
+  const t = M.fresh();
+  t.coins = 1e6;
+  ok(!M.openTruck(t, 'burger') && M.openBlock(t, 'burger').why === 'level', 'burger street opened before pasta level ' + D.TRUCK.burger.needs);
+  for (let i = 0; i < D.TRUCK.burger.needs; i++) t.trucks.pasta.stars[i] = 1;
+  t.coins = D.TRUCK.burger.price - 1;
+  ok(!M.openTruck(t, 'burger') && M.openBlock(t, 'burger').why === 'coins', 'burger street opened a coin short');
+  t.coins += 1;
+  ok(M.openTruck(t, 'burger') && t.trucks.burger.open && t.coins === 0 && t.truck === 'burger', 'burger street did not open at its price');
+  ok(!M.openTruck(t, 'burger'), 'an open truck was bought twice');
+  ok(PV.Store.BACKUP_STORES.indexOf(M.KEY) >= 0, 'the save is not in the backup');
+});
 
 /* --------------------------------------------------------------- security */
 

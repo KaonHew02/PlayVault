@@ -188,7 +188,7 @@ something that does not match the source:
 
 `profile` and `stats` are stored with a checksum of themselves, and so is
 each game's record of coins and unlocks (`crowd.meta`, `worms.meta`,
-`fps.meta`). A value that does not match its own sum is dropped on the next
+`fps.meta`, `hide.meta`, `chef.meta`). A value that does not match its own sum is dropped on the next
 read and the app starts that record again, so editing a number in devtools
 does not survive a refresh — which is the thing that actually happened.
 
