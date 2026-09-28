@@ -15,6 +15,7 @@ window.PV = window.PV || {};
   let live = null;                 // the running game's controller
   let parked = null;               // an online game put aside while its player looks at the room
   let pendingOpts = null;          // options chosen in the lobby sheet
+  let fullCard = null;             // an end card shown on a full screen: {layer, wrap}
 
   /* ------------------------------------------------------------------ theme */
 
@@ -375,7 +376,17 @@ window.PV = window.PV || {};
         el('div', { class: 'over-lines' },
           (panel.lines || []).filter(Boolean).map(line => el('div', {}, line))),
         actions));
-    wrap.appendChild(layer);
+
+    /* A full screen shows its own element and nothing else, so a game
+       played on one gets its card in there. boot() puts it back on the
+       page when the full screen ends, to cover the page as it always has. */
+    const full = document.fullscreenElement;
+    if (full && wrap.contains(full)) {
+      full.appendChild(layer);
+      fullCard = { layer: layer, wrap: wrap };
+    } else {
+      wrap.appendChild(layer);
+    }
   }
 
   /* ------------------------------------------------------------------ stats */
@@ -529,6 +540,12 @@ window.PV = window.PV || {};
       PV.Registry.localize();
       PV.I18n.apply();
       route();
+    });
+    document.addEventListener('fullscreenchange', () => {
+      const c = fullCard;
+      if (!c || document.fullscreenElement) return;
+      fullCard = null;
+      if (c.layer.isConnected && c.wrap.isConnected) c.wrap.appendChild(c.layer);
     });
 
     route();

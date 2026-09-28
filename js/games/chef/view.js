@@ -36,7 +36,7 @@ window.PV = window.PV || {};
     let meta = M.load();
     const audio = PV.ChefAudio();
 
-    let ui = null, panels = null, mapBtn = null, actions = null;
+    let ui = null, panels = null, mapBtn = null, fullBtn = null, actions = null;
     let shape = 'wide', L = null, lsig = '', bg = null, bgSig = '';
     let plan = null, popup = null;
     let drag = null, fx = [], seen = 0, lastNow = 0;
@@ -82,6 +82,28 @@ window.PV = window.PV || {};
       if (racing || !g.spec || g.spec.level !== 1) return false;
       const tm = meta.trucks[g.truck.key];
       return !!tm && tm.stars[0] === 0 && g.served < TUTORIAL_SERVES;
+    }
+
+    /* ------------------------------------------------------ full screen */
+
+    /* The whole host goes full screen, not the canvas alone as in Strike
+       Squad: the bar's Map, Pause and Restart have no other home here, and
+       a race's table sits in the host too. The canvas takes the stage,
+       whatever the bar leaves of the screen (fit). */
+    function isFull() { return !!ui && document.fullscreenElement === ctx.host; }
+
+    function toggleFull() {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else if (ctx.host.requestFullscreen) ctx.host.requestFullscreen().catch(() => {});
+    }
+
+    function labelFull() {
+      if (fullBtn) fullBtn.textContent = '⛶ ' + t(isFull() ? 'chef.fullscreenExit' : 'chef.fullscreen');
+    }
+
+    function onFullChange() {
+      labelFull();
+      if (ui) ui.resize();
     }
 
     /* ------------------------------------------------------------ input */
@@ -531,9 +553,17 @@ window.PV = window.PV || {};
       },
 
       fit(availW, availH) {
+        // Full screen, the room is the stage the CSS leaves under the bar,
+        // and nothing caps it: the caps keep a game readable on a page.
+        const stage = isFull() ? ui.canvas.parentElement.parentElement : null;
+        if (stage) { availW = stage.clientWidth; availH = stage.clientHeight; }
         shape = availW < availH * 0.92 ? 'tall' : 'wide';
         const s = S();
         const ratio = s.H / s.W;
+        if (stage) {
+          const fw = Math.floor(Math.max(280, Math.min(availW, availH / ratio)));
+          return { w: fw, h: Math.round(fw * ratio) };
+        }
         let w = Math.min(availW, shape === 'wide' ? 1180 : 640);
         if (w * ratio > availH) w = Math.max(Math.min(availW, 560), availH / ratio);
         w = Math.max(280, Math.min(availW, w));
@@ -555,6 +585,11 @@ window.PV = window.PV || {};
         actions = api.status.parentElement.querySelector('.bar-actions');
         mapBtn = PV.el('button', { class: 'btn ghost', onclick: toMap }, t('chef.toMap'));
         if (actions && !racing) actions.insertBefore(mapBtn, actions.firstChild);
+        // Last in the bar, so it keeps its place whether the level's buttons
+        // show or not. A browser that cannot (an iPhone's) never shows it.
+        fullBtn = PV.el('button', { class: 'btn ghost', hidden: !document.fullscreenEnabled, onclick: toggleFull });
+        if (actions) actions.appendChild(fullBtn);
+        document.addEventListener('fullscreenchange', onFullChange);
         api.canvas.addEventListener('pointerdown', onDown);
         api.canvas.addEventListener('pointermove', onMove);
         api.canvas.addEventListener('pointerup', onUp);
@@ -569,12 +604,15 @@ window.PV = window.PV || {};
           ui.canvas.removeEventListener('pointerup', onUp);
           ui.canvas.removeEventListener('pointercancel', onCancel);
         }
+        document.removeEventListener('fullscreenchange', onFullChange);
+        if (isFull()) document.exitFullscreen().catch(() => {});
         if (panels) panels.destroy();
         audio.destroy();
       },
 
       onRelabel(api) {
         if (mapBtn) mapBtn.textContent = t('chef.toMap');
+        labelFull();
         if (panels && panels.open) panels.refresh();
         const g = api.game;
         if (g) api.status.textContent = g.spec ? t('chef.truck.' + g.truck.key) + ' · ' + t('chef.lv', { n: g.spec.level }) : t('chef.title');
@@ -591,9 +629,10 @@ window.PV = window.PV || {};
           } else if (!menu && panels.open) panels.show(false);
         }
         // At the menu the bar's Pause and Restart have nothing to act on;
-        // in a level, Map is the way back to it. A race has no menu, and
-        // its Restart is the harness's to hide, so a race is left alone.
-        if (actions && !racing) for (const b of actions.children) b.hidden = menu;
+        // in a level, Map is the way back to it. Full screen is for both.
+        // A race has no menu, and its Restart is the harness's to hide, so
+        // a race is left alone.
+        if (actions && !racing) for (const b of actions.children) if (b !== fullBtn) b.hidden = menu;
         if (racing) mapBtn.hidden = true;
         const status = g.spec ? t('chef.truck.' + g.truck.key) + ' · ' + t('chef.lv', { n: g.spec.level }) : t('chef.title');
         if (api.status.textContent !== status) api.status.textContent = status;
