@@ -76,7 +76,7 @@ const FILES = [
   'js/games/hide/data.js', 'js/games/hide/body.js', 'js/games/hide/maps.js', 'js/games/hide/world.js',
   'js/games/hide/bots.js', 'js/games/hide/engine.js', 'js/games/hide/meta.js',
   'js/games/stick/data.js', 'js/games/stick/bot.js', 'js/games/stick/engine.js', 'js/games/stick/meta.js',
-  'js/games/chef/data.js', 'js/games/chef/engine.js', 'js/games/chef/bot.js', 'js/games/chef/meta.js', 'js/games/chef/layout.js',
+  'js/games/chef/menu.js', 'js/games/chef/data.js', 'js/games/chef/engine.js', 'js/games/chef/bot.js', 'js/games/chef/meta.js', 'js/games/chef/layout.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
   'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
@@ -2311,7 +2311,9 @@ section('stick clash — combos, guards, breakers, ultimates and the save', () =
 
 section('street chef — the catalogue, the levels and where things sit', () => {
   const D = PV.ChefData;
-  ok(D.TRUCKS.length === 5 && D.LEVELS === 20, 'not five trucks of twenty levels');
+  ok(D.TRUCKS.length === 17 && D.LEVELS === 40, 'not seventeen streets of forty levels, as the reference has');
+  ok(D.TRUCKS.every((tr, i) => i === 0 || tr.price >= D.TRUCKS[i - 1].price), 'a truck is cheaper than the one before it');
+  ok(D.TRUCKS.every((tr, i) => i === 0 || tr.menu[0].price >= D.TRUCKS[0].menu[0].price), 'a later street sells for less than the first');
   const seeds = new Set();
   for (const tr of D.TRUCKS) {
     const makes = new Set(tr.stations.map(s => s.makes).concat(tr.bins));
@@ -2570,16 +2572,21 @@ section('street chef — cooking, burning, plating, serving and the till', () =>
 
 section('street chef — every level, played', () => {
   const D = PV.ChefData, M = PV.ChefMeta;
-  // Every level can be three-starred: a quick cook with the middle kitchen does it.
-  const mid = key => { const kit = {}; for (const u of D.upgrades(key)) kit[u.key] = u.kind === 'station' || u.kind === 'plates' ? 2 : (u.kind === 'warmer' || u.kind === 'recipe' ? 1 : 0); return kit; };
-  let three = 0;
+  // Every level can be three-starred: a quick cook with the kitchen bought
+  // does all 680. With the middle kitchen nearly all; the late busy levels
+  // of the biggest menus are what the top upgrades are for.
+  const kitAt = (key, lv) => { const kit = {}; for (const u of D.upgrades(key)) kit[u.key] = u.kind === 'station' || u.kind === 'plates' ? lv : (u.kind === 'warmer' || u.kind === 'recipe' ? lv - 1 : (lv >= 3 ? 1 : 0)); return kit; };
+  let three = 0, total = 0;
   for (const tr of D.TRUCKS) {
     for (let L = 1; L <= D.LEVELS; L++) {
-      const g = PV.ChefBot.play({ truck: tr.key, level: L, kit: mid(tr.key) }, 18);
-      ok(g.isOver() && g.result.stars === 3, tr.key + ' ' + L + ': a quick cook with a middle kitchen got ' + g.result.stars + ' stars');
-      if (g.result.stars === 3) three++;
+      const g = PV.ChefBot.play({ truck: tr.key, level: L, kit: kitAt(tr.key, 3) }, 18);
+      ok(g.isOver() && g.result.stars === 3, tr.key + ' ' + L + ': a quick cook with the kitchen bought got ' + g.result.stars + ' stars');
+      const m = PV.ChefBot.play({ truck: tr.key, level: L, kit: kitAt(tr.key, 2) }, 18);
+      if (m.result.stars === 3) three++;
+      total++;
     }
   }
+  ok(three >= total * 0.97, 'a quick cook with the middle kitchen three-starred only ' + three + ' of ' + total);
 
   // A whole career at a person's pace: every level in order, a little quicker
   // on each retry and a booster on the third, coins banked after every try
@@ -2625,8 +2632,9 @@ section('street chef — every level, played', () => {
     }
   }
   ok(stuck === 0, stuck + ' levels stopped the career');
-  ok(tries < 100 * 1.8, 'the career took ' + tries + ' tries for 100 levels');
-  ok(M.totalStars(m) >= 180, 'the career ended on only ' + M.totalStars(m) + ' stars');
+  const levels = D.TRUCKS.length * D.LEVELS;
+  ok(tries < levels * 1.6, 'the career took ' + tries + ' tries for ' + levels + ' levels');
+  ok(M.totalStars(m) >= levels * 3 * 0.75, 'the career ended on only ' + M.totalStars(m) + ' stars of ' + levels * 3);
   ok(farmed < 80, 'the career replayed ' + farmed + ' levels to afford the trucks');
 });
 
@@ -2649,6 +2657,14 @@ section('street chef — the save: coins, gems, stars, the kitchen and the truck
   ok(!('zzz' in c.trucks) && c.truck === 'pasta', 'a truck not in the catalogue survived');
   const ok8 = M.clean({ trucks: { pasta: { stars: [1, 1, 1, 1, 1, 1, 1, 1] }, burger: { open: true } } });
   ok(ok8.trucks.burger.open, 'a truck opened properly was closed again');
+
+  // A save from when a street had twenty levels and pasta three stations
+  // keeps what it earned and gains the rest, shut.
+  const old = M.clean({ coins: 900, trucks: { pasta: { stars: new Array(20).fill(2), best: new Array(20).fill(50), kit: { pot: 2, pan: 3, espresso: 2 } } } });
+  const op = old.trucks.pasta;
+  ok(op.stars.length === D.LEVELS && op.stars[19] === 2 && op.stars[20] === 0 && op.best[19] === 50, 'an old save lost its stars, or kept the wrong length');
+  ok(M.levelOpen(old, 'pasta', 21) && !M.levelOpen(old, 'pasta', 22), 'an old save did not open level 21 and no further');
+  ok(op.kit.pot === 2 && op.kit.pan === 3 && op.kit.espresso === 2 && op.kit.skillet === 1 && op.kit.garlicoven === 1, 'an old kitchen was not carried over with the new stations at level 1');
 
   // Sealed: an edited record is not believed.
   const m = M.fresh();

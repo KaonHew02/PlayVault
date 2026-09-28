@@ -64,12 +64,14 @@ Street Chef is a food-truck cooking game: customers at the window order
 plates, sides and drinks; tap a pot to cook, tap the food to plate it, tap
 a topping to add it, tap the finished plate to serve it — or drag any of
 it where you want — before patience runs out or the food burns, and pick
-up the coins, which hold the place until you do. Five trucks (pasta,
-burgers, pizza, tacos, sushi) of twenty levels each, a kitchen per truck to
-upgrade with coins, boosters bought with gems, and a chef level. A bot in
-`bot.js` plays every level in the tests and points the way on a truck's
-first level. Plain 2D canvas, ten files in `js/games/chef/`;
-`docs/GAMES.md` (phase 30) is the record.
+up the coins, which hold the place until you do. Seventeen streets of forty
+levels — 680, as the reference has — from pasta, burgers, pizza, tacos and
+sushi to hot dogs, sandwiches, breakfast, waffles, ice cream, barbecue,
+falafel, a wok, a bakery, a café, ramen and Nashville hot chicken; a
+kitchen per truck to upgrade with coins, boosters bought with gems, and a
+chef level. A bot in `bot.js` plays every level in the tests and points
+the way on a truck's first level. Plain 2D canvas, thirteen files in
+`js/games/chef/`; `docs/GAMES.md` (phases 30 and 31) is the record.
 
 Each family sits on its own engine contract, and each contract has a shared
 harness so a game only writes its rules and its painting.

@@ -340,7 +340,7 @@ window.PV = window.PV || {};
           Ls.slots.forEach((sl, i) => A.cookSlot(c, st.def.art, st.makes, sl, st, st.slots[i], g.clock));
         } else if (b.kind === 'drink') {
           const st = g.stations[b.s], Ls = L.stations[b.s];
-          A.drinkMachine(c, st.def.art, b, Ls.machine, th, g.clock, st.slots.some(x => x.st === 'fill'));
+          A.drinkMachine(c, st.def.art, b, Ls.machine, th, g.clock, st.slots.some(x => x.st === 'fill'), st.makes);
           Ls.slots.forEach((sl, i) => A.drinkSlot(c, st.makes, sl, st, st.slots[i], g.clock));
         } else if (b.kind === 'warm') {
           A.warmer(c, b, L.warm, g.warm, g.clock);

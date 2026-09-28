@@ -1314,3 +1314,71 @@ Played in the browser at a laptop's size and a phone's: the lobby, the
 how-to card, level 1 by taps and drags on the canvas through to its end
 card, Continue opening level 2's card, fully upgraded kitchens on the taco
 and sushi trucks, and the deployed bundle with no console errors.
+
+### Phase 31 — Street Chef: seventeen streets, 680 levels
+
+The reference's store page counts 17 locations and 680 levels, so that is
+the size now: forty levels a street, and twelve streets added to the five —
+Hot Dog, Sandwich, Breakfast (the reference's Bacon Street), Waffle, Ice
+Cream, BBQ, Falafel, Wok (its Oriental Street), Bakery, Café, Ramen and
+Nashville, the reference's newest.
+
+- **Every street is its own kitchen**: a hot-dog roller, a sandwich press,
+  a pancake griddle, a waffle iron, a smoker, a shawarma spit, a wok, a
+  bamboo steamer, an espresso brewer and a blender join the pots, pans,
+  grills, fryers and ovens; ribs and steak share one board, the café builds
+  coffees in the cup (a shot, then milk, caramel, chocolate, cream,
+  cinnamon), and the ice-cream van stacks scoops on a cone with nothing to
+  cook but hot fudge.
+- **The first five streets got their second twenty levels** with new things
+  to learn in them: meatballs and garlic bread, bacon and milkshakes, ham
+  and pineapple, jalapeños and churros, tempura prawns and edamame. A save
+  from before keeps its stars and its kitchen; the new stations start at
+  level 1 and the new levels open behind the old ones.
+- The truck strip scrolls sideways and keeps the chosen street in view; the
+  level map is forty buttons.
+
+Decisions:
+
+- **The menu moved to its own file** (`menu.js`): 118 parts and 17 trucks
+  are data, and `data.js` keeps only the rules that read it. The new food
+  and machines are drawn in `food.js` and `stands.js`, hung on a table in
+  `art.js` that its own functions look in first — the first five trucks'
+  drawings were not touched to add the next twelve.
+- **A level is still a pure function of its street and number**, now spread
+  over forty: from six unhurried customers who want one thing to a queue of
+  twenty-odd who want three, a little busier on each street along the
+  chain.
+- **A later street sells dearer food** — 6% a truck along the chain, as the
+  reference's do — so its takings keep up with its dearer kitchen.
+
+What measuring found (the bot, `node`):
+
+- **Late levels on the three-station streets outran a middle kitchen**: a
+  quick cook with every station at level 2 three-starred 676 of 680, and the
+  four it missed were late *don't lose a customer* levels on Wok and Ramen,
+  where every bowl needs two or three cooked things. With the kitchen bought
+  it three-stars all 680 — which is what the top upgrades are for.
+- **The bot let unclaimed food burn when it was busy.** Food nobody had
+  claimed was only rescued when there was nothing else to do, and on a
+  busy BBQ level there never was: ribs started for an order that then had
+  no plate burned on a *don't burn* level. Rescuing now competes with every
+  other move by how close the food is to burning.
+- **The first prices broke the chain at Sandwich Street**: upgrades costing
+  up to five times the first truck's, and truck prices climbing faster than
+  takings, left a casual player farming forever. Upgrades now cost 1× to
+  2.1× from the first street to the last, trucks 2,500 more each from Hot
+  Dog Street (15,000) to Wok (30,000), the last four 32,500–35,000, and the
+  dearer food above. The casual career clears all 680 levels in about 900
+  tries, with some thirty replays near the end to afford Ramen and
+  Nashville.
+
+`smoke.js` holds it: 17 streets of 40, prices rising along the chain, every
+dish makeable on every level, every truck fully upgraded laid out wide and
+tall with every tap landing; a quick cook with the kitchen bought
+three-starring all 680 levels and with the middle kitchen at least 97% of
+them; the casual career clearing every level; and an old twenty-level save
+keeping its stars and kitchen. Checked in the browser: every new dish, side,
+drink, bin, cooker in every state and drink machine drawn large; a
+five-station Breakfast kitchen on a laptop and a five-station Ramen kitchen
+on an upright phone; the seventeen-truck lobby.

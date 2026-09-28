@@ -36,6 +36,13 @@ window.PV = window.PV || {};
   };
   const themeOf = key => THEMES[key] || THEMES.pasta;
 
+  /* Pictures added from outside (food.js, stands.js), by what they draw:
+     the ware a base is served on, a dish by its base, a part in a bin, a
+     part on the heat and its raw-to-done colours, a side, a drink and its
+     colour in a machine, a cook station's body and slots, a drink machine.
+     The functions below look here first. */
+  const FOOD = { ware: {}, dish: {}, part: {}, heat: {}, done: {}, side: {}, drink: {}, liquid: {}, station: {}, machine: {} };
+
   /* ------------------------------------------------------------ helpers */
 
   function hash(a, b, c) {
@@ -160,6 +167,7 @@ window.PV = window.PV || {};
 
   /** What a dish is served on, by its base. (x, y) is the middle, r the half-width. */
   function ware(c, base, x, y, r) {
+    if (FOOD.ware[base]) { FOOD.ware[base](c, x, y, r); return; }
     const lw = r * 0.05;
     if (base === 'pizza') {
       ell(c, x, y + r * 0.08, r * 1.02, r * 0.6); paint(c, '#A8703A', OL, lw);
@@ -213,6 +221,12 @@ window.PV = window.PV || {};
       }
       ell(c, x - r * 0.1, sy - r * 0.05, r * 0.12, r * 0.04, -0.15); paint(c, 'rgba(255,255,255,.6)');
     }
+    if (has('meatball')) {
+      for (const [dx, dy] of [[-0.2, -0.1], [0.16, -0.12], [-0.02, -0.24]]) {
+        circ(c, x + dx * r, my + dy * r, r * 0.12); paint(c, '#7A3E22', OL, r * 0.035);
+        circ(c, x + dx * r - r * 0.04, my + dy * r - r * 0.04, r * 0.035); paint(c, 'rgba(255,255,255,.35)');
+      }
+    }
     if (has('parmesan')) {
       for (const p of scatter(14, 11, r * 0.4, r * 0.18)) {
         c.fillStyle = p.r > 0.5 ? '#FFF6C9' : '#F5E7A0';
@@ -228,6 +242,7 @@ window.PV = window.PV || {};
     cheddar: { h: 0.05, draw: (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x - w * 1.02, y - h); c.lineTo(x + w * 1.02, y - h); c.lineTo(x + w * 0.9, y + h * 1.4); c.lineTo(x + w * 0.62, y); c.lineTo(x - w * 0.2, y); c.lineTo(x - w * 0.45, y + h * 1.8); c.lineTo(x - w * 0.7, y); c.lineTo(x - w * 1.02, y); c.closePath(); paint(c, '#FFC61A', '#C98A00', r * 0.03); } },
     onion: { h: 0.05, draw: (c, x, y, w, h, r) => { for (let i = -1; i <= 1; i++) onionRing(c, x + i * w * 0.55, y - h * 0.5, w * 0.34); } },
     tomato: { h: 0.07, draw: (c, x, y, w, h, r) => { for (let i = -1; i <= 1; i += 2) { ell(c, x + i * w * 0.45, y - h * 0.5, w * 0.52, h * 0.7); paint(c, '#E8402E', '#9E2014', r * 0.03); ell(c, x + i * w * 0.45, y - h * 0.5, w * 0.3, h * 0.35); paint(c, '#FF8A73'); } } },
+    bacon: { h: 0.06, draw: (c, x, y, w, h, r) => { for (let i = 0; i < 2; i++) { c.beginPath(); c.moveTo(x - w * 1.02, y - h * (0.4 + i * 0.3)); for (let j = 1; j <= 6; j++) c.quadraticCurveTo(x - w * 1.02 + (j - 0.5) * w * 0.34, y - h * (0.4 + i * 0.3) + (j % 2 ? -h * 0.6 : h * 0.6), x - w * 1.02 + j * w * 0.34, y - h * (0.4 + i * 0.3)); c.strokeStyle = '#8E2F1E'; c.lineWidth = h * 0.8; c.lineCap = 'round'; c.stroke(); c.strokeStyle = '#F2B8A0'; c.lineWidth = h * 0.22; c.stroke(); } } },
     lettuce: { h: 0.07, draw: (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x - w * 1.08, y - h * 0.3); for (let i = 0; i <= 10; i++) { const px = x - w * 1.08 + i * w * 0.216; c.quadraticCurveTo(px - w * 0.1, y + h * (i % 2 ? 0.9 : -0.2), px, y - h * 0.3); } c.lineTo(x + w, y - h); c.lineTo(x - w, y - h); c.closePath(); paint(c, '#6CC04A', '#3C7F25', r * 0.03); } }
   };
 
@@ -239,7 +254,7 @@ window.PV = window.PV || {};
     c.quadraticCurveTo(x + w, top + r * 0.12, x, top + r * 0.12); c.quadraticCurveTo(x - w, top + r * 0.12, x - w, top - r * 0.08);
     paint(c, '#E7A94F', OL, r * 0.045);
     top -= r * 0.08;
-    const order = ['patty', 'cheddar', 'onion', 'tomato', 'lettuce'];
+    const order = ['patty', 'bacon', 'cheddar', 'onion', 'tomato', 'lettuce'];
     for (const p of order) {
       if (parts.indexOf(p) < 0) continue;
       const st = STACK[p];
@@ -263,6 +278,8 @@ window.PV = window.PV || {};
     if (has('pepperoni')) for (const p of scatter(6, 31, r * 0.5, r * 0.28)) pepperoni(c, x + p.x, cy + p.y, r * 0.1);
     if (has('mushroom')) for (const p of scatter(5, 41, r * 0.5, r * 0.28)) mushroom(c, x + p.x, cy + p.y + r * 0.04, r * 0.08);
     if (has('pepper')) for (const p of scatter(5, 51, r * 0.5, r * 0.28)) pepperRing(c, x + p.x, cy + p.y, r * 0.07, p.r * TAU);
+    if (has('ham')) for (const p of scatter(6, 91, r * 0.5, r * 0.28)) { rr(c, x + p.x - r * 0.07, cy + p.y - r * 0.05, r * 0.14, r * 0.1, r * 0.02); paint(c, '#F29CA3', '#B85C66', r * 0.02); }
+    if (has('pineapple')) for (const p of scatter(6, 97, r * 0.5, r * 0.28)) { c.beginPath(); c.moveTo(x + p.x - r * 0.06, cy + p.y + r * 0.04); c.lineTo(x + p.x + r * 0.06, cy + p.y + r * 0.04); c.lineTo(x + p.x, cy + p.y - r * 0.06); c.closePath(); paint(c, '#FFD84A', '#C99A00', r * 0.02); }
     if (has('olives')) for (const p of scatter(6, 61, r * 0.52, r * 0.3)) olive(c, x + p.x, cy + p.y, r * 0.06);
     if (has('basil')) for (const p of scatter(4, 71, r * 0.45, r * 0.25)) leaf(c, x + p.x, cy + p.y, r * 0.1, p.r * 3);
   }
@@ -286,6 +303,7 @@ window.PV = window.PV || {};
     if (has('jack')) for (let i = 0; i < 9; i++) line(c, x - w * 0.7 + i * w * 0.17, ty - r * 0.2, x - w * 0.62 + i * w * 0.17, ty - r * 0.28, '#FFD23F', r * 0.035);
     if (has('salsa')) { bumps('#E0452F', '#9E2014', 0.22, 0.06, 9, 6); for (let i = 0; i < 4; i++) { circ(c, x - w * 0.5 + i * w * 0.33, ty - r * 0.27, r * 0.025); paint(c, '#3E9B3A'); } }
     if (has('guac')) { ell(c, x + w * 0.1, ty - r * 0.25, w * 0.42, r * 0.1); paint(c, '#9CCB5A', '#5E8A2A', r * 0.03); }
+    if (has('jalapeno')) for (let i = 0; i < 4; i++) { circ(c, x - w * 0.55 + i * w * 0.36, ty - r * (0.3 + (i % 2) * 0.04), r * 0.06); paint(c, '#4CAF3F', '#2E6B24', r * 0.025); circ(c, x - w * 0.55 + i * w * 0.36, ty - r * (0.3 + (i % 2) * 0.04), r * 0.025); paint(c, '#E7F5C8'); }
     // the front of the shell
     c.beginPath(); c.moveTo(x - w * 1.02, ty - r * 0.02);
     c.bezierCurveTo(x - w * 0.95, ty + r * 0.5, x + w * 0.95, ty + r * 0.5, x + w * 1.02, ty - r * 0.02);
@@ -308,6 +326,10 @@ window.PV = window.PV || {};
         paint(c, fish[0], OL, r * 0.04);
         for (let i = 0; i < 3; i++) line(c, cx - r * 0.18 + i * r * 0.14, cy - r * 0.26 + i * r * 0.01, cx - r * 0.1 + i * r * 0.14, cy - r * 0.13, fish[1], r * 0.025);
       }
+      if (has('tempura')) {
+        blob(c, cx - r * 0.04, cy - r * 0.2, r * 0.3, r * 0.1, 10, 7, 0.25); paint(c, '#F2B84B', '#B67A12', r * 0.03);
+        c.beginPath(); c.moveTo(cx + r * 0.24, cy - r * 0.22); c.lineTo(cx + r * 0.38, cy - r * 0.34); c.lineTo(cx + r * 0.36, cy - r * 0.14); c.closePath(); paint(c, '#E8503A', OL, r * 0.02);
+      }
       if (has('avocado')) { ell(c, cx, cy - r * 0.3, r * 0.2, r * 0.06, -0.15); paint(c, '#A7D163', '#4E7A22', r * 0.025); }
       if (has('roe')) for (let i = 0; i < 6; i++) { circ(c, cx - r * 0.12 + (i % 3) * r * 0.12, cy - r * (0.36 + Math.floor(i / 3) * 0.06), r * 0.04); paint(c, '#FF7A1A', '#C24A00', r * 0.012); }
     }
@@ -324,6 +346,7 @@ window.PV = window.PV || {};
     if (!parts || !parts.length) { if (!noWare) ware(c, 'pasta', x, y, r); return; }
     const base = parts[0];
     if (!noWare) ware(c, base, x, y, r);
+    if (FOOD.dish[base]) { FOOD.dish[base](c, parts, x, y, r); return; }
     switch (base) {
       case 'pasta': pasta(c, parts, x, y, r); break;
       case 'bun': burger(c, parts, x, y, r); break;
@@ -336,6 +359,7 @@ window.PV = window.PV || {};
   /* -------------------------------------------------------------- sides */
 
   function side(c, id, x, y, r, tone) {
+    if (FOOD.side[id]) { FOOD.side[id](c, x, y, r, tone); return; }
     if (id === 'fries') {
       for (let i = 0; i < 7; i++) {
         const px = x - r * 0.36 + i * r * 0.12;
@@ -382,6 +406,7 @@ window.PV = window.PV || {};
   /** A drink. (x, y) is where it stands; r its size; fill 0..1 while pouring. */
   function drink(c, id, x, y, r, fill, hot, t) {
     const f = fill == null ? 1 : Math.max(0, Math.min(1, fill));
+    if (FOOD.drink[id]) { FOOD.drink[id](c, x, y, r, f, hot, t || 0); return; }
     const lw = r * 0.05;
     if (id === 'coffee' || id === 'tea') {
       const cup = id === 'coffee' ? '#FFFFFF' : '#6FA37B';
@@ -456,6 +481,7 @@ window.PV = window.PV || {};
 
   /** One part on its own, for a bin or a hot plate. */
   function part(c, id, x, y, r) {
+    if (FOOD.part[id]) { FOOD.part[id](c, x, y, r); return; }
     switch (id) {
       case 'redsauce': case 'salsa': {
         const col = id === 'redsauce' ? '#D7301F' : '#E0452F';
@@ -540,8 +566,9 @@ window.PV = window.PV || {};
 
   /** What is on the heat. k: 0 raw to 1 done; burnt draws it black. */
   function onHeat(c, id, x, y, r, k, burnt) {
-    const pair = DONENESS[id] || ['#DDDDDD', '#999999'];
+    const pair = DONENESS[id] || FOOD.done[id] || ['#DDDDDD', '#999999'];
     const col = burnt ? '#2A1E17' : mix(pair[0], pair[1], Math.max(0, Math.min(1, k)));
+    if (FOOD.heat[id]) { FOOD.heat[id](c, x, y, r, col, burnt, k); return; }
     switch (id) {
       case 'pasta': pasta(c, ['pasta'], x, y + r * 0.1, r * 0.95, col); break;
       case 'whitesauce': ell(c, x, y, r * 0.66, r * 0.44); paint(c, col, burnt ? '#000' : '#C9B98E', r * 0.05); if (!burnt) for (let i = 0; i < 3; i++) { circ(c, x - r * 0.3 + i * r * 0.3, y + (i % 2) * r * 0.1, r * 0.06); paint(c, 'rgba(255,255,255,.6)'); } break;
@@ -616,6 +643,7 @@ window.PV = window.PV || {};
 
   /** The body behind a cook station's slots. */
   function cookBody(c, art, box, th) {
+    if (FOOD.station[art] && FOOD.station[art].body) { FOOD.station[art].body(c, box, th); return; }
     const { x, y, w, h } = box, u = box.u;
     const lw = u * 0.025;
     if (art === 'oven') {
@@ -653,7 +681,10 @@ window.PV = window.PV || {};
     const k = sl.st === 'cook' ? sl.t / st.work : (sl.st === 'empty' ? 0 : 1);
     const burnt = sl.st === 'burnt';
     const busy = sl.st !== 'empty';
-    if (art === 'pot' || art === 'pan') {
+    const custom = FOOD.station[art];
+    if (custom && custom.slot) {
+      custom.slot(c, part, slot, k, burnt, busy, sl, t);
+    } else if (art === 'pot' || art === 'pan') {
       burner(c, cx, cy + r * 0.25, r * 0.95, busy && !burnt && sl.st !== 'done');
       if (art === 'pot') {
         rr(c, cx - r * 0.86, cy - r * 0.1, r * 1.72, r * 0.9, r * 0.2); paint(c, '#AEB6C0', OL, r * 0.06);
@@ -689,7 +720,7 @@ window.PV = window.PV || {};
       c.beginPath(); c.moveTo(cx - r * 0.86, cy + r * 0.72); c.lineTo(cx - r * 0.86, cy - r * 0.1); c.arc(cx, cy - r * 0.1, r * 0.86, Math.PI, TAU); c.lineTo(cx + r * 0.86, cy + r * 0.72); c.closePath();
       paint(c, busy && !burnt && sl.st === 'cook' ? '#3B1A0E' : '#2B1A12', OL, r * 0.06);
       if (sl.st === 'cook') { c.save(); c.globalAlpha = 0.5 + 0.2 * Math.sin(t * 0.2); ell(c, cx, cy + r * 0.55, r * 0.7, r * 0.18); c.fillStyle = '#FF7A1A'; c.fill(); c.restore(); }
-      if (busy) onHeat(c, part, cx, cy + r * 0.3, r * 0.72, k, burnt);
+      if (busy) onHeat(c, part, cx, cy + r * 0.3, r * (part === 'pizza' ? 0.72 : 0.98), k, burnt);
     } else if (art === 'ricer') {
       rr(c, cx - r * 0.78, cy - r * 0.45, r * 1.56, r * 1.25, r * 0.4); paint(c, '#F4F4F2', OL, r * 0.06);
       rr(c, cx - r * 0.5, cy + r * 0.4, r * 1.0, r * 0.2, r * 0.08); paint(c, '#D93A2E');
@@ -720,10 +751,11 @@ window.PV = window.PV || {};
   }
 
   /** A drink machine: body, and the cups under it. */
-  function drinkMachine(c, art, box, m, th, t, busy) {
+  function drinkMachine(c, art, box, m, th, t, busy, id) {
     const u = box.u, { x, y, w, h } = m;
     const lw = u * 0.025;
     rr(c, box.x, y + h * 0.9, box.w, h * 0.1, u * 0.03); paint(c, '#9AA3AE', OL, lw);
+    if (FOOD.machine[art]) { FOOD.machine[art](c, box, m, th, t, busy, id); return; }
     if (art === 'espresso') {
       rr(c, x, y + h * 0.12, w, h * 0.8, u * 0.06); paint(c, '#D93A2E', OL, lw);
       rr(c, x + w * 0.12, y + h * 0.22, w * 0.76, h * 0.2, u * 0.03); paint(c, '#E9EEF3');
@@ -733,10 +765,10 @@ window.PV = window.PV || {};
       rr(c, x, y + h * 0.08, w, h * 0.84, u * 0.06); paint(c, '#2E6FB8', OL, lw);
       for (let i = 0; i < 3; i++) { rr(c, x + w * 0.12, y + h * (0.18 + i * 0.17), w * 0.76, h * 0.12, u * 0.03); paint(c, ['#E23B3B', '#FFD447', '#8BD17C'][i]); }
     } else if (art === 'jug' || art === 'urn') {
-      const liq = art === 'jug' ? '#FFE45C' : '#F3E6CF';
+      const liq = FOOD.liquid[id] || (art === 'jug' ? '#FFE45C' : '#F3E6CF');
       rr(c, x + w * 0.08, y + h * 0.05, w * 0.84, h * 0.72, u * 0.12); paint(c, 'rgba(220,240,255,.7)', OL, lw);
       rr(c, x + w * 0.12, y + h * 0.25, w * 0.76, h * 0.5, u * 0.1); paint(c, liq);
-      if (art === 'jug') {
+      if (art === 'jug' && (!id || id === 'lemonade')) {
         // Lemon wheels and ice, scattered — three half-moons in a row read as a face.
         for (const [fx, fy, rr2] of [[0.34, 0.36, 0.065], [0.66, 0.5, 0.055], [0.42, 0.62, 0.05]]) {
           circ(c, x + w * fx, y + h * fy, u * rr2); paint(c, '#FFF3A0', '#D9B400', lw * 0.6);
@@ -744,7 +776,7 @@ window.PV = window.PV || {};
         }
         rr(c, x + w * 0.56, y + h * 0.28, u * 0.08, u * 0.08, u * 0.02); paint(c, 'rgba(255,255,255,.7)');
       }
-      else for (let i = 0; i < 4; i++) line(c, x + w * 0.25 + i * w * 0.15, y + h * 0.3, x + w * 0.3 + i * w * 0.15, y + h * 0.36, '#B77A45', lw);
+      else if (art === 'urn' && (!id || id === 'horchata')) for (let i = 0; i < 4; i++) line(c, x + w * 0.25 + i * w * 0.15, y + h * 0.3, x + w * 0.3 + i * w * 0.15, y + h * 0.36, '#B77A45', lw);
       rr(c, x + w * 0.2, y + h * 0.77, w * 0.6, h * 0.15, u * 0.03); paint(c, th.a, OL, lw);
     } else if (art === 'kettle') {
       rr(c, x + w * 0.1, y + h * 0.7, w * 0.8, h * 0.22, u * 0.04); paint(c, '#474C55', OL, lw);
@@ -773,7 +805,7 @@ window.PV = window.PV || {};
     const cold = st.cools && sl.st === 'full' && sl.age >= st.cools;
     drink(c, id, cx, floorY, r, f, !cold, t);
     if (sl.st === 'fill') {
-      const col = id === 'coffee' ? '#6B3E1E' : (id === 'tea' ? '#B9D46A' : (id === 'soda' ? '#5A2A1A' : (id === 'lemonade' ? '#FFE45C' : '#F3E6CF')));
+      const col = FOOD.liquid[id] || (id === 'coffee' ? '#6B3E1E' : (id === 'tea' ? '#B9D46A' : (id === 'soda' ? '#5A2A1A' : (id === 'lemonade' ? '#FFE45C' : '#F3E6CF'))));
       line(c, cx, y, cx, floorY - r * 0.2, col, r * 0.1);
       ring(c, cx + r * 0.55, y + h * 0.1, r * 0.2, f, '#FF9F1C', r * 0.1);
     } else if (cold) {
@@ -790,7 +822,7 @@ window.PV = window.PV || {};
       ell(c, s.cx, s.cy + s.r * 0.4, s.r * 0.7, s.r * 0.28); c.strokeStyle = 'rgba(255,90,40,' + (0.55 + 0.2 * Math.sin(t * 0.08 + i)) + ')'; c.lineWidth = s.r * 0.12; c.stroke();
       // Something cooked keeps its cooked look; a side is a side.
       if (parts[i]) {
-        if (DONENESS[parts[i]] && PV.ChefData.partKind(parts[i]) !== 'side') onHeat(c, parts[i], s.cx, s.cy, s.r * 1.15, 1, false);
+        if ((DONENESS[parts[i]] || FOOD.done[parts[i]]) && PV.ChefData.partKind(parts[i]) !== 'side') onHeat(c, parts[i], s.cx, s.cy, s.r * 1.15, 1, false);
         else part(c, parts[i], s.cx, s.cy, s.r * 1.1);
       }
     }
@@ -1064,7 +1096,15 @@ window.PV = window.PV || {};
     ware: ware, dish: dish, side: side, drink: drink, item: item, part: part, onHeat: onHeat,
     cookBody: cookBody, cookSlot: cookSlot, drinkMachine: drinkMachine, drinkSlot: drinkSlot, warmer: warmer,
     bin: bin, trash: trash, person: person, street: street, frame: frame, kitchen: kitchen, truck: truck,
-    coin: coin, coins: coins, gem: gem, star: star, clock: clock, head: head, hand: hand, ring: ring, tick: tick, steam: steam, smoke: smoke
+    coin: coin, coins: coins, gem: gem, star: star, clock: clock, head: head, hand: hand, ring: ring, tick: tick, steam: steam, smoke: smoke,
+    // For food.js and stands.js: the shapes and the pieces they are made of.
+    OL: OL, TAU: TAU, STACK: STACK, DONENESS: DONENESS,
+    hash: hash, scatter: scatter, blob: blob, leaf: leaf, olive: olive, onionRing: onionRing, burner: burner, bubbles: bubbles,
+    /** Add pictures: { ware, dish, part, heat, done, side, drink, liquid, station, machine } by id. */
+    food(spec) { for (const k in spec) { if (FOOD[k]) Object.assign(FOOD[k], spec[k]); } },
+    has: (kind, id) => !!(FOOD[kind] && FOOD[kind][id]),
+    doneOf: id => DONENESS[id] || FOOD.done[id] || null,
+    liquidOf: id => FOOD.liquid[id] || null
   };
 
 })(window.PV);

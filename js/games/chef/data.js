@@ -1,8 +1,9 @@
-/* 街头大厨 / Street Chef — the catalogue.
+/* 街头大厨 / Street Chef — the rules of the catalogue.
 
-   Everything a truck cooks, sells and upgrades, and the rule that turns a
-   truck and a level number into a level. Nothing here draws or keeps
-   state; the engine, the save, the bot and the tests all read it.
+   What a truck sells and upgrades (the menu itself is menu.js), and the
+   rule that turns a truck and a level number into a level. Nothing here
+   draws or keeps state; the engine, the save, the bot and the tests all
+   read it.
 
    A DISH is a set of parts on one plate: one base (pasta, a bun, a pizza,
    a shell, rice) and any number of adds. A side (fries, soup) and a drink
@@ -19,170 +20,30 @@ window.PV = window.PV || {};
   'use strict';
 
   const HZ = 60;
-  const LEVELS = 20;
+  const LEVELS = 40;
   const LOOKS = 12;                 // how many different customers there are to draw
 
-  /* kind: base (starts a plate), add (goes on one), side, drink.
-     layer: the order they are painted in, bottom first. */
-  const PARTS = {
-    pasta: { kind: 'base', layer: 0 },
-    redsauce: { kind: 'add', layer: 1 },
-    whitesauce: { kind: 'add', layer: 1 },
-    parmesan: { kind: 'add', layer: 3 },
-    olives: { kind: 'add', layer: 4 },
-    basil: { kind: 'add', layer: 5 },
-    coffee: { kind: 'drink', cools: 14 },
-
-    bun: { kind: 'base', layer: 0 },
-    patty: { kind: 'add', layer: 1 },
-    cheddar: { kind: 'add', layer: 2 },
-    onion: { kind: 'add', layer: 3 },
-    tomato: { kind: 'add', layer: 4 },
-    lettuce: { kind: 'add', layer: 5 },
-    fries: { kind: 'side' },
-    soda: { kind: 'drink' },
-
-    pizza: { kind: 'base', layer: 0 },
-    pepperoni: { kind: 'add', layer: 2 },
-    mushroom: { kind: 'add', layer: 2 },
-    pepper: { kind: 'add', layer: 3 },
-    wings: { kind: 'side' },
-    lemonade: { kind: 'drink' },
-
-    shell: { kind: 'base', layer: 0 },
-    beef: { kind: 'add', layer: 1 },
-    chicken: { kind: 'add', layer: 1 },
-    jack: { kind: 'add', layer: 3 },
-    salsa: { kind: 'add', layer: 4 },
-    guac: { kind: 'add', layer: 5 },
-    nachos: { kind: 'side' },
-    horchata: { kind: 'drink' },
-
-    rice: { kind: 'base', layer: 0 },
-    salmon: { kind: 'add', layer: 1 },
-    tuna: { kind: 'add', layer: 1 },
-    cucumber: { kind: 'add', layer: 2 },
-    avocado: { kind: 'add', layer: 3 },
-    roe: { kind: 'add', layer: 4 },
-    miso: { kind: 'side' },
-    tea: { kind: 'drink', cools: 16 }
-  };
-
-  /* A station cooks one thing (type cook) or pours one drink (type drink).
-     slots and speed are by upgrade level 1..3; cook, burn and fill are
-     seconds at level 1. Burn is how long a cooked thing waits before it
-     burns. */
-  const TRUCKS = [
-    {
-      key: 'pasta', price: 0, needs: 0,
-      stations: [
-        { id: 'pot', type: 'cook', makes: 'pasta', art: 'pot', cook: 4.5, burn: 8, slots: [2, 3, 4], speed: [1, 0.82, 0.68] },
-        { id: 'pan', type: 'cook', makes: 'whitesauce', art: 'pan', cook: 3.5, burn: 4, slots: [1, 2, 3], speed: [1, 0.82, 0.68] },
-        { id: 'espresso', type: 'drink', makes: 'coffee', art: 'espresso', fill: 3, slots: [1, 2, 3], speed: [1, 0.8, 0.62] }
-      ],
-      bins: ['redsauce', 'parmesan', 'olives', 'basil'],
-      menu: [
-        { parts: ['pasta', 'redsauce'], price: 10, at: 1 },
-        { parts: ['coffee'], price: 6, at: 2 },
-        { parts: ['pasta', 'redsauce', 'parmesan'], price: 14, at: 4 },
-        { parts: ['pasta', 'whitesauce'], price: 14, at: 6 },
-        { parts: ['pasta', 'whitesauce', 'parmesan'], price: 18, at: 8 },
-        { parts: ['pasta', 'redsauce', 'olives'], price: 16, at: 10 },
-        { parts: ['pasta', 'redsauce', 'parmesan', 'olives'], price: 21, at: 12 },
-        { parts: ['pasta', 'whitesauce', 'basil'], price: 19, at: 14 },
-        { parts: ['pasta', 'redsauce', 'parmesan', 'basil'], price: 22, at: 16 },
-        { parts: ['pasta', 'whitesauce', 'parmesan', 'olives', 'basil'], price: 27, at: 18 }
-      ]
-    },
-    {
-      key: 'burger', price: 2500, needs: 8,
-      stations: [
-        { id: 'grill', type: 'cook', makes: 'patty', art: 'grill', cook: 5, burn: 6.5, slots: [2, 3, 4], speed: [1, 0.82, 0.68] },
-        { id: 'fryer', type: 'cook', makes: 'fries', art: 'fryer', cook: 4, burn: 8, slots: [1, 2, 3], speed: [1, 0.82, 0.68] },
-        { id: 'fountain', type: 'drink', makes: 'soda', art: 'fountain', fill: 2.5, slots: [1, 2, 3], speed: [1, 0.8, 0.62] }
-      ],
-      bins: ['bun', 'cheddar', 'lettuce', 'tomato', 'onion'],
-      menu: [
-        { parts: ['bun', 'patty'], price: 10, at: 1 },
-        { parts: ['bun', 'patty', 'cheddar'], price: 14, at: 2 },
-        { parts: ['fries'], price: 6, at: 3 },
-        { parts: ['soda'], price: 5, at: 5 },
-        { parts: ['bun', 'patty', 'lettuce'], price: 14, at: 7 },
-        { parts: ['bun', 'patty', 'cheddar', 'tomato'], price: 18, at: 9 },
-        { parts: ['bun', 'patty', 'lettuce', 'tomato'], price: 18, at: 11 },
-        { parts: ['bun', 'patty', 'cheddar', 'onion'], price: 18, at: 13 },
-        { parts: ['bun', 'patty', 'cheddar', 'lettuce', 'tomato'], price: 24, at: 15 },
-        { parts: ['bun', 'patty', 'cheddar', 'onion', 'tomato', 'lettuce'], price: 28, at: 17 }
-      ]
-    },
-    {
-      key: 'pizza', price: 5000, needs: 8,
-      stations: [
-        { id: 'oven', type: 'cook', makes: 'pizza', art: 'oven', cook: 6, burn: 7, slots: [2, 3, 4], speed: [1, 0.82, 0.68] },
-        { id: 'wingfryer', type: 'cook', makes: 'wings', art: 'fryer', cook: 5, burn: 7, slots: [1, 2, 3], speed: [1, 0.82, 0.68] },
-        { id: 'jug', type: 'drink', makes: 'lemonade', art: 'jug', fill: 3, slots: [1, 2, 3], speed: [1, 0.8, 0.62] }
-      ],
-      bins: ['pepperoni', 'mushroom', 'pepper', 'olives', 'basil'],
-      menu: [
-        { parts: ['pizza', 'pepperoni'], price: 12, at: 1 },
-        { parts: ['pizza'], price: 9, at: 2 },
-        { parts: ['lemonade'], price: 5, at: 3 },
-        { parts: ['pizza', 'mushroom'], price: 12, at: 4 },
-        { parts: ['pizza', 'pepperoni', 'mushroom'], price: 17, at: 6 },
-        { parts: ['wings'], price: 8, at: 8 },
-        { parts: ['pizza', 'pepper', 'olives'], price: 17, at: 10 },
-        { parts: ['pizza', 'pepperoni', 'pepper'], price: 17, at: 12 },
-        { parts: ['pizza', 'mushroom', 'olives', 'basil'], price: 22, at: 14 },
-        { parts: ['pizza', 'pepperoni', 'mushroom', 'pepper', 'olives'], price: 26, at: 16 }
-      ]
-    },
-    {
-      key: 'taco', price: 8000, needs: 8,
-      stations: [
-        { id: 'grill', type: 'cook', makes: 'beef', art: 'grill', cook: 4.5, burn: 6, slots: [2, 3, 4], speed: [1, 0.82, 0.68] },
-        { id: 'plancha', type: 'cook', makes: 'chicken', art: 'pan', cook: 4, burn: 5, slots: [1, 2, 3], speed: [1, 0.82, 0.68] },
-        { id: 'chipfryer', type: 'cook', makes: 'nachos', art: 'fryer', cook: 3.5, burn: 7, slots: [1, 2, 3], speed: [1, 0.82, 0.68] },
-        { id: 'urn', type: 'drink', makes: 'horchata', art: 'urn', fill: 2.8, slots: [1, 2, 3], speed: [1, 0.8, 0.62] }
-      ],
-      bins: ['shell', 'salsa', 'jack', 'lettuce', 'guac'],
-      menu: [
-        { parts: ['shell', 'beef', 'salsa'], price: 12, at: 1 },
-        { parts: ['shell', 'beef', 'jack'], price: 12, at: 2 },
-        { parts: ['horchata'], price: 5, at: 3 },
-        { parts: ['shell', 'beef', 'salsa', 'jack'], price: 16, at: 4 },
-        { parts: ['nachos'], price: 7, at: 5 },
-        { parts: ['shell', 'chicken', 'lettuce'], price: 14, at: 7 },
-        { parts: ['shell', 'chicken', 'salsa', 'jack'], price: 18, at: 9 },
-        { parts: ['shell', 'beef', 'guac'], price: 16, at: 11 },
-        { parts: ['shell', 'chicken', 'lettuce', 'guac'], price: 20, at: 13 },
-        { parts: ['shell', 'beef', 'salsa', 'jack', 'guac'], price: 24, at: 15 },
-        { parts: ['shell', 'chicken', 'salsa', 'jack', 'lettuce', 'guac'], price: 28, at: 17 }
-      ]
-    },
-    {
-      key: 'sushi', price: 12000, needs: 8,
-      stations: [
-        { id: 'ricer', type: 'cook', makes: 'rice', art: 'ricer', cook: 5, burn: 12, slots: [2, 3, 4], speed: [1, 0.82, 0.68] },
-        { id: 'soup', type: 'cook', makes: 'miso', art: 'pot', cook: 4, burn: 8, slots: [1, 2, 3], speed: [1, 0.82, 0.68] },
-        { id: 'kettle', type: 'drink', makes: 'tea', art: 'kettle', fill: 2.5, slots: [1, 2, 3], speed: [1, 0.8, 0.62] }
-      ],
-      bins: ['salmon', 'tuna', 'cucumber', 'avocado', 'roe'],
-      menu: [
-        { parts: ['rice', 'salmon'], price: 12, at: 1 },
-        { parts: ['rice', 'tuna'], price: 12, at: 2 },
-        { parts: ['tea'], price: 5, at: 3 },
-        { parts: ['miso'], price: 8, at: 4 },
-        { parts: ['rice', 'salmon', 'avocado'], price: 16, at: 6 },
-        { parts: ['rice', 'tuna', 'cucumber'], price: 15, at: 8 },
-        { parts: ['rice', 'salmon', 'roe'], price: 18, at: 10 },
-        { parts: ['rice', 'tuna', 'avocado', 'cucumber'], price: 20, at: 12 },
-        { parts: ['rice', 'salmon', 'avocado', 'roe'], price: 23, at: 14 },
-        { parts: ['rice', 'salmon', 'cucumber', 'avocado', 'roe'], price: 27, at: 16 }
-      ]
-    }
-  ];
+  /* The parts and the trucks are menu.js's; here they gain an index and a
+     lookup, and every truck opens once the one before it is cleared to
+     level NEEDS and its price is paid. */
+  const PARTS = PV.ChefMenu.PARTS;
+  const TRUCKS = PV.ChefMenu.TRUCKS;
+  const NEEDS = 8;
+  TRUCKS.forEach(tr => { tr.needs = tr.price ? NEEDS : 0; });
   const TRUCK = Object.create(null);
   TRUCKS.forEach((tr, i) => { tr.index = i; TRUCK[tr.key] = tr; });
+
+  /* A later street sells dearer food, as the reference's do, so its takings
+     keep up with its dearer kitchen. menu.js writes the first street's
+     prices (kept as `list`); each truck along the chain charges 6% more.
+     Worked from the list price, so reading this file twice changes nothing. */
+  const PRICE_STEP = 0.06;
+  for (const tr of TRUCKS) {
+    for (const m of tr.menu) {
+      if (m.list == null) m.list = m.price;
+      m.price = Math.round(m.list * (1 + PRICE_STEP * tr.index));
+    }
+  }
 
   /* ------------------------------------------------------------ upgrades */
 
@@ -191,7 +52,6 @@ window.PV = window.PV || {};
      recipe raises every price on the truck, and each piece of decor makes
      customers wait longer — except the tip jar, which picks up the coins
      for you. Costs grow with the truck: a later street earns more. */
-  const COST_K = [1, 1.35, 1.7, 2.1, 2.5];
   const STATION_COST = [0, 0, 420, 1150];         // by the level being bought
   const PLATE_COST = [0, 0, 360, 980];
   const WARMER_COST = [0, 600, 1400];
@@ -207,7 +67,7 @@ window.PV = window.PV || {};
   ];
 
   const round5 = n => Math.max(5, Math.round(n / 5) * 5);
-  const costK = truck => COST_K[TRUCK[truck] ? TRUCK[truck].index : 0] || 1;
+  const costK = truck => 1 + 0.07 * (TRUCK[truck] ? TRUCK[truck].index : 0);
 
   /** Every upgrade a truck offers, in the order the kitchen lists them. */
   function upgrades(truckKey) {
@@ -300,10 +160,13 @@ window.PV = window.PV || {};
       menu.push(i);
       if (m.at === L && L > 1) fresh.push(i);
     });
-    const count = 5 + Math.ceil(L * 0.72) + Math.min(2, T);
-    const gap = Math.max(3.4, 7.2 - L * 0.17 - T * 0.25);
-    const patience = Math.max(19, 33 - L * 0.55 - T * 0.9);
-    const orderMax = L < 3 ? 1 : (L < 11 ? 2 : 3);
+    // Forty levels, from six unhurried customers to a queue of twenty-odd
+    // who want three things each; a later street is a little busier.
+    const p = (L - 1) / (LEVELS - 1);
+    const count = Math.round(6 + 15 * p) + Math.min(2, Math.floor(T / 4));
+    const gap = Math.max(3.3, 7.2 - 3.6 * p - Math.min(0.6, T * 0.04));
+    const patience = Math.max(19, 33 - 12 * p - Math.min(3, T * 0.2));
+    const orderMax = L < 3 ? 1 : (L < 16 ? 2 : 3);
     const goal = L % 5 === 0
       ? { type: 'serve', n: count - Math.max(2, Math.floor(count / 5)) }
       : { type: 'coins' };

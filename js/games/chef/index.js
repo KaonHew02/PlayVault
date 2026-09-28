@@ -11,8 +11,8 @@
     family: 'arcade',
     name: 'Street Chef',
     nameZh: '街头大厨',
-    blurb: 'Run a food truck: cook, plate and serve before the customers lose patience. Five trucks, a hundred levels, and a kitchen to upgrade.',
-    blurbZh: '经营一辆美食餐车：在顾客失去耐心之前烹饪、装盘、上菜。五辆餐车、一百个关卡，还有可以升级的厨房。',
+    blurb: 'Run a food truck: cook, plate and serve before the customers lose patience. Seventeen streets of forty levels — 680 in all — and a kitchen to upgrade on every truck.',
+    blurbZh: '经营一辆美食餐车：在顾客失去耐心之前烹饪、装盘、上菜。十七条街、每条四十关，共 680 关，每辆餐车都有可以升级的厨房。',
     accent: '#F07A26',
     icon: '<svg viewBox="0 0 48 48" aria-hidden="true">'
       + '<path d="M5 14h27v20H5z" fill="#F07A26"/>'

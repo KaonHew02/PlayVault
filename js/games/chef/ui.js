@@ -44,7 +44,8 @@ window.PV = window.PV || {};
       if (up.kind === 'station') {
         const st = up.station;
         if (st.type === 'drink') { A.drink(c, st.makes, s / 2, s * 0.86, s * 0.42, 1, true, 0); return; }
-        const slot = { cx: s / 2, cy: s * 0.56, r: s * 0.3 };
+        // A whole slot, as layout.js makes them: some machines draw from its edges.
+        const slot = { cx: s / 2, cy: s * 0.56, r: s * 0.3, x: s * 0.18, y: s * 0.12, w: s * 0.64, h: s * 0.8 };
         const box = { x: s * 0.06, y: s * 0.12, w: s * 0.88, h: s * 0.8, u: s * 0.8 };
         A.cookBody(c, st.art, box, A.themeOf(truckKey));
         A.cookSlot(c, st.art, st.makes, slot, { work: 1, burn: 1 }, { st: 'done', t: 0 }, 0);
@@ -339,7 +340,11 @@ window.PV = window.PV || {};
       paintTop();
       paintTabs();
       PV.clear(body);
-      body.appendChild(paintTrucks());
+      const trucks = paintTrucks();
+      body.appendChild(trucks);
+      // Keep the chosen street in view: the row scrolls, and it was just rebuilt.
+      const on = trucks.querySelector('.chef-truck.on');
+      if (on) trucks.scrollLeft = Math.max(0, on.offsetLeft - (trucks.clientWidth - on.clientWidth) / 2);
       body.appendChild(tab === 'map' ? paintLevels() : paintKitchen());
       paintLayer();
     }

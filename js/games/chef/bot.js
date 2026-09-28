@@ -154,6 +154,27 @@ window.PV = window.PV || {};
       if (act) acts.push(act);
     }
 
+    // Something cooked that nobody has claimed will burn where it is: a base
+    // is safe on a plate, anything else on the hot plate. It goes in with
+    // the rest, by how close it is to burning.
+    let rescue = null, rescueHeat = -1;
+    for (let s = 0; s < g.stations.length; s++) {
+      const st = g.stations[s];
+      if (st.type !== 'cook') continue;
+      for (let i = 0; i < st.slots.length; i++) {
+        const sl = st.slots[i];
+        const heat = sl.t / st.burn;
+        if (sl.st !== 'done' || slotsUsed.has(s + ':' + i) || heat < 0.3 || heat <= rescueHeat) continue;
+        const kind = kindOf(st.makes);
+        const free = g.warm.indexOf(null);
+        let a = null;
+        if (kind === 'base' && g.bestPlate(st.makes) >= 0) a = { a: 'slot', s: s, i: i };
+        else if (free >= 0) a = { a: 'slot', s: s, i: i, to: { k: 'warm', i: free } };
+        else if (kind === 'add' && g.bestPlate(st.makes) >= 0) a = { a: 'slot', s: s, i: i };
+        if (a) { rescue = a; rescueHeat = heat; }
+      }
+    }
+
     // Every order has had its say; now which first. Food coming off the heat
     // beats everything, the nearest to burning first; then whatever starts
     // something cooking, because that is the step that takes time; then the
@@ -166,7 +187,9 @@ window.PV = window.PV || {};
         const st = g.stations[a.s], sl = st.slots[a.i];
         if (sl.st === 'done' && st.type === 'cook' && sl.t / st.burn > heat) { heat = sl.t / st.burn; pick = a; }
       }
+      if (rescue && rescueHeat > Math.max(heat, 0.55)) return rescue;
       if (pick) return pick;
+      if (rescue && rescueHeat > 0.55) return rescue;
       for (const a of acts) if (a.a === 'slot' && g.stations[a.s].slots[a.i].st === 'empty') return a;
       return acts[0];
     }
@@ -177,22 +200,7 @@ window.PV = window.PV || {};
         if (g.plates[i].parts.length && !platesUsed.has(i)) return { a: 'plate', i: i, to: { k: 'trash' } };
       }
     }
-
-    // Something cooked that nobody has claimed is about to burn: a base is
-    // safe on a plate, anything else on the hot plate.
-    for (let s = 0; s < g.stations.length; s++) {
-      const st = g.stations[s];
-      if (st.type !== 'cook') continue;
-      for (let i = 0; i < st.slots.length; i++) {
-        const sl = st.slots[i];
-        if (sl.st !== 'done' || slotsUsed.has(s + ':' + i) || sl.t < st.burn * 0.3) continue;
-        const kind = kindOf(st.makes);
-        const free = g.warm.indexOf(null);
-        if (kind === 'base' && g.bestPlate(st.makes) >= 0) return { a: 'slot', s: s, i: i };
-        if (free >= 0) return { a: 'slot', s: s, i: i, to: { k: 'warm', i: free } };
-        if (kind === 'add' && g.bestPlate(st.makes) >= 0) return { a: 'slot', s: s, i: i };
-      }
-    }
+    if (rescue) return rescue;
 
     // 5. A base on the heat for whoever is next, if there is a plate to put it on.
     const spare = g.plates.some((pl, i) => !pl.parts.length && !platesUsed.has(i));
