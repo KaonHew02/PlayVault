@@ -450,6 +450,16 @@ main {
 /* Real-time games (snake, racing, tower defense) */
 .loop-stage { display: flex; gap: 14px; justify-content: center; align-items: flex-start; }
 .loop-box { display: flex; }
+/* A game's DOM over its canvas, laid out at its own size and drawn bigger
+   with a canvas past it (PV.scaleUI). Every such layer here sits at inset
+   1px with a 9px corner, which stays 9px. */
+.loop-box.ui-big > :not(canvas) {
+  right: auto; bottom: auto;
+  width: calc((100% - 2px) / var(--ui-k));
+  height: calc((100% - 2px) / var(--ui-k));
+  border-radius: calc(9px / var(--ui-k));
+  transform: scale(var(--ui-k)); transform-origin: 0 0;
+}
 .loop-canvas { border-radius: 10px; border: 1px solid var(--line-2); box-shadow: var(--shadow); touch-action: none; }
 .loop-side { display: flex; flex-direction: column; gap: 10px; }
 .loop-side:empty { display: none; }

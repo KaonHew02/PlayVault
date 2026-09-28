@@ -19,10 +19,15 @@ window.PV = window.PV || {};
   const el = (...a) => PV.el(...a);
   const fmt = n => PV.fmtNum(Math.round(n));
 
+  // How much bigger the lobby is drawn than it is laid out (PV.scaleUI), so
+  // that its pictures are painted for the size they show at. One lobby is
+  // on screen at a time.
+  let sharp = 1;
+
   /** A small canvas with a drawing on it, sharp on any screen. */
   function pic(w, h, draw, cls) {
     const cv = document.createElement('canvas');
-    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const dpr = Math.min(3, (window.devicePixelRatio || 1) * sharp);
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
     cv.style.width = w + 'px'; cv.style.height = h + 'px';
     if (cls) cv.className = cls;
@@ -358,6 +363,8 @@ window.PV = window.PV || {};
       /** Straight to a level's card, as after a level ends. */
       openLevel(key, L) { tab = 'map'; paint(); openCard(key, L); },
       help() { help = true; paintLayer(); },
+      /** The lobby is drawn k times bigger now: paint its pictures for that. */
+      sharpen(k) { if (k === sharp) return; sharp = k; if (!node.hidden) paint(); },
       refresh: paint,
       toast: say,
       destroy() { clearTimeout(toastT); node.remove(); }

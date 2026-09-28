@@ -99,10 +99,14 @@ window.PV = window.PV || {};
   };
   PV.FpsSettingsPanel.DEFAULTS = SET_DEFAULTS;
 
+  // How much bigger the lobby is drawn than it is laid out (PV.scaleUI), so
+  // that a gun is painted for the size it shows at. One lobby at a time.
+  let sharp = 1;
+
   /** A canvas with a gun painted side on, sharp on any screen. */
   function gunCanvas(id, w, h, look, cls) {
     const c = el('canvas', { class: cls || 'fps-gun' });
-    const r = Math.min(2, window.devicePixelRatio || 1);
+    const r = Math.min(2, window.devicePixelRatio || 1) * sharp;
     c.width = Math.round(w * r); c.height = Math.round(h * r);
     c.style.width = w + 'px'; c.style.height = h + 'px';
     const x = c.getContext('2d');
@@ -456,6 +460,8 @@ window.PV = window.PV || {};
     return {
       node: root,
       refresh(m) { if (m) meta = m; render(); },
+      /** The lobby is drawn k times bigger now: paint its guns for that. */
+      sharpen(k) { if (k === sharp) return; sharp = k; if (!root.hidden) render(); },
       // Called every frame: redraw only when the panel comes back. Rebuilt
       // each frame, a button was gone between press and release and no click
       // ever landed — Deploy did nothing.

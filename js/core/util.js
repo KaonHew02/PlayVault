@@ -64,6 +64,25 @@ window.PV = window.PV || {};
     };
   };
 
+  /**
+   * The DOM a game lays over its canvas (a lobby, a card, a picker) is laid
+   * out at the size it was designed for, and drawn k times bigger once the
+   * canvas has grown past that — on a full screen, mostly. Without this a
+   * full-screen lobby is the page's lobby in a corner of a bigger box.
+   *
+   * It goes on the canvas's box and covers every child of it that is not a
+   * canvas. A transform, not `zoom`: under a transform a pointer's
+   * coordinates and getBoundingClientRect agree in every browser, and Blend
+   * In's colour wheel does sums with both. Returns the scale it set.
+   */
+  PV.scaleUI = function (box, k) {
+    k = Math.max(1, Math.round((k || 1) * 100) / 100);
+    box.classList.toggle('ui-big', k > 1);
+    if (k > 1) box.style.setProperty('--ui-k', String(k));
+    else box.style.removeProperty('--ui-k');
+    return k;
+  };
+
   /** m:ss, growing to h:mm:ss past the hour. */
   PV.fmtTime = function (ms) {
     const t = Math.max(0, Math.floor(ms / 1000));

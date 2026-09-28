@@ -130,13 +130,24 @@ window.PV = window.PV || {};
       },
 
       fit(availW, availH) {
-        if (PV.stage().phone) {
-          const w = Math.max(280, availW);
-          return { w: w, h: Math.round(Math.max(300, Math.min(availH, w * 0.9))) };
+        const box = ui && ui.canvas.parentElement;
+        let w, h;
+        // Full screen, the stage is the screen, as in Strike Squad: the
+        // fighter select lies over the whole box, so the canvas fills it too.
+        if (box && document.fullscreenElement === box) {
+          w = window.innerWidth; h = window.innerHeight;
+        } else if (PV.stage().phone) {
+          w = Math.max(280, availW);
+          h = Math.round(Math.max(300, Math.min(availH, w * 0.9)));
+        } else {
+          w = Math.min(availW, 1180); h = w * 0.5625;
+          if (h > availH + 30) { h = availH + 30; w = h / 0.5625; }
+          w = Math.round(Math.max(320, w)); h = Math.round(Math.max(240, h));
         }
-        let w = Math.min(availW, 1180), h = w * 0.5625;
-        if (h > availH + 30) { h = availH + 30; w = h / 0.5625; }
-        return { w: Math.round(Math.max(320, w)), h: Math.round(Math.max(240, h)) };
+        // The fighter select and the moves list are laid out for the page's
+        // biggest stage, and grow with a canvas past it.
+        if (box) PV.scaleUI(box, Math.min(w / 1180, h / 664));
+        return { w: w, h: h };
       },
 
       build(api) {

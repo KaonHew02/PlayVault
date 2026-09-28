@@ -560,14 +560,18 @@ window.PV = window.PV || {};
         shape = availW < availH * 0.92 ? 'tall' : 'wide';
         const s = S();
         const ratio = s.H / s.W;
+        let w;
         if (stage) {
-          const fw = Math.floor(Math.max(280, Math.min(availW, availH / ratio)));
-          return { w: fw, h: Math.round(fw * ratio) };
+          w = Math.floor(Math.max(280, Math.min(availW, availH / ratio)));
+        } else {
+          w = Math.min(availW, shape === 'wide' ? 1180 : 640);
+          if (w * ratio > availH) w = Math.max(Math.min(availW, 560), availH / ratio);
+          w = Math.round(Math.max(280, Math.min(availW, w)));
         }
-        let w = Math.min(availW, shape === 'wide' ? 1180 : 640);
-        if (w * ratio > availH) w = Math.max(Math.min(availW, 560), availH / ratio);
-        w = Math.max(280, Math.min(availW, w));
-        return { w: Math.round(w), h: Math.round(w * ratio) };
+        // The lobby is laid out for the logical size, as the kitchen is
+        // drawn in it, and grows with the canvas past it.
+        if (panels) panels.sharpen(PV.scaleUI(ui.canvas.parentElement, w / s.W));
+        return { w: w, h: Math.round(w * ratio) };
       },
 
       build(api) {

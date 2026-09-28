@@ -483,14 +483,21 @@ window.PV = window.PV || {};
       },
 
       fit(availW, availH) {
-        if (box && document.fullscreenElement === box) return { w: window.innerWidth, h: window.innerHeight };
-        if (PV.stage().phone) {
-          const w = Math.max(280, availW);
-          return { w: w, h: Math.round(Math.max(340, Math.min(availH + 60, w * 1.3))) };
+        let w, h;
+        if (box && document.fullscreenElement === box) {
+          w = window.innerWidth; h = window.innerHeight;
+        } else if (PV.stage().phone) {
+          w = Math.max(280, availW);
+          h = Math.round(Math.max(340, Math.min(availH + 60, w * 1.3)));
+        } else {
+          w = Math.min(availW, 1280); h = w * 0.5625;
+          if (h > availH + 40) { h = availH + 40; w = h / 0.5625; }
+          w = Math.round(Math.max(320, w)); h = Math.round(Math.max(220, h));
         }
-        let w = Math.min(availW, 1280), h = w * 0.5625;
-        if (h > availH + 40) { h = availH + 40; w = h / 0.5625; }
-        return { w: Math.round(Math.max(320, w)), h: Math.round(Math.max(220, h)) };
+        // The panels are laid out for a laptop's stage and grow with a canvas
+        // past it, as on a full screen.
+        if (box) PV.scaleUI(box, Math.min(w / 1180, h / 664));
+        return { w: w, h: h };
       },
 
       build(api) {
