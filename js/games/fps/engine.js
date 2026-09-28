@@ -57,6 +57,7 @@ window.PV = window.PV || {};
   const RESPAWN_T = 3 * HZ;
   const PROTECT_T = 1.5 * HZ;
   const REGEN_DELAY = 5 * HZ, REGEN = 14;
+  const BOT_HITS = [0.5, 0.6, 1];  // what a bot's hit on the person does, by difficulty
   const DROP_T = 20 * HZ;
 
   const NADE_FUSE = 2.4 * HZ, NADE_R = 6.5, NADE_DMG = 135;
@@ -691,6 +692,9 @@ window.PV = window.PV || {};
       if (v.protect > 0) return;
       if (a && a !== v && !this.enemy(a, v)) return;
       let dmg = dmg0;
+      // A bot's hit on the person playing lands softer on easy and normal:
+      // the seconds it buys are the ones a person spends finding the bot.
+      if (v.human && a && !a.human) dmg *= BOT_HITS[this.diff];
       if (v.fx.shield > 0) dmg *= 0.5;
       if (v.armor > 0) {
         const soak = Math.min(v.armor, dmg * 0.5);
@@ -1264,6 +1268,7 @@ window.PV = window.PV || {};
   FpsGame.BOMB_T = BOMB_T;
   FpsGame.CAP_T = CAP_T;
   FpsGame.RESPAWN_T = RESPAWN_T;
+  FpsGame.BOT_HITS = BOT_HITS;
   FpsGame.NADE_R = NADE_R;
   FpsGame.raySphere = raySphere;
   FpsGame.rayCyl = rayCyl;

@@ -24,6 +24,12 @@
    took 1.4 s and normal 1.1, less time than a new player needs to find
    the bot on the screen at all (docs/GAMES.md, phase 27).
 
+   One rule does bend, for the person playing and nobody else: a bot's hit
+   on them lands at half its weight on easy and at 0.6 on normal
+   (engine.js, BOT_HITS), which makes those kills about six seconds and
+   three (phase 28). Bots still hurt each other in full, and the person's
+   own shots do what they always did.
+
    Everything a bot does goes through the controls a player has — move,
    look, fire, aim, jump, crouch, reload, switch, throw, use — and every
    random choice is drawn from the match's own RNG, so a match with bots in
@@ -57,6 +63,7 @@ window.PV = window.PV || {};
       this.head = [0.03, 0.1, 0.3][d];
       this.nadeRate = [0.002, 0.005, 0.014][d];
       this.jumpy = [0, 0.003, 0.008][d];
+      this.burst = BURST[d];
       this.role = a.id % 3;
       // One guard a side stays home in capture the flag: the last of its
       // squad. Everyone else goes for the other flag.
@@ -205,7 +212,7 @@ window.PV = window.PV || {};
       if (s.cat === 'sniper' && a.adsT < 0.85) shoot = false;
 
       // Auto guns fire in bursts at range, so the bloom has time to settle.
-      const B = BURST[g.diff];
+      const B = this.burst;
       if (s.fire === 'auto' && d > B.from) {
         this.burstT = (this.burstT + 1) % B.every;
         if (this.burstT >= B.on) shoot = false;

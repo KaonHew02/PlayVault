@@ -21,6 +21,84 @@ window.PV = window.PV || {};
   const TABS = ['play', 'armory', 'wardrobe', 'skills', 'missions', 'settings'];
   const SKILL_ICON = { medkit: '✚', stim: '⚡', radar: '◎', shield: '⛨' };
 
+  /* The keys, as key caps beside what they do. A cap written 'kc.x' is a
+     word (Mouse, Space) and goes through the strings like the rest. */
+  const KEYS_HELP = [
+    ['WASD', 'move'], ['kc.mouse', 'look'], ['kc.lmb', 'fire'], ['kc.rmb', 'ads'], ['kc.space', 'jump'],
+    ['Shift', 'sprint'], ['C', 'crouch'], ['R', 'reload'], ['1 2 3', 'guns'], ['Q', 'nade'],
+    ['4 5 6', 'skills'], ['E', 'use'], ['G', 'pick'], ['Tab', 'scores'], ['Esc · P', 'pause']
+  ];
+  function keysHelp() {
+    return el('div', { class: 'fps-keys' }, KEYS_HELP.map(([cap, what]) => el('span', { class: 'key' },
+      el('kbd', {}, cap.indexOf('kc.') === 0 ? t('fps.' + cap) : cap), el('span', {}, t('fps.k.' + what)))));
+  }
+
+  /* The device's own settings: how the mouse turns you, the crosshair, the
+     picture and the sound. view.js keeps them; this is the one place they
+     are drawn, in the lobby's Settings tab and on the pause card alike. */
+  const SET_DEFAULTS = {
+    sens: 1, adsSens: 1, invert: false, assist: true,
+    xStyle: 'cross', xColor: 'white', xSize: 1,
+    fov: 95, bright: 1, vol: 0.7, mute: false
+  };
+
+  /** The settings, in four groups. Every change is applied and saved as it is made. */
+  PV.FpsSettingsPanel = function (S, onChange) {
+    const X = PV.FpsHud.XHAIR;
+    const root = el('div', { class: 'fps-settings' });
+    const PW = 150, PH = 90;
+    let preview = null;
+    const xh = () => ({ style: S.xStyle, color: S.xColor, size: S.xSize });
+    function changed() { onChange(S); if (preview) PV.FpsHud.crossPreview(preview, xh(), PW, PH); }
+
+    function slider(key, lo, hi, step, fmt) {
+      const v = el('span', { class: 'v' }, fmt(S[key]));
+      const input = el('input', { type: 'range', min: lo, max: hi, step: step, value: S[key], 'aria-label': t('fps.set.' + key) });
+      input.addEventListener('input', () => { S[key] = +input.value; v.textContent = fmt(S[key]); changed(); });
+      return el('label', { class: 'fps-set' }, el('span', { class: 'k' }, t('fps.set.' + key)), input, v);
+    }
+    const tog = key => el('button', {
+      class: 'fps-chip' + (S[key] ? ' on' : ''), 'aria-pressed': S[key] ? 'true' : 'false',
+      onclick: () => { S[key] = !S[key]; changed(); draw(); }
+    }, (S[key] ? '✓ ' : '') + t('fps.set.' + key));
+    const group = (key, kids) => el('section', { class: 'grp' }, el('h5', {}, t('fps.set.sec.' + key)), kids);
+
+    function draw() {
+      PV.clear(root);
+      root.appendChild(group('mouse', [
+        slider('sens', 0.1, 5, 0.05, x => x.toFixed(2)),
+        slider('adsSens', 0.2, 2, 0.05, x => x.toFixed(2) + '×'),
+        el('div', { class: 'fps-opts' }, tog('invert'), tog('assist')),
+        el('p', { class: 'hint' }, t('fps.set.help'))
+      ]));
+      preview = el('canvas', { class: 'fps-xprev' });
+      PV.FpsHud.crossPreview(preview, xh(), PW, PH);
+      const styles = el('div', { class: 'fps-opts' }, X.styles.map(s => el('button', {
+        class: 'fps-chip' + (S.xStyle === s ? ' on' : ''), onclick: () => { S.xStyle = s; changed(); draw(); }
+      }, t('fps.x.' + s))));
+      const cols = el('div', { class: 'fps-xcols' }, Object.keys(X.colors).map(k => el('button', {
+        class: 'fps-xcol' + (S.xColor === k ? ' on' : ''), title: t('fps.xc.' + k), 'aria-label': t('fps.xc.' + k),
+        style: { background: X.colors[k] }, onclick: () => { S.xColor = k; changed(); draw(); }
+      })));
+      root.appendChild(group('crosshair', el('div', { class: 'fps-xh' }, preview,
+        el('div', { class: 'fps-xctl' }, styles, cols, slider('xSize', 0.5, 2, 0.1, x => x.toFixed(1) + '×')))));
+      root.appendChild(group('display', [
+        slider('fov', 70, 110, 1, x => x + '°'),
+        slider('bright', 0.7, 1.5, 0.05, x => Math.round(x * 100) + '%')
+      ]));
+      root.appendChild(group('sound', [
+        slider('vol', 0, 1, 0.05, x => Math.round(x * 100) + '%'),
+        el('div', { class: 'fps-opts' }, tog('mute'))
+      ]));
+      root.appendChild(el('button', {
+        class: 'btn ghost sm fps-reset', onclick: () => { Object.assign(S, SET_DEFAULTS); changed(); draw(); }
+      }, t('fps.set.reset')));
+    }
+    draw();
+    return root;
+  };
+  PV.FpsSettingsPanel.DEFAULTS = SET_DEFAULTS;
+
   /** A canvas with a gun painted side on, sharp on any screen. */
   function gunCanvas(id, w, h, look, cls) {
     const c = el('canvas', { class: cls || 'fps-gun' });
@@ -83,7 +161,7 @@ window.PV = window.PV || {};
       for (const k of TABS) {
         const badge = k === 'missions' ? readyCount() : 0;
         tabs.appendChild(el('button', { class: 'fps-tab' + (tab === k ? ' on' : ''), onclick: () => { tab = k; render(); } },
-          t('fps.tab.' + k), badge ? el('span', { class: 'dot' }, String(badge)) : null));
+          (k === 'settings' ? '⚙ ' : '') + t('fps.tab.' + k), badge ? el('span', { class: 'dot' }, String(badge)) : null));
       }
       root.appendChild(tabs);
       const body = el('div', { class: 'fps-body' });
@@ -103,20 +181,25 @@ window.PV = window.PV || {};
     function play(body) {
       const cfg = o.cfg();
       body.appendChild(el('div', { class: 'fps-mission' },
-        el('div', { class: 'mode' }, t('fps.mode.' + cfg.mode), el('small', {}, t('fps.map.' + cfg.map) + ' · ' + t('diff.' + cfg.diff))),
-        el('p', { class: 'muted small' }, t('fps.modeInfo.' + cfg.mode))));
+        el('div', { class: 'head' },
+          el('span', { class: 'mode' }, t('fps.mode.' + cfg.mode)),
+          el('span', { class: 'tag' }, t('fps.map.' + cfg.map)),
+          el('span', { class: 'tag diff-' + cfg.diff }, t('fps.opt.diff') + ': ' + t('diff.' + cfg.diff))),
+        el('p', { class: 'info' }, t('fps.modeInfo.' + cfg.mode))));
       const kit = el('div', { class: 'fps-kit' });
       ['primary', 'secondary', 'melee'].forEach((slot, i) => {
         const id = meta.kit[slot], look = { att: meta.fit[id] || {}, camo: (meta.look[id] || {}).camo };
         kit.appendChild(el('button', {
           class: 'fps-slot', onclick: () => { tab = 'armory'; cat = D.W[id].cat; sel = id; render(); }
-        }, el('small', {}, t('fps.slot.' + slot) + ' · ' + (i + 1)), gunCanvas(id, 150, 56, look), el('b', {}, id.toUpperCase())));
+        }, el('small', {}, el('kbd', {}, String(i + 1)), ' ' + t('fps.slot.' + slot)),
+        el('span', { class: 'fps-gun-tile' }, gunCanvas(id, 150, 56, look)), el('b', {}, id.toUpperCase())));
       });
       body.appendChild(kit);
       const row = el('div', { class: 'fps-row' });
       row.appendChild(el('button', { class: 'fps-slot wide', onclick: () => { tab = 'skills'; render(); } },
         el('small', {}, t('fps.tab.skills')),
-        el('span', { class: 'icons' }, meta.kit.skills.length ? meta.kit.skills.map((s, i) => el('span', { class: 'sk' }, SKILL_ICON[s] + ' ' + (4 + i))) : t('fps.none'))));
+        el('span', { class: 'icons' }, meta.kit.skills.length ? meta.kit.skills.map((s, i) => el('span', { class: 'sk' },
+          el('kbd', {}, String(4 + i)), ' ' + SKILL_ICON[s] + ' ' + t('fps.skill.' + s))) : t('fps.none'))));
       row.appendChild(el('button', { class: 'fps-slot wide', onclick: () => { tab = 'wardrobe'; render(); } },
         el('small', {}, t('fps.tab.wardrobe')),
         el('span', {}, D.GEAR_SLOTS.map(s => t('fps.gear.' + meta.wear[s])).join(' · '))));
@@ -130,7 +213,8 @@ window.PV = window.PV || {};
       if (gs.quiet) perks.push(t('fps.perk.quiet'));
       if (perks.length) body.appendChild(el('p', { class: 'fps-perks' }, perks.join(' · ')));
       body.appendChild(el('button', { class: 'btn primary fps-deploy', onclick: () => o.onDeploy() }, t('fps.deploy')));
-      body.appendChild(el('p', { class: 'muted small fps-keys' }, o.touch ? t('fps.touchHelp') : t('fps.keysHelp')));
+      body.appendChild(el('p', { class: 'fps-hint' }, o.touch ? t('fps.pauseHintTouch') : t('fps.pauseHint')));
+      body.appendChild(o.touch ? el('p', { class: 'fps-hint' }, t('fps.touchHelp')) : keysHelp());
     }
 
     /* ---- armory ---- */
@@ -364,19 +448,8 @@ window.PV = window.PV || {};
     /* ---- settings ---- */
 
     function settings(body) {
-      const S = o.settings;
-      const slider = (key, lo, hi, step, fmt) => {
-        const v = el('span', { class: 'v' }, fmt(S[key]));
-        const input = el('input', { type: 'range', min: lo, max: hi, step: step, value: S[key] });
-        input.addEventListener('input', () => { S[key] = +input.value; v.textContent = fmt(S[key]); o.onSettings(S); });
-        return el('div', { class: 'fps-set' }, el('span', { class: 'k' }, t('fps.set.' + key)), input, v);
-      };
-      body.appendChild(slider('sens', 0.2, 3, 0.05, x => x.toFixed(2)));
-      body.appendChild(slider('fov', 70, 110, 1, x => x + '°'));
-      body.appendChild(slider('vol', 0, 1, 0.05, x => Math.round(x * 100) + '%'));
-      const tog = key => el('button', { class: 'fps-chip' + (S[key] ? ' on' : ''), onclick: () => { S[key] = !S[key]; o.onSettings(S); render(); } }, t('fps.set.' + key));
-      body.appendChild(el('div', { class: 'fps-opts' }, tog('invert'), tog('mute')));
-      body.appendChild(el('p', { class: 'muted small' }, t('fps.keysHelp')));
+      body.appendChild(PV.FpsSettingsPanel(o.settings, o.onSettings));
+      body.appendChild(o.touch ? el('p', { class: 'fps-hint' }, t('fps.touchHelp')) : keysHelp());
     }
 
     render();

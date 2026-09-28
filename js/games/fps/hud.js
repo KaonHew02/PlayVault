@@ -131,24 +131,57 @@ window.PV = window.PV || {};
 
   /* ------------------------------------------------------------- pieces */
 
-  function crosshair(c, st, W, H, u) {
-    if (st.hideCross) return;
-    const cx = W / 2, cy = H / 2;
-    const gap = Math.max(u * 0.7, st.spreadPx) + u * 0.4;
-    const len = u * 1.3;
+  /* The crosshair is the player's to choose in the settings: its shape, its
+     colour and its size. Every shape but the dot still opens with the
+     spread, so it still says how wide a shot can land. */
+  const XHAIR = {
+    styles: ['cross', 'tee', 'circle', 'dot'],
+    colors: { white: '#FFFFFF', green: '#5BFF6E', yellow: '#FFE14D', cyan: '#3BE2FF', pink: '#FF6BDF', red: '#FF4A3D' },
+    def: { style: 'cross', color: 'white', size: 1 }
+  };
+
+  /** One crosshair at (cx, cy): a dark edge under the colour, so it reads on snow and in shade. */
+  function crossShape(c, cx, cy, u, spreadPx, xh, melee) {
+    const k = xh.size || 1, col = XHAIR.colors[xh.color] || '#fff';
+    const gap = Math.max(u * 0.7 * k, spreadPx) + u * 0.4 * k;
+    const len = u * 1.3 * k;
+    const dot = xh.style === 'dot' ? Math.max(2, u * 0.32 * k) : Math.max(1, k);
     c.lineCap = 'butt';
     for (const pass of [0, 1]) {
-      c.strokeStyle = pass ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.55)';
+      c.strokeStyle = pass ? col : 'rgba(0,0,0,0.6)';
+      c.fillStyle = c.strokeStyle;
       c.lineWidth = pass ? 2 : 4;
-      c.beginPath();
-      c.moveTo(cx - gap - len, cy); c.lineTo(cx - gap, cy);
-      c.moveTo(cx + gap, cy); c.lineTo(cx + gap + len, cy);
-      c.moveTo(cx, cy + gap); c.lineTo(cx, cy + gap + len);
-      if (!st.melee) { c.moveTo(cx, cy - gap - len); c.lineTo(cx, cy - gap); }
-      c.stroke();
+      if (xh.style === 'circle') {
+        c.beginPath(); c.arc(cx, cy, gap + len * 0.35, 0, TAU); c.stroke();
+      } else if (xh.style !== 'dot') {
+        c.beginPath();
+        c.moveTo(cx - gap - len, cy); c.lineTo(cx - gap, cy);
+        c.moveTo(cx + gap, cy); c.lineTo(cx + gap + len, cy);
+        c.moveTo(cx, cy + gap); c.lineTo(cx, cy + gap + len);
+        if (!melee && xh.style !== 'tee') { c.moveTo(cx, cy - gap - len); c.lineTo(cx, cy - gap); }
+        c.stroke();
+      }
+      c.beginPath(); c.arc(cx, cy, dot + (pass ? 0 : 1), 0, TAU); c.fill();
     }
-    c.fillStyle = '#fff';
-    c.fillRect(cx - 1, cy - 1, 2, 2);
+  }
+
+  function crosshair(c, st, W, H, u) {
+    if (st.hideCross) return;
+    crossShape(c, W / 2, H / 2, u, st.spreadPx, st.xhair || XHAIR.def, st.melee);
+  }
+
+  /** The settings' preview, w × h CSS pixels: the chosen crosshair, at its
+      size in a match, over bright sky and dark wall at once. */
+  function crossPreview(canvas, xh, w, h) {
+    const r = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(w * r); canvas.height = Math.round(h * r);
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    const c = canvas.getContext('2d');
+    c.setTransform(r, 0, 0, r, 0, 0);
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#9CC3E6'); g.addColorStop(0.5, '#DCE6EF'); g.addColorStop(0.5, '#6F7780'); g.addColorStop(1, '#434A52');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    crossShape(c, w / 2, h / 2, 6, 0, xh, false);
   }
 
   function hitMarker(c, st, W, H, u) {
@@ -614,12 +647,14 @@ window.PV = window.PV || {};
     if (st.touch && me.alive && game.phase === 'live') pad = touchPad(c, game, st, W, H, u);
     if (st.board || game.phase === 'end') scoreboard(c, game, W, H, u);
     if (st.prompt) {
-      panel(c, W / 2 - u * 22, H * 0.58 - u * 3, u * 44, u * 6, 0.7);
+      const sub = st.promptSub;
+      panel(c, W / 2 - u * 22, H * 0.58 - u * 3, u * 44, sub ? u * 9 : u * 6, 0.72);
       text(c, st.prompt, W / 2, H * 0.58, u * 2.6, '#fff', 'center');
+      if (sub) text(c, sub, W / 2, H * 0.58 + u * 3.3, u * 1.7, 'rgba(255,255,255,0.82)', 'center', false);
     }
     return pad;
   }
 
-  PV.FpsHud = { draw: draw, text: text, panel: panel, rr: rr, TEAM: TEAM, miniMap: miniMap };
+  PV.FpsHud = { draw: draw, text: text, panel: panel, rr: rr, TEAM: TEAM, miniMap: miniMap, XHAIR: XHAIR, crossPreview: crossPreview };
 
 })(window.PV);

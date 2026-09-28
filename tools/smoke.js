@@ -1589,6 +1589,23 @@ section('strike squad — maps, bodies, guns, and ' + (7 * scale) + ' bot matche
     ok(!v.alive && shooter.stats.k === 1 && shooter.stats.hs === 1 && g.teamScore[0] === 1, 'a kill was not counted');
   }
 
+  /* A bot's hit on the person playing lands softer on easy and normal
+     (phase 28), and only that: bots still hurt each other in full, and the
+     person's own shots do what they did. */
+  ok(F.BOT_HITS[0] < F.BOT_HITS[1] && F.BOT_HITS[1] < 1 && F.BOT_HITS[2] === 1, 'the bot hit table is not easy < normal < hard = 1');
+  ['easy', 'normal', 'hard'].forEach((diff, d) => {
+    const g = new F({ seed: 11, mode: 'tdm', map: 'yard', difficulty: diff, autostart: true });
+    while (g.phase !== 'live') g.advance();
+    const me = g.me, foe = g.actors.find(a => a.team === 1), mate = g.actors.find(a => a.team === 0 && a !== me);
+    for (const a of [me, foe, mate]) { a.protect = 0; a.armor = 0; a.hp = 100; }
+    g.hurt(me, foe, 40, { how: 'gun', w: 'striker' });
+    ok(Math.abs(me.hp - (100 - 40 * F.BOT_HITS[d])) < 1e-9, diff + ': a bot hit the player for ' + (100 - me.hp) + ', not ' + 40 * F.BOT_HITS[d]);
+    g.hurt(mate, foe, 40, { how: 'gun', w: 'striker' });
+    ok(Math.abs(mate.hp - 60) < 1e-9, diff + ': a bot hit another bot for ' + (100 - mate.hp) + ', not 40');
+    g.hurt(foe, me, 40, { how: 'gun', w: 'striker' });
+    ok(Math.abs(foe.hp - 60) < 1e-9, diff + ': the player hit a bot for ' + (100 - foe.hp) + ', not 40');
+  });
+
   /* Whole matches, bots in every place (yours too): every mode ends, on
      its own terms, with nobody at NaN and nobody inside a wall. */
   const WON = { win: 1, lose: 1, draw: 1 };
@@ -1653,7 +1670,8 @@ section('strike squad — maps, bodies, guns, and ' + (7 * scale) + ' bot matche
      the open fifteen metres off, on Depot's clear strip: the median time
      to the kill goes down from easy to normal to hard, and easy and normal
      leave a new player the seconds it takes to find the bot at all (phase
-     27: they had killed in 2.2 s and 1.2 s, about as fast as hard). */
+     27: they had killed in 2.2 s and 1.2 s, about as fast as hard; phase
+     28's softer hits made it six seconds and three). */
   function duel(diff, seed) {
     const g = new F({ seed: seed, mode: 'tdm', map: 'depot', difficulty: diff, autostart: true });
     while (g.phase !== 'live') g.advance();
@@ -1669,8 +1687,8 @@ section('strike squad — maps, bodies, guns, and ' + (7 * scale) + ' bot matche
   const median = diff => { const ts = []; for (let s = 1; s <= 5 + 4 * scale; s++) ts.push(duel(diff, s * 31)); ts.sort((p, q) => p - q); return ts[ts.length >> 1]; };
   const me = { easy: median('easy'), normal: median('normal'), hard: median('hard') };
   ok(me.easy > me.normal && me.normal > me.hard, 'the bots were not quicker from easy to hard: ' + JSON.stringify(me));
-  ok(me.hard > 20 && me.easy < 60 * 6, 'a duel took an unreasonable time: ' + JSON.stringify(me));
-  ok(me.easy >= 60 * 3 && me.normal >= 60 * 1.6, 'easy or normal bots kill a player in the open too fast: ' + JSON.stringify(me));
+  ok(me.hard > 20 && me.easy < 60 * 12, 'a duel took an unreasonable time: ' + JSON.stringify(me));
+  ok(me.easy >= 60 * 5 && me.normal >= 60 * 2.2, 'easy or normal bots kill a player in the open too fast: ' + JSON.stringify(me));
 });
 
 section('strike squad — the lobby: coins, the armory, missions and crates', () => {

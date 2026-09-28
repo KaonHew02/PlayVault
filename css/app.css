@@ -665,8 +665,12 @@ main {
 }
 
 /* ---------------------------------------------------- strike squad (fps) */
-/* The lobby is the game's own glass over a 3D scene, like its HUD: dark in
-   both themes, so its colours are its own rather than the page's tokens. */
+/* The lobby and the pause card are the game's own glass over a 3D scene,
+   like its HUD: dark in both themes, so their colours are their own rather
+   than the page's tokens. Frosted, not see-through: the map behind them is
+   a soft backdrop, not buildings showing through every card. The cards
+   are solid, and the guns sit on light tiles, because a dark gun on dark
+   glass was hard to see at all. */
 
 .fps-box { position: relative; }
 .fps-box .fps-hud { position: relative; z-index: 1; cursor: crosshair; }
@@ -677,16 +681,23 @@ main {
 
 .fps-lobby {
   position: absolute; inset: 1px; z-index: 2; overflow: auto;
-  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px;
-  border-radius: 9px; color: #EAF0F7;
-  background: linear-gradient(180deg, rgba(8, 11, 16, .72), rgba(8, 11, 16, .92));
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 18px;
+  border-radius: 9px; color: #F2F6FA;
+  background: rgba(21, 28, 38, .86);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15); backdrop-filter: blur(14px) saturate(1.15);
 }
+.fps-lobby > :not(.fps-toast) { width: 100%; max-width: 960px; margin-left: auto; margin-right: auto; }
 .fps-lobby[hidden] { display: none; }
-.fps-lobby .muted { color: #A5B2C2; }
-.fps-lobby .btn { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .22); color: #EAF0F7; }
-.fps-lobby .btn.primary { background: #F97316; border-color: #F97316; color: #14100C; font-weight: 700; }
+.fps-lobby .muted { color: #B9C5D3; }
+.fps-lobby .btn, .fps-pause .btn { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .26); color: #F2F6FA; }
+.fps-lobby .btn.primary, .fps-pause .btn.primary { background: #F97316; border-color: #F97316; color: #14100C; font-weight: 700; }
 .fps-lobby .btn:disabled { opacity: .45; cursor: default; }
-.fps-lobby .btn.sm { padding: 5px 10px; font-size: 12.5px; }
+.fps-lobby .btn.sm, .fps-pause .btn.sm { padding: 5px 10px; font-size: 12.5px; }
+.fps-lobby kbd, .fps-pause kbd {
+  display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5px;
+  background: #E9EEF4; color: #17202B; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .28);
+  font: 700 11px/1.5 system-ui, sans-serif; text-align: center; white-space: nowrap;
+}
 
 .fps-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .fps-rank { display: flex; align-items: center; gap: 10px; }
@@ -696,70 +707,96 @@ main {
   font-weight: 800; font-size: 18px;
 }
 .fps-rank .who { display: flex; flex-direction: column; gap: 3px; min-width: 150px; }
-.fps-rank small { color: #A5B2C2; font-size: 11.5px; }
-.fps-rank .xp, .fps-mis .xp { display: block; height: 6px; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, .12); }
+.fps-rank small { color: #B9C5D3; font-size: 11.5px; }
+.fps-rank .xp, .fps-mis .xp { display: block; height: 6px; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, .16); }
 .fps-rank .xp i, .fps-mis .xp i { display: block; height: 100%; background: #F97316; }
 .fps-coins { font-weight: 800; font-size: 18px; color: #FFD35A; font-variant-numeric: tabular-nums; }
 
-.fps-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid rgba(255, 255, 255, .12); }
-.fps-tab {
-  position: relative; background: none; border: 0; border-bottom: 2px solid transparent;
-  color: #A5B2C2; padding: 8px 12px; font: inherit; font-weight: 600; cursor: pointer;
+.fps-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 12px;
+  background: rgba(0, 0, 0, .22); border: 1px solid rgba(255, 255, 255, .08);
 }
-.fps-tab:hover { color: #fff; }
-.fps-tab.on { color: #fff; border-bottom-color: #F97316; }
+.fps-tab {
+  position: relative; background: none; border: 0; border-radius: 9px;
+  color: #C3CEDA; padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer;
+}
+.fps-tab:hover { color: #fff; background: rgba(255, 255, 255, .07); }
+.fps-tab.on { color: #fff; background: rgba(255, 255, 255, .14); box-shadow: inset 0 -2px 0 #F97316; }
 .fps-tab .dot {
   display: inline-flex; align-items: center; justify-content: center; margin-left: 5px;
   min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
   background: #F0503E; color: #fff; font-size: 11px;
 }
 .fps-body { display: flex; flex-direction: column; gap: 12px; }
-.fps-sec h5 { margin: 0 0 7px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #A5B2C2; }
+.fps-sec h5, .fps-settings h5 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #B9C5D3; }
 
-.fps-mission .mode { font-size: 22px; font-weight: 800; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.fps-mission .mode small { font-size: 14px; font-weight: 600; color: #FFD35A; }
-.fps-kit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.fps-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fps-mission { display: flex; flex-direction: column; gap: 5px; }
+.fps-mission .head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.fps-mission .mode { font-size: 22px; font-weight: 800; line-height: 1.2; margin-right: 2px; }
+.fps-mission .tag { padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: rgba(255, 255, 255, .1); color: #E4EAF1; }
+.fps-mission .tag.diff-easy { background: rgba(88, 210, 106, .18); color: #8BEA99; }
+.fps-mission .tag.diff-normal { background: rgba(242, 192, 64, .18); color: #FFD35A; }
+.fps-mission .tag.diff-hard { background: rgba(240, 80, 62, .2); color: #FF8A7A; }
+.fps-mission .info { margin: 0; color: #C3CEDA; font-size: 13.5px; }
+.fps-kit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.fps-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fps-slot, .fps-card, .fps-item {
-  display: flex; flex-direction: column; gap: 3px; min-width: 0;
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .13);
-  border-radius: 10px; padding: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  background: #243040; border: 1px solid #37455A;
+  border-radius: 12px; padding: 10px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  transition: border-color .12s, background .12s;
 }
-.fps-slot { align-items: flex-start; }
-.fps-slot small, .fps-card small, .fps-item small { color: #A5B2C2; font-size: 11.5px; }
-.fps-slot:hover, .fps-card:hover, .fps-item:hover { border-color: rgba(249, 115, 22, .7); }
-.fps-card.on, .fps-item.on { border-color: #F97316; background: rgba(249, 115, 22, .15); }
+.fps-slot { align-items: stretch; }
+.fps-slot small, .fps-card small, .fps-item small { color: #B9C5D3; font-size: 12px; }
+.fps-slot:hover, .fps-card:hover, .fps-item:hover { border-color: #F97316; background: #2A3748; }
+.fps-card.on, .fps-item.on { border-color: #F97316; background: #3B3431; }
 .fps-card.locked, .fps-item.locked, .fps-chip.locked, .fps-swatch.locked { opacity: .5; }
-.fps-slot .icons { display: flex; gap: 8px; flex-wrap: wrap; }
-.fps-slot .sk { font-weight: 700; }
-.fps-perks { margin: 0; color: #7FE0A0; font-size: 13px; }
-.fps-deploy { align-self: center; min-width: 220px; padding: 12px 30px; font-size: 18px; letter-spacing: .06em; }
-.fps-keys { text-align: center; margin: 0; }
+.fps-gun-tile { display: flex; align-items: center; justify-content: center; padding: 4px; }
+.fps-gun-tile, .fps-card .fps-gun, .fps-hero .fps-gun {
+  border-radius: 9px; background: radial-gradient(ellipse at 50% 40%, #7D8CA2 0%, #505D71 55%, #3A4658 100%);
+}
+.fps-slot .icons { display: flex; gap: 12px; flex-wrap: wrap; }
+.fps-slot .sk { font-weight: 700; white-space: nowrap; }
+.fps-perks { margin: 0; color: #8BEA99; font-size: 13px; }
+/* Deploy never scrolls out of sight: it rides the bottom of the panel
+   until the page reaches its own place for it. */
+.fps-deploy {
+  position: sticky; bottom: 6px; z-index: 2;
+  align-self: center; min-width: 240px; padding: 12px 34px; font-size: 18px; letter-spacing: .08em;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45), 0 0 0 4px rgba(21, 28, 38, .55);
+}
+.fps-hint { margin: 0; text-align: center; color: #B9C5D3; font-size: 12.5px; }
+.fps-keys {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 7px 14px;
+  padding: 12px 14px; border-radius: 12px; background: rgba(0, 0, 0, .2); border: 1px solid rgba(255, 255, 255, .07);
+  font-size: 12.5px; color: #D5DDE6;
+}
+.fps-keys .key { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 .fps-cats { display: flex; flex-wrap: wrap; gap: 6px; }
 .fps-guns { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
 .fps-card { align-items: center; text-align: center; }
 .fps-gun { display: block; max-width: 100%; }
-.fps-gun.dim { filter: grayscale(1) brightness(.75); }
-.fps-detail { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); }
+.fps-gun.dim { filter: grayscale(1) brightness(.8); }
+.fps-detail { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 12px; background: #1F2935; border: 1px solid #334155; }
 .fps-hero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .fps-hero h4 { margin: 0; font-size: 20px; }
 .fps-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
-.fps-stat { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; font-size: 12.5px; color: #C7D1DC; }
-.fps-stat .track { position: relative; display: block; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255, 255, 255, .1); }
+.fps-stat { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; font-size: 12.5px; color: #D5DDE6; }
+.fps-stat .track { position: relative; display: block; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255, 255, 255, .12); }
 .fps-stat .track i, .fps-stat .track b { position: absolute; left: 0; top: 0; bottom: 0; }
 .fps-stat .track b { z-index: 0; background: #F97316; }
-.fps-stat .track i { z-index: 1; background: #B9C6D4; }
+.fps-stat .track i { z-index: 1; background: #C9D4E0; }
 .fps-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .fps-up { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
-.fps-up .pips i { display: inline-block; width: 18px; height: 8px; margin-right: 4px; border-radius: 2px; background: rgba(255, 255, 255, .15); }
+.fps-up .pips i { display: inline-block; width: 18px; height: 8px; margin-right: 4px; border-radius: 2px; background: rgba(255, 255, 255, .18); }
 .fps-up .pips i.on { background: #F97316; }
-.fps-up .max { color: #7FE0A0; font-weight: 700; font-size: 12px; }
+.fps-up .max { color: #8BEA99; font-weight: 700; font-size: 12px; }
 .fps-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 3px 0; }
-.fps-opts .k { width: 96px; color: #A5B2C2; font-size: 13px; }
+.fps-opts .k { width: 96px; color: #B9C5D3; font-size: 13px; }
 .fps-chip {
-  background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px;
-  color: #EAF0F7; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px;
+  color: #F2F6FA; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
 }
 .fps-chip:hover { border-color: #F97316; }
 .fps-chip.on { background: #F97316; border-color: #F97316; color: #14100C; font-weight: 700; }
@@ -767,7 +804,7 @@ main {
 .fps-swatch {
   display: inline-flex; align-items: flex-end; justify-content: flex-end;
   width: 36px; height: 36px; padding: 2px; border-radius: 8px; cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, .2); background: #2F3237; color: #fff; font-size: 10px;
+  border: 2px solid rgba(255, 255, 255, .22); background: #2F3237; color: #fff; font-size: 10px;
 }
 .fps-swatch.on { border-color: #F97316; box-shadow: 0 0 0 2px rgba(249, 115, 22, .45); }
 .fps-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 8px; }
@@ -776,14 +813,48 @@ main {
 .fps-item .price { color: #FFD35A; font-weight: 700; font-size: 12.5px; }
 .fps-item.crate { cursor: default; }
 .fps-item.crate .btn { align-self: flex-start; margin-top: 4px; }
-.fps-mis { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.fps-mis { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, .1); }
 .fps-mis .txt { display: flex; flex-direction: column; gap: 4px; }
-.fps-mis small { color: #A5B2C2; font-size: 11.5px; }
+.fps-mis small { color: #B9C5D3; font-size: 11.5px; }
 .fps-mis.done { opacity: .6; }
-.fps-mis .ok { color: #7FE0A0; font-weight: 800; font-size: 18px; }
-.fps-set { display: grid; grid-template-columns: 150px 1fr 56px; align-items: center; gap: 10px; font-size: 13.5px; }
+.fps-mis .ok { color: #8BEA99; font-weight: 800; font-size: 18px; }
+
+/* Settings: in the lobby's tab and on the pause card. */
+.fps-settings { display: flex; flex-direction: column; gap: 12px; }
+.fps-settings .grp {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+  border-radius: 12px; background: #1F2935; border: 1px solid #334155;
+}
+.fps-settings .grp h5 { margin-bottom: 2px; }
+.fps-settings .hint { margin: 0; color: #B9C5D3; font-size: 12px; }
+.fps-set { display: grid; grid-template-columns: 190px 1fr 60px; align-items: center; gap: 10px; font-size: 13.5px; }
 .fps-set input { width: 100%; accent-color: #F97316; }
-.fps-set .v { color: #FFD35A; font-variant-numeric: tabular-nums; }
+.fps-set .v { color: #FFD35A; font-variant-numeric: tabular-nums; text-align: right; }
+.fps-xh { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+.fps-xprev { display: block; border-radius: 9px; border: 1px solid #334155; }
+.fps-xctl { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fps-xctl .fps-set { grid-template-columns: 64px 1fr 48px; }
+.fps-xcols { display: flex; flex-wrap: wrap; gap: 8px; }
+.fps-xcol { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(0, 0, 0, .45); cursor: pointer; }
+.fps-xcol.on { box-shadow: 0 0 0 2px #1F2935, 0 0 0 4px #F97316; }
+.fps-reset { align-self: flex-start; }
+
+/* The pause card: over the stopped match, lightly dimmed. */
+.fps-pause {
+  position: absolute; inset: 1px; z-index: 3; display: flex; align-items: center; justify-content: center;
+  padding: 14px; border-radius: 9px; background: rgba(8, 12, 18, .42);
+}
+.fps-pause[hidden] { display: none; }
+.fps-pause-card {
+  width: 100%; max-width: 600px; max-height: 100%; overflow: auto;
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border-radius: 14px;
+  color: #F2F6FA; background: rgba(21, 28, 38, .92); border: 1px solid #37455A;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.fps-pause-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fps-pause-head h3 { margin: 0; font-size: 20px; }
+
 .fps-toast {
   position: sticky; bottom: 0; align-self: center; margin-top: auto;
   padding: 8px 16px; border-radius: 999px; background: #F97316; color: #14100C; font-weight: 700;
@@ -795,6 +866,10 @@ main {
   .fps-up { grid-template-columns: 90px 1fr auto; }
   .fps-set { grid-template-columns: 1fr 56px; }
   .fps-set .k { grid-column: 1 / -1; }
+  .fps-xh { grid-template-columns: 1fr; }
+  .fps-xctl .fps-set { grid-template-columns: 1fr 48px; }
+  .fps-keys { grid-template-columns: 1fr 1fr; }
+  .fps-pause { padding: 8px; }
 }
 
 /* ------------------------------------------------------ blend in (hide) */

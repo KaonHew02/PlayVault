@@ -88,6 +88,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **25** | Strike Squad | **2026-09-25** — "i want add on game for fps shooter like this, just copy all the thing", with the crazygames *Hazmob FPS: Online Shooter* link. A new game: a first-person shooter against bots, with the reference's seven modes, eight maps, gun classes, upgrades, attachments, camos, keychains, clothes, skills, missions and crates. Hazmob's art, names and code are not copied. See below |
 | **26** | Blend In | **2026-09-25** — "and then oso add on paint to hide do like this linke, FULLY COPY IT", with the crazygames *Paint to Hide!* link. A new game: hide and seek in which hiders paint their bodies to match the map and seekers hunt them with water guns — the reference's colour wheel, Pick, Fill and Reset, brush sizes, poses, freecam, lock, wall climbing, first or third person seekers, six hiders against two seekers, 75 s to hide and 120 s to hunt, a table at the end, XP and coins. The reference's art, name and code are not copied. See below |
 | **27** | Strike Squad: easy and normal eased | **2026-09-28** — "for the fps shooter game the bot normal mode or easy mode 太厉害了 降低下power" (too strong, turn the power down). Measured before anything was changed: easy killed a player standing in the open in 1.4 s and normal in 1.1 s, hard in 0.7. Now about four seconds and two; hard is untouched. See below |
+| **28** | Strike Squad: a clearer lobby, settings in the match, softer hits | **2026-09-28** — "the interface look to dark and messy make it clear a bit and then add on the setting can like change the mouse sensitive cursor something", and "the bot dont too power, to hard to fight them". A frosted lobby with the guns on light tiles and the keys as key caps; sensitivity, aiming sensitivity, aim assist, crosshair and brightness, also on a pause card in the match; a bot's hit on the person playing lands at half on easy and 0.6 on normal. Measured with a simulated person first; hard is untouched. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1074,3 +1075,78 @@ home and split search and destroy. Played in the browser on the built
 bundle: an easy team deathmatch deploys and runs with no console errors,
 and the same duel run inside the page gives the headless numbers to the
 tick.
+
+### Phase 28 — Strike Squad: a clearer lobby, settings in the match, softer hits
+
+"For the shooter game, the interface look to dark and messy make it clear a
+bit and then add on the setting can like change the mouse sensitive cursor
+something", and "the bot dont too power, to hard to fight them".
+
+**The lobby, made clear.** It was a dark see-through panel over the live map:
+the map's buildings showed through every card, the guns — dark grey drawings
+— sat on dark glass, the skills read "✚ 4", and every key was in one run-on
+line. Now the panel is frosted (the map behind it is a blur, not detail), the
+cards are solid and the text brighter; the guns sit on light tiles with their
+key (1 2 3) on a key cap; the mission is its mode, then chips for the map and
+the bots' difficulty, coloured by level; skills read "4 ✚ Medkit"; the keys
+are a grid of key caps beside what they do. Deploy rides the bottom of the
+panel, so no height hides it: at the laptop size of the report the panel is
+528 px and Deploy sits 44 px above its bottom edge without a scroll.
+
+**Settings, in the match too.** The Settings tab had mouse sensitivity, field
+of view, volume, invert and mute — only in the lobby, and nothing said so. It
+is four groups now, the same in the lobby's tab (⚙) and on a new pause card:
+
+- **Mouse and aim**: sensitivity 0.1–5 (it was 0.2–3, and a touchpad wants
+  more), aiming sensitivity while aiming down the sights (0.2–2×), invert Y,
+  aim assist.
+- **Crosshair**: cross, T, circle or dot; white, green, yellow, cyan, pink or
+  red; size 0.5–2×; a live preview over bright sky and dark wall at once.
+  Every shape but the dot still opens with the spread.
+- **Display**: field of view, and brightness, 70–150%, of the 3D picture only.
+- **Sound**: volume and mute. Then *Reset to defaults*.
+
+Esc or P — II on a phone — pauses the match and shows the card over it,
+lightly dimmed. It replaces the harness's dark veil and the scoreboard the
+pause used to show (a game can say `pauseVeil: false` now). "Click to play"
+says where it is: *Esc or P: pause and settings*. Resume hands the keyboard
+back: a slider left holding the focus would have swallowed W, A, S and D.
+
+Aim assist slows the aim to 65% while the crosshair is on an enemy, so a
+small hand on a touchpad does not skate past. It scales the turn the view
+sends, not the engine, so a match still replays from its inputs. It is on
+by default and one tap turns it off.
+
+**Softer hits.** Phase 27 slowed the bots' hands and the fights were still
+too hard. Measured again before changing anything, and this time with a
+simulated person rather than one who stands still: a bot's brain with a
+person's hands — *casual*, 0.7 s to react, 180°/s, 9° first error; *decent*,
+0.45 s, 290°/s, 5° — in whole team deathmatches, three on each of the eight
+maps, the rank-one kit:
+
+| kills a death (deaths a minute) | before | after |
+| --- | --- | --- |
+| casual, easy | 2.42 (2.19) | 4.03 (1.50) |
+| casual, normal | 1.02 (3.65) | 1.49 (2.70) |
+| casual, hard | 0.28 (6.24) | unchanged |
+| decent, easy | 3.78 (2.07) | 5.90 (1.43) |
+| decent, normal | 1.93 (3.25) | 2.62 (2.64) |
+| decent, hard | 0.54 (5.65) | unchanged |
+
+The simulated person hears every step and never loses a bot off the edge of
+the screen; a real one on a laptop does both, so a real casual player on
+normal — the default — was below one kill a death. What changed is the power
+the report named: a bot's hit on the person playing lands at 0.5 on easy and
+0.6 on normal (`BOT_HITS`, `engine.js`). Only that hit — bots hurt each
+other in full, and the person's own shots do what they did. One bot now takes
+6.2 s to kill a player standing in the open fifteen metres off on easy and
+2.9 s on normal (3.9 and 2.2 before), and the two big sniper rifles, which
+killed with one body hit, need two. Hard is untouched: the same code path,
+the same numbers to the hundredth.
+
+`smoke.js` holds it: the hit table, and that it bends only a bot's hit on the
+person; the duel's floors are five seconds on easy and 2.2 on normal. Played
+in the browser on the built bundle, at a laptop's size and a phone's, in
+English and Chinese: the lobby and its Settings tab, a crosshair picked there
+and drawn in the match, brightness on the 3D picture, P to the pause card and
+Resume out of it, no console errors.

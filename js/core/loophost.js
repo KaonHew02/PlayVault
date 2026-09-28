@@ -38,6 +38,7 @@ window.PV = window.PV || {};
    *   pad                          [{label, action, aria}] or null
    *   build(api)                   optional: add side panels / HUD to api.side
    *   onFrame(game, api)           optional: called once per painted frame
+   *   pauseVeil                    false: the game draws its own pause screen
    *   onPointer(game, pt, geom, api)  optional
    *   outcome(game, {timeMs})      -> {result, xp, score, title, tone, lines}
    * }
@@ -246,7 +247,8 @@ window.PV = window.PV || {};
       const c = canvas.getContext('2d');
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       spec.draw(c, game, geom, api, typeof alpha === 'number' ? alpha : 1);
-      if (paused) {
+      // A game with its own pause screen (Strike Squad's card) says so.
+      if (paused && spec.pauseVeil !== false) {
         c.fillStyle = 'rgba(11,15,20,.78)';
         c.fillRect(0, 0, geom.w, geom.h);
         c.fillStyle = '#EAF0F7';

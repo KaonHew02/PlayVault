@@ -29,17 +29,24 @@ window.PV = window.PV || {};
   const D = PV.FpsData;
   const DEG = Math.PI / 180;
   const SETTINGS = 'fps.settings';
+  const ASSIST = 0.65;             // the aim's speed while it is on an enemy, with the assist on
 
-  /* The device's own settings: not sealed, not in the backup. */
+  /* The device's own settings: not sealed, not in the backup. A record from
+     before a setting existed gets that setting's default. */
+  const XH = PV.FpsHud.XHAIR, DEFAULTS = PV.FpsSettingsPanel.DEFAULTS;
   PV.Store.validate(SETTINGS, v => {
     const s = PV.Safe.obj(v);
     if (!s) return undefined;
     return {
-      sens: PV.Safe.num(s.sens, 0.2, 3, 1), fov: PV.Safe.int(s.fov, 70, 110, 95),
-      vol: PV.Safe.num(s.vol, 0, 1, 0.7), mute: PV.Safe.bool(s.mute), invert: PV.Safe.bool(s.invert)
+      sens: PV.Safe.num(s.sens, 0.1, 5, 1), adsSens: PV.Safe.num(s.adsSens, 0.2, 2, 1),
+      invert: PV.Safe.bool(s.invert), assist: s.assist == null ? DEFAULTS.assist : PV.Safe.bool(s.assist),
+      xStyle: PV.Safe.pick(s.xStyle, XH.styles), xColor: PV.Safe.pick(s.xColor, Object.keys(XH.colors)),
+      xSize: PV.Safe.num(s.xSize, 0.5, 2, 1),
+      fov: PV.Safe.int(s.fov, 70, 110, 95), bright: PV.Safe.num(s.bright, 0.7, 1.5, 1),
+      vol: PV.Safe.num(s.vol, 0, 1, 0.7), mute: PV.Safe.bool(s.mute)
     };
   });
-  const loadSettings = () => PV.Store.get(SETTINGS, null) || { sens: 1, fov: 95, vol: 0.7, mute: false, invert: false };
+  const loadSettings = () => PV.Store.get(SETTINGS, null) || Object.assign({}, DEFAULTS);
 
   const KEYS = {
     KeyW: 'fwd', ArrowUp: 'fwd', KeyS: 'back', ArrowDown: 'back', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
@@ -77,7 +84,26 @@ window.PV = window.PV || {};
     let seen = 0, lastNow = 0, camY = null, wasAlive = true, steps = Object.create(null);
     let lobbyCam = 0;
 
-    function saveSettings() { PV.Store.set(SETTINGS, settings); audio.setVolume(settings.vol, settings.mute); }
+    function saveSettings() { PV.Store.set(SETTINGS, settings); audio.setVolume(settings.vol, settings.mute); applySettings(); }
+    /** What the settings change outside the engine: the crosshair and the picture's brightness. */
+    function applySettings() {
+      st.xhair = { style: settings.xStyle, color: settings.xColor, size: settings.xSize };
+      if (glCanvas) glCanvas.style.filter = settings.bright !== 1 ? 'brightness(' + settings.bright + ')' : '';
+    }
+
+    /* Radians of turn for one pixel of mouse (or finger): the sensitivity,
+       slower through a scope, the aiming sensitivity while aiming, and the
+       assist, which slows the aim while it is on an enemy so a small hand
+       on a touchpad stays on target. What is sent to the engine is the turn
+       itself, so a match still replays from its inputs. */
+    function lookScale(base) {
+      const me = ui.game.me, gun = me.inv[me.cur];
+      const sights = !!gun && gun.s.cat !== 'melee';
+      const zoom = sights ? 1 + (gun.s.zoom - 1) * me.adsT : 1;
+      const ads = sights ? 1 + (settings.adsSens - 1) * me.adsT : 1;
+      const assist = settings.assist && st.aimed ? ASSIST : 1;
+      return base * settings.sens * ads * assist / Math.pow(zoom, 0.85);
+    }
 
     function cfg() {
       const g = ui && ui.game;
@@ -89,10 +115,45 @@ window.PV = window.PV || {};
     function deploy() {
       const g = ui && ui.game;
       if (!g || g.phase !== 'lobby') return;
+      if (ui.paused) ui.pause();             // P pressed in the lobby: a paused match takes no start
       audio.init();
       g.setLoadout(PV.FpsMeta.loadout(meta));
       ui.input('start');
       if (lobby) lobby.show(false);
+      unfocus();
+      if (!touch) grab();
+    }
+
+    /* A slider still holding the focus would swallow W, A, S and D, and its
+       arrow keys would move it: the match gets the keyboard back. */
+    function unfocus() {
+      const f = document.activeElement;
+      if (f && f !== document.body && f.blur) f.blur();
+    }
+
+    /* ---- the pause card ---- */
+
+    /* Esc, P or the II button stops the match and shows this over it: the
+       settings, and the way back in. It replaces the harness's own dark veil
+       and the scoreboard the pause used to show. */
+    let pauseBox = null;
+    function syncPause() {
+      if (!pauseBox || !ui) return;
+      const g = ui.game;
+      const on = !!ui.paused && !!g && g.phase !== 'lobby' && !g.isOver();
+      if (on === !pauseBox.hidden) return;
+      pauseBox.hidden = !on;
+      PV.clear(pauseBox);
+      if (!on) return;
+      pauseBox.appendChild(PV.el('div', { class: 'fps-pause-card', role: 'dialog', 'aria-label': t('fps.paused') },
+        PV.el('div', { class: 'fps-pause-head' },
+          PV.el('h3', {}, t('fps.paused')),
+          PV.el('button', { class: 'btn primary', onclick: resume }, '▶ ' + t('common.resume'))),
+        PV.FpsSettingsPanel(settings, saveSettings)));
+    }
+    function resume() {
+      unfocus();
+      if (ui && ui.paused) ui.pause();
       if (!touch) grab();
     }
 
@@ -130,9 +191,7 @@ window.PV = window.PV || {};
     }
     function onMouseMove(e) {
       if (!locked || !active() || ui.paused) return;
-      const g = ui.game, me = g.me, gun = me.inv[me.cur];
-      const zoom = gun && gun.s.cat !== 'melee' ? 1 + (gun.s.zoom - 1) * me.adsT : 1;
-      const k = 0.0022 * settings.sens / Math.pow(zoom, 0.85);
+      const k = lookScale(0.0022);
       pendYaw += (e.movementX || 0) * k;
       pendPitch += -(e.movementY || 0) * k * (settings.invert ? -1 : 1);
     }
@@ -223,9 +282,7 @@ window.PV = window.PV || {};
         if (l > 1) { dx /= l; dy /= l; }
         stick.dx = dx; stick.dy = dy;
       } else if (tch.kind === 'look' || (tch.kind === 'btn' && (tch.id === 'fire' || tch.id === 'fire2'))) {
-        const g = ui.game, me = g.me, gun = me.inv[me.cur];
-        const zoom = gun && gun.s.cat !== 'melee' ? 1 + (gun.s.zoom - 1) * me.adsT : 1;
-        const k = 0.0055 * settings.sens / Math.pow(zoom, 0.85);
+        const k = lookScale(0.0055);
         pendYaw += (p.x - tch.x) * k;
         pendPitch += -(p.y - tch.y) * k * (settings.invert ? -1 : 1);
         tch.x = p.x; tch.y = p.y;
@@ -421,6 +478,7 @@ window.PV = window.PV || {};
       hz: 60,
       keymap: {},
       pad: null,
+      pauseVeil: false,
 
       create: () => new PV.FpsGame({
         seed: ctx.seed(), mode: opts.mode, map: opts.map, difficulty: opts.difficulty,
@@ -466,6 +524,9 @@ window.PV = window.PV || {};
           });
           box.appendChild(lobby.node);
         }
+        pauseBox = PV.el('div', { class: 'fps-pause', hidden: true });
+        box.appendChild(pauseBox);
+        applySettings();
         const full = PV.el('button', {
           class: 'btn ghost', onclick: () => {
             if (document.fullscreenElement) document.exitFullscreen();
@@ -518,6 +579,9 @@ window.PV = window.PV || {};
         const g = api.game;
         if (g) api.status.textContent = t('fps.mode.' + g.modeKey) + ' · ' + t('fps.map.' + g.mapKey) + ' · ' + t('diff.' + (opts.difficulty || 'normal'));
         if (lobby) lobby.refresh();
+        // A pause, a resume, or a new language: the card follows, redrawn.
+        if (pauseBox && !pauseBox.hidden) { pauseBox.hidden = true; PV.clear(pauseBox); }
+        syncPause();
       },
 
       draw(c, game, geom, api, alpha) {
@@ -534,6 +598,7 @@ window.PV = window.PV || {};
         if (glCanvas.style.width !== geom.w + 'px') { glCanvas.style.width = geom.w + 'px'; glCanvas.style.height = geom.h + 'px'; }
         scene.resize(geom.w, geom.h, Math.min(1.5, window.devicePixelRatio || 1));
         if (lobby) lobby.show(game.phase === 'lobby' && !racing);
+        syncPause();
         if (api.paused || game.isOver()) release();
 
         send(game);
@@ -576,7 +641,7 @@ window.PV = window.PV || {};
         const spreadDeg = s && s.cat !== 'melee' ? game.spread(me, s) : 1.2;
         st.spreadPx = Math.tan(spreadDeg * DEG) / Math.tan(cam.fov / 2) * geom.h / 2;
         st.hideCross = !me.alive || (me.adsT > 0.55 && !st.melee) || me.sprinting || !!scoped;
-        st.board = board || (api.paused && game.phase !== 'lobby');
+        st.board = board;
         // The enemy under the crosshair, and the nearest gun on the floor.
         st.aimed = null;
         if (me.alive && cam.first) {
@@ -599,6 +664,7 @@ window.PV = window.PV || {};
         }
         st.stick = stick;
         st.prompt = !touch && !locked && !api.paused && (game.phase === 'live' || game.phase === 'count' || game.phase === 'round') ? t('fps.clickToPlay') : null;
+        st.promptSub = st.prompt ? t('fps.pauseHint') : null;
         pad = PV.FpsHud.draw(c, game, geom, st) || [];
         if (me.alive !== wasAlive) { wasAlive = me.alive; if (!me.alive) mouseFire = false; }
       },
