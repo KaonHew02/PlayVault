@@ -53,6 +53,9 @@ global.document = {
 };
 
 const FILES = [
+  // The lock: off here, as it is on any page it cannot place (no address,
+  // no location), so it only publishes PV.Guard for the tests below.
+  'js/core/guard.js',
   'js/core/safe.js', 'js/core/util.js', 'js/core/rng.js', 'js/core/store.js', 'js/core/profile.js',
   // The Drive copy. Nothing here reaches Google: the Drive section at the end
   // swaps in a fake sign-in library and a fake Drive behind fetch().
@@ -2806,7 +2809,9 @@ section('security — hostile input cannot break the app', () => {
   ok(PV.Store.importAll(null).ok === false, 'null imported');
   ok(PV.Store.importAll({ format: 'somethingelse', data: {} }).ok === false, "another app's backup imported");
   ok(PV.Store.importAll('{}').ok === false, 'a string imported');
-  const hostile = JSON.parse('{"format":"playvault.backup","version":1,"data":{"profile":{"name":"ok","xp":1e308},"__proto__":{"x":1},"evil":{"a":1}}}');
+  // Sealed, as if whoever wrote it had worked the seal out: a seal is a speed
+  // bump, so a sealed file is still rebuilt, never believed.
+  const hostile = PV.Store.sealBackup(JSON.parse('{"format":"playvault.backup","version":1,"data":{"profile":{"name":"ok","xp":1e308},"__proto__":{"x":1},"evil":{"a":1}}}'));
   const res = PV.Store.importAll(hostile);
   ok(res.ok === true && res.restored === 1, 'the hostile backup restored ' + res.restored + ' stores');
   ok(({}).x === undefined, 'importing polluted Object.prototype');
@@ -2929,6 +2934,14 @@ section('security — sealed records and a fresh bundle', () => {
   ok(PV.Store.importAll(env).ok === true, 'a sealed export did not import');
   PV.Store.del('sudoku.saved');
 
+  // A record sealed by every earlier version still opens. This one was
+  // written by the store.js that had a raw NUL byte in its source where it
+  // now says '\0' — the same string, and this pins it.
+  localStorage.setItem('playvault.profile', '{"d":{"name":"Kaon","xp":120,"created":""},"c":"f9cf72f1"}');
+  ok(PV.Store.get('profile', null) && PV.Store.get('profile', null).xp === 120,
+    'a record sealed by an earlier version no longer opens');
+  PV.Store.set('profile', { name: '', xp: 0, created: '' });
+
   // The deploy bundle must match the source it was built from. A bundle one
   // edit behind is a bug that only appears in production, after a push.
   const build = require('./build.js');
@@ -2936,14 +2949,207 @@ section('security — sealed records and a fresh bundle', () => {
   const dev = fs2.readFileSync(path.join(ROOT, 'index.dev.html'), 'utf8');
   const files = build.sources(dev);
   ok(files.length > 20, 'index.dev.html lists only ' + files.length + ' scripts');
-  const stamp = build.stampOf(files);
+  ok(files.indexOf(build.GUARD) < 0, 'the lock went into the bundle, where it cannot tell its own frames apart');
+  const stamp = build.stampOf(build.stamped(dev));
   const onDisk = fs2.readFileSync(path.join(ROOT, 'js/playvault.min.js'), 'utf8');
   ok(onDisk.indexOf('stamp:' + stamp) > 0,
     'js/playvault.min.js is stale — run `node tools/build.js`');
   const html = fs2.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   ok(html.indexOf('js/playvault.min.js?v=' + stamp) > 0,
     'index.html points at a different bundle — run `node tools/build.js`');
-  ok(html.indexOf('<script src="js/core/') < 0, 'the deployed page still loads loose sources');
+  // Exactly two of our own scripts: the lock, first thing in the head, then the bundle.
+  const own = html.match(/<script src="js\/[^"]*"/g) || [];
+  ok(own.length === 2, 'the deployed page loads ' + own.length + ' of its own scripts, not the lock and the bundle');
+  const lockAt = html.indexOf('<script src="' + build.GUARD + '?v=' + stamp + '"></script>');
+  ok(lockAt > 0 && lockAt < html.indexOf('</head>'), 'the deployed page does not load the lock, versioned, in its head');
+  ok(lockAt < html.indexOf('<link rel="stylesheet"'), 'something loads before the lock');
+});
+
+
+section('security — an edited backup file is refused', () => {
+  PV.Store.set('profile', { name: 'Kaon', xp: 120, created: '' });
+  const fresh = () => JSON.parse(JSON.stringify(PV.Store.exportAll(), null, 2));
+
+  // Export, through a file and back: the path a real backup takes.
+  const file = fresh();
+  ok(typeof file.seal === 'string', 'an export carries no seal');
+  ok(PV.Store.sealed(file), 'a file this app wrote does not match its own seal');
+  ok(PV.Store.importAll(file).ok === true, 'an untouched export did not import');
+
+  // The cheat this closes: export, change a number in a text editor, import.
+  const edited = fresh();
+  edited.data.profile.xp = 5e8;
+  const res = PV.Store.importAll(edited);
+  ok(res.ok === false && res.error === 'tampered', 'an edited backup was restored');
+  ok(PV.Store.get('profile', null).xp === 120, 'an edited backup changed the profile');
+
+  // ...and every other way of doing the same.
+  const noSeal = fresh(); delete noSeal.seal;
+  ok(PV.Store.importAll(noSeal).error === 'tampered', 'a backup with its seal taken off was restored');
+  const oldFile = { format: 'playvault.backup', version: 1, saved: '2026-09-25T00:00:00.000Z', data: fresh().data };
+  ok(PV.Store.importAll(oldFile).error === 'tampered', 'an unsealed backup (from before seals) was restored');
+  const moved = fresh(); moved.saved = '2030-01-01T00:00:00.000Z';
+  ok(PV.Store.importAll(moved).error === 'tampered', 'a backup with its date changed was restored');
+  const added = fresh(); added.data['chef.meta'] = { coins: 1e9 };
+  ok(PV.Store.importAll(added).error === 'tampered', 'a backup with a store added was restored');
+  const badSeal = fresh(); badSeal.seal = 'deadbeef';
+  ok(PV.Store.importAll(badSeal).error === 'tampered', 'a backup with a made-up seal was restored');
+  ok(PV.Store.importAll({ format: 'somethingelse', seal: 'x', data: {} }).error === 'wrong-format',
+    "another app's file is not reported as a tampered one");
+  ok(PV.Store.sealed(null) === false && PV.Store.sealed('x') === false && PV.Store.sealed({ seal: 'x' }) === false,
+    'sealed() said yes to something that is not a backup');
+  const cyclic = { format: 'playvault.backup', seal: 'x', data: {} }; cyclic.data.self = cyclic;
+  ok(PV.Store.sealed(cyclic) === false, 'a backup that cannot be written out threw instead of being refused');
+
+  PV.Store.set('profile', { name: '', xp: 0, created: '' });
+});
+
+
+section('security — the lock knows the console from the page', () => {
+  const { stranger, wanted } = PV.Guard;
+  ok(PV.Guard.on === false, 'the lock switched itself on in a page with no address');
+  const base = 'https://kaonhew02.github.io/PlayVault/';
+  const self = base + 'js/core/guard.js?v=abc123';
+  const v8 = (...frames) => ['Error'].concat(frames.map(f => '    at ' + f)).join('\n');
+  const asked = `asked (${self}:98:18)`, set = `HTMLElement.set (${self}:222:40)`;
+  const bundle = base + 'js/playvault.min.js?v=abc123';
+  const peer = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js:1:5000';
+  const gsi = 'https://accounts.google.com/gsi/client:120:33';
+  const T = (stack, want, msg) => ok(stranger(stack, base, self) === want, msg);
+
+  T(v8(asked, set, `HTMLButtonElement.onclick (${bundle}:512:20)`), false, 'a click handler in the bundle is let through');
+  T(v8(asked, set, `el (${base}js/core/util.js:22:14)`), false, 'a source file on the development page is let through');
+  T(v8(asked, set, 'Object.assign (<anonymous>)', `PV.el (${bundle}:9:3)`), false,
+    'looking through a built-in to the code that called it');
+  T(v8(asked, set, `DataConnection.emit (${peer})`), false, 'PeerJS calling back in is trusted');
+  T(v8(asked, set, `Object.open (${gsi})`), false, "Google's sign-in opening its window is trusted");
+  T(v8(asked, set, '<anonymous>:1:15'), true, 'Chrome’s console is refused');
+  T(v8(asked, set, 'Object.assign (<anonymous>)', '<anonymous>:1:8'), true, 'even through a built-in');
+  T(v8(asked, set, '<anonymous>:1:30', 'Array.forEach (<anonymous>)', '<anonymous>:1:5'), true, 'or a callback it wrote');
+  T(v8(asked, set), true, 'a DOM method handed to a timer has no caller, and is refused');
+  T(v8(asked, set, 'VM812:3:7'), true, 'a VM script is refused');
+  T(v8(asked, set, 'run (snippet:///Script%20snippet%20%231:1:1)'), true, 'a DevTools snippet is refused');
+  T(v8(asked, set, 'inject (chrome-extension://abcdefgh/inject.js:1:1)'), true, 'an extension’s page script is refused');
+  T(v8(asked, set, `eval (eval at run (${bundle}:1:1), <anonymous>:1:1)`), true, 'eval is refused');
+  T(v8(asked, set, 'x (https://kaonhew02.github.io/GameTable/js/app.js:1:1)'), true,
+    'another app on the same origin is refused');
+  T(v8(asked, set, 'x (https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.0.8/angular.js:1:1)'), true,
+    'another library on the same CDN is refused');
+  const gecko = (...f) => f.join('\n');
+  T(gecko(`asked@${self}:98:18`, `set@${self}:222:40`, '@debugger eval code:1:15'), true, 'Firefox’s console is refused');
+  T(gecko(`asked@${self}:98:18`, `set@${self}:222:40`, `onclick@${bundle}:10:3`), false, 'and Firefox running this site is not');
+  T(gecko(`asked@${self}:98:18`, 'global code@', 'evaluateWithScopeExtension@[native code]', '_wrapCall@'), true,
+    'Safari’s console is refused');
+  ok(stranger(undefined, base, self) === false, 'a browser that gives no stack is let through');
+  ok(stranger(v8(asked, set, '<anonymous>:1:1'), '', '') === false, 'and so is a page that could not find its own address');
+
+  // The lock switches on only where it can read its own frame back, address
+  // and query and all, so a browser that writes stacks some other way gets
+  // no lock rather than a game that refuses itself.
+  const { readsItself } = PV.Guard;
+  ok(readsItself(v8(`readsItself (${self}:131:5)`, `${self}:160:40`), self) === true, 'Chrome’s own frame was not read');
+  ok(readsItself(gecko(`@${self}:160:40`), self) === true, 'Firefox’s own frame was not read');
+  ok(readsItself(gecko(`global code@${self}:160:40`), self) === true, 'Safari’s own frame was not read');
+  ok(readsItself(v8(`readsItself (${base}js/core/guard.js:131:5)`), self) === false,
+    'a stack that drops the query was read as legible');
+  ok(readsItself(v8('readsItself (<anonymous>:1:1)'), self) === false, 'a stack with no address was read as legible');
+  ok(readsItself(v8(`x (${bundle}:1:1)`), self) === false, 'a stack whose first frame is somebody else was read as legible');
+  ok(readsItself(undefined, self) === false && readsItself('Error', '') === false, 'no stack, or no address, was read as legible');
+
+  // On for the published site, off on this machine, and ?guard turns it on here.
+  const at = (href) => { const u = new URL(href); return { protocol: u.protocol, hostname: u.hostname, search: u.search }; };
+  ok(wanted(at('https://kaonhew02.github.io/PlayVault/')) === true, 'the lock is off on the published site');
+  ok(wanted(at('https://kaonhew02.github.io/PlayVault/index.dev.html#/games')) === true,
+    'the development page on the published site is unlocked');
+  ok(wanted(at('http://192.168.1.20:8099/')) === true, 'a phone on the LAN is unlocked');
+  ok(wanted(at('http://localhost:8099/index.dev.html')) === false, 'localhost is locked');
+  ok(wanted(at('http://127.0.0.1:8099/')) === false && wanted(at('http://[::1]:8099/')) === false
+    && wanted(at('http://app.localhost:8099/')) === false, 'a loopback address is locked');
+  ok(wanted(at('http://localhost:8099/index.html?guard')) === true
+    && wanted(at('http://127.0.0.1:8099/?x=1&guard=1')) === true, '?guard does not switch the lock on locally');
+  ok(wanted(at('http://localhost:8099/?guardian')) === false, 'a query that only starts with "guard" switched it on');
+});
+
+
+section('security — frozen, the engines still play and nothing can be replaced', () => {
+  /* A second copy of the engines in their own realm, so freezing its
+     built-ins leaves this test runner's alone. */
+  const ctx = vm.createContext({ console, setTimeout, clearTimeout, setInterval, clearInterval });
+  vm.runInContext(`
+    const mem = new Map();
+    globalThis.window = globalThis;
+    globalThis.localStorage = {
+      getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => { mem.set(k, String(v)); },
+      removeItem: k => { mem.delete(k); }
+    };
+    globalThis.document = { addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
+      querySelectorAll: () => [], documentElement: { setAttribute() {}, style: {} } };
+    globalThis.CustomEvent = class CustomEvent { constructor(type) { this.type = type; } };
+    globalThis.navigator = { language: 'en' };
+  `, ctx);
+  for (const f of FILES) vm.runInContext(strip(fs.readFileSync(path.join(ROOT, f), 'utf8')), ctx, { filename: f });
+  const G = ctx.PV;
+  G.t = k => k;
+  const failed = G.Guard.freezeLanguage();
+  ok(failed.length === 0, 'the language did not freeze whole: ' + failed.join('; '));
+
+  vm.runInContext(`
+    for (const hook of [
+      () => { Math.random = () => 0.5; }, () => { JSON.stringify = () => '{}'; }, () => { Date.now = () => 0; },
+      () => { Array.prototype.push = function () { return 0; }; }, () => { Object.assign = () => ({}); },
+      () => { Math.min = () => 1e9; }, () => { Object.prototype.toString = () => 'hooked'; },
+      () => { Object.defineProperty(Object.prototype, 'coins', { set() {} }); },
+      () => { globalThis.Math = { random: () => 0.5 }; }, () => { globalThis.JSON = null; },
+      () => { Error.prepareStackTrace = () => 'nothing to see'; }, () => { Error.stackTraceLimit = 0; }
+    ]) { try { hook(); } catch (e) { /* refused loudly is fine too */ } }
+  `, ctx);
+  ok(vm.runInContext(`Math.random() !== 0.5 && JSON.stringify({ a: 1 }) === '{"a":1}' && Date.now() > 0
+    && (() => { const a = []; a.push(1); return a.length === 1; })() && Object.assign({}, { b: 2 }).b === 2
+    && Math.min(1, 2) === 1 && ({}).toString() === '[object Object]' && !('coins' in Object.prototype)
+    && Error.prepareStackTrace === undefined && Error.stackTraceLimit >= 20`, ctx),
+    'a built-in could be replaced');
+  ok(vm.runInContext('const o = {}; o.toString = () => "mine"; String(o)', ctx) === 'mine',
+    'an object can no longer have a toString of its own');
+
+  // Every engine still plays frozen: the loop games through their ticker's
+  // step, the board games through apply().
+  G.Store.set('profile', { name: 'x', xp: 5, created: '' });
+  ok(G.Store.get('profile', null).xp === 5, 'the seal does not work frozen');
+  const loops = {
+    tetris: () => new G.Tetris({ seed: 7 }),
+    snake: () => new G.Snake({ seed: 7 }),
+    worms: () => new G.Worms({ seed: 7, bots: 5, autostart: true }),
+    crowd: () => new G.CrowdRush({ seed: 7, course: G.CrowdCourse.keys[0], difficulty: 'normal' }),
+    fps: () => new G.FpsGame({ seed: 7, mode: 'tdm', map: 'yard', autostart: true }),
+    hide: () => new G.HideGame({ seed: 7, map: 'park' }),
+    stick: () => new G.StickGame({ seed: 7, mode: 'versus', p1: 'ink', p2: 'blaze', level: 0.5, stage: 'dojo' })
+  };
+  for (const name of Object.keys(loops)) {
+    let threw = null, ticks = 0;
+    try { const g = loops[name](); while (ticks < 300 && g.advance()) ticks++; } catch (e) { threw = e; }
+    ok(!threw, name + ' threw frozen: ' + (threw && threw.stack));
+  }
+  const boards = {
+    chess: () => new G.Chess({ rng: new G.RNG(3) }),
+    xiangqi: () => new G.Xiangqi({ rng: new G.RNG(3) }),
+    gomoku: () => new G.Gomoku({ rng: new G.RNG(3) }),
+    reversi: () => new G.Reversi({ rng: new G.RNG(3) })
+  };
+  for (const name of Object.keys(boards)) {
+    let threw = null;
+    try {
+      const g = boards[name]();
+      for (let i = 0; i < 40 && !g.over; i++) g.apply(g.legalMoves()[0]);
+    } catch (e) { threw = e; }
+    ok(!threw, name + ' threw frozen: ' + (threw && threw.stack));
+  }
+  let dealt = null;
+  try {
+    new G.Sudoku({ seed: 5, difficulty: 'easy' });
+    new G.Spider({ seed: 5, suits: 2 });
+    new G.Mahjong({ seed: 5 });
+  } catch (e) { dealt = e; }
+  ok(!dealt, 'a puzzle could not be dealt frozen: ' + (dealt && dealt.stack));
 });
 
 /* ------------------------------------------------------------------- core */

@@ -7,7 +7,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const COLS = 9, ROWS = 10;
   const RED = ['帥', '仕', '相', '馬', '車', '炮', '兵'];
   const BLACK = ['將', '士', '象', '馬', '車', '砲', '卒'];

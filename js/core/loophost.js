@@ -24,7 +24,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const DAS = 160, ARR = 40;
 
   /**
@@ -55,6 +55,7 @@ window.PV = window.PV || {};
 
     const wrap = PV.el('div', { class: 'g-loop' });
     const canvas = PV.el('canvas', { class: 'loop-canvas' });
+    let ctx2d = null;                  // asked for once: a canvas has one context for life
     const side = PV.el('div', { class: 'loop-side' });
     const below = PV.el('div', { class: 'loop-below' });
     const btnPause = PV.el('button', { class: 'btn ghost', onclick: togglePause });
@@ -269,7 +270,7 @@ window.PV = window.PV || {};
     function draw(alpha) {
       if (!game) return;
       const dpr = window.devicePixelRatio || 1;
-      const c = canvas.getContext('2d');
+      const c = ctx2d || (ctx2d = canvas.getContext('2d'));
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       spec.draw(c, game, geom, api, typeof alpha === 'number' ? alpha : 1);
       // A game with its own pause screen (Strike Squad's card) says so.

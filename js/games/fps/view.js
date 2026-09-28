@@ -25,7 +25,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.FpsData;
   const DEG = Math.PI / 180;
   const SETTINGS = 'fps.settings';

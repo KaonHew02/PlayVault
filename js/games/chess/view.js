@@ -11,7 +11,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const GLYPH = ['♟', '♞', '♝', '♜', '♛', '♚'];
   const FONT = '"Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif';
 

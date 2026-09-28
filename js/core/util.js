@@ -145,7 +145,7 @@ window.PV = window.PV || {};
       }
     });
     function relabel() {
-      btn.textContent = '⛶ ' + window.PV.t(on() ? 'common.fullscreenExit' : 'common.fullscreen');
+      btn.textContent = '⛶ ' + PV.t(on() ? 'common.fullscreenExit' : 'common.fullscreen');
     }
     function onChange() { relabel(); if (changed) changed(); }
     document.addEventListener('fullscreenchange', onChange);

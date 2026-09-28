@@ -14,7 +14,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.ChefData, M = PV.ChefMeta, A = PV.ChefArt;
   const el = (...a) => PV.el(...a);
   const fmt = n => PV.fmtNum(Math.round(n));

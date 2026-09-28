@@ -8,7 +8,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const el = PV.el;
 
   let app = null;
@@ -469,7 +469,7 @@ window.PV = window.PV || {};
           try { parsed = JSON.parse(fr.result); } catch (err) { parsed = null; }
           if (!parsed) return say(t('settings.importBadJson'));
           const res = PV.Store.importAll(parsed);
-          if (!res.ok) return say(t('settings.importBadFormat'));
+          if (!res.ok) return say(t(res.error === 'tampered' ? 'settings.importTampered' : 'settings.importBadFormat'));
           say(t('settings.importOk', { n: res.restored }));
           setTimeout(route, 900);
         };

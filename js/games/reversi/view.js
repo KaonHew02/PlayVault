@@ -7,7 +7,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const N = 8;
 
   PV.ReversiView = function (ctx) {

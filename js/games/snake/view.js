@@ -11,7 +11,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
 
   const FRAME = '#B4512B';       // the tray the board sits in
   const FIELD_A = '#F6C15A';     // the two checkerboard squares

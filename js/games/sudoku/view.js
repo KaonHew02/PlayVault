@@ -11,7 +11,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const SAVE = 'sudoku.saved';
 
   PV.SudokuView = function (ctx) {
@@ -29,6 +29,12 @@ window.PV = window.PV || {};
 
     const grid = PV.el('div', { class: 'sudoku-grid', role: 'grid' });
     const cells = [];
+    /* What each cell is showing — a value 'v', notes 'n' or nothing '0' — so
+       a render only rebuilds the cells that changed. Kept here rather than
+       in a data- attribute: the page is a picture of the game, never where
+       the game keeps anything, and the lock (js/core/guard.js) puts back any
+       change to the page it did not see this site make. */
+    const modes = [];
     for (let i = 0; i < 81; i++) {
       const c = PV.el('div', {
         class: 'sq', role: 'gridcell', tabindex: '-1',
@@ -202,22 +208,22 @@ window.PV = window.PV || {};
         node.className = cls.join(' ');
 
         if (v) {
-          if (node.dataset.mode !== 'v' || node.textContent !== String(v)) {
+          if (modes[i] !== 'v' || node.textContent !== String(v)) {
             PV.clear(node);
-            node.dataset.mode = 'v';
+            modes[i] = 'v';
             node.appendChild(document.createTextNode(String(v)));
           }
         } else if (game.notes[i]) {
           PV.clear(node);
-          node.dataset.mode = 'n';
+          modes[i] = 'n';
           const box = PV.el('div', { class: 'marks' });
           for (let n = 1; n <= 9; n++) {
             box.appendChild(PV.el('i', {}, game.noteAt(i, n) ? String(n) : ''));
           }
           node.appendChild(box);
-        } else if (node.dataset.mode !== '0') {
+        } else if (modes[i] !== '0') {
           PV.clear(node);
-          node.dataset.mode = '0';
+          modes[i] = '0';
         }
       }
 

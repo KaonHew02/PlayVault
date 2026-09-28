@@ -11,7 +11,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
 
   // The arcade palette rather than the app's own: players read the shape of a
   // piece off its colour before they read the shape itself, and cyan-I,
@@ -33,6 +33,9 @@ window.PV = window.PV || {};
 
     const wrap = PV.el('div', { class: 'g-tetris' });
     const canvas = PV.el('canvas', { class: 'well-canvas', 'aria-label': 'Tetris well' });
+    let ctx2d = null;                  // asked for once: a canvas has one context for life
+    const minis = new Map();           // the same for the hold and next canvases — up here,
+                                       // because the first draw() runs during construction
 
     const scoreEl = PV.el('b', {}, '0');
     const linesEl = PV.el('b', {}, '0');
@@ -253,7 +256,7 @@ window.PV = window.PV || {};
     function draw() {
       if (!game) return;
       const dpr = window.devicePixelRatio || 1;
-      const c = canvas.getContext('2d');
+      const c = ctx2d || (ctx2d = canvas.getContext('2d'));
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       const visRows = game.visibleRows();
       const w = cell * PV.Tetris.COLS, h = cell * visRows;
@@ -331,7 +334,8 @@ window.PV = window.PV || {};
     }
 
     function drawMini(cv, types) {
-      const c = cv.getContext('2d');
+      let c = minis.get(cv);
+      if (!c) { c = cv.getContext('2d'); minis.set(cv, c); }
       c.clearRect(0, 0, cv.width, cv.height);
       const slot = 90, unit = 18;
       types.forEach((type, n) => {

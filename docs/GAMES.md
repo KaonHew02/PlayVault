@@ -89,6 +89,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **26** | Blend In | **2026-09-25** — "and then oso add on paint to hide do like this linke, FULLY COPY IT", with the crazygames *Paint to Hide!* link. A new game: hide and seek in which hiders paint their bodies to match the map and seekers hunt them with water guns — the reference's colour wheel, Pick, Fill and Reset, brush sizes, poses, freecam, lock, wall climbing, first or third person seekers, six hiders against two seekers, 75 s to hide and 120 s to hunt, a table at the end, XP and coins. The reference's art, name and code are not copied. See below |
 | **27** | Strike Squad: easy and normal eased | **2026-09-28** — "for the fps shooter game the bot normal mode or easy mode 太厉害了 降低下power" (too strong, turn the power down). Measured before anything was changed: easy killed a player standing in the open in 1.4 s and normal in 1.1 s, hard in 0.7. Now about four seconds and two; hard is untouched. See below |
 | **28** | Strike Squad: a clearer lobby, settings in the match, softer hits | **2026-09-28** — "the interface look to dark and messy make it clear a bit and then add on the setting can like change the mouse sensitive cursor something", and "the bot dont too power, to hard to fight them". A frosted lobby with the guns on light tiles and the keys as key caps; sensitivity, aiming sensitivity, aim assist, crosshair and brightness, also on a pause card in the match; a bot's hit on the person playing lands at half on easy and 0.6 on normal. Measured with a simulated person first; hard is untouched. See below |
+| **32** | The lock | **2026-09-28** — "my friend programmer he go f12 change the element, so block all the action that modify the data and element". `js/core/guard.js`, first in the head, on for the published site: the console cannot reach `PV`, the saves or the page, the Elements panel's edits are put back, the built-ins are frozen, and F12 and right-click do nothing. Backups are sealed, so an edited export or Drive copy is refused. Checked in a real Chrome by `tools/lockcheck.mjs`; `SECURITY.md` has the table of what a friend can and cannot still do. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1382,3 +1383,61 @@ keeping its stars and kitchen. Checked in the browser: every new dish, side,
 drink, bin, cooker in every state and drink machine drawn large; a
 five-station Breakfast kitchen on a laptop and a five-station Ramen kitchen
 on an upright phone; the seventeen-truck lobby.
+
+### Phase 32 — the lock
+
+Asked for as "check all the security, like previous i said my friend
+programmer he go f12 change the element, so block all the action that
+modify the data and element". What the friend could do, found by trying it
+before changing anything:
+
+- **The console could write a save.** Every module hung off `window.PV`, so
+  `PV.Profile.addXp(…)` or `PV.Store.set('chef.meta', …)` wrote a record the
+  app then sealed as its own — the seal stopped a hand edit and did nothing
+  about the app's own functions being called by hand.
+- **An exported file could be edited and imported.** Backups carried no seal
+  at all: Export, change `coins` in Notepad, Import. The same for the Drive copy.
+- **The built-ins could be hooked**: `Math.random` behind the crates,
+  `performance.now` behind every clock, `JSON.stringify` on the way into
+  every save, WebGL behind Strike Squad's walls.
+- **The Elements panel could change anything on screen.** That part was
+  already harmless to the saves — every shop, unlock and claim re-checks the
+  save it was handed, not the button — but a number typed over stayed there.
+
+What shipped is `js/core/guard.js` and a seal on every backup; SECURITY.md is
+the full account, including what still gets through (a breakpoint, Local
+Overrides, a seal worked out from the public source, any other page on
+`kaonhew02.github.io`, which is one origin with one `localStorage`).
+
+Four things that were not obvious, and cost a browser session each:
+
+- **Chrome keeps CSS properties off every prototype.** `el.style.width` is a
+  named property of the declaration itself, as is every `el.dataset.x`, so
+  wrapping prototypes saw neither — this site's own included, and a change
+  the lock did not see this site make would have been put back as a
+  stranger's. `style` and `dataset` hand out a stand-in instead. Sudoku kept
+  its render cache in `data-mode`; it keeps it in an array now.
+- **Reading the stack costs 30–60 µs**, and some games wrote the same
+  `hidden`, class or text every frame — up to twelve reads a frame in Blend
+  In. A write that changes nothing now skips the read, and the harness asks
+  for its 2D context once instead of every frame; measured, no game asks the
+  lock anything in a frame now, and script time with and without it is within
+  noise.
+- **The lock must live outside the bundle.** It tells this site's frames from a
+  console's by the address on the stack; inside the bundle its own frames
+  would carry everybody's address. `tools/build.js` copies its tag into the
+  head with the bundle's `?v=`, and the smoke tests fail if it is ever bundled.
+- **A half-built view leaves its listeners behind.** Caching the Tetris hold
+  and next canvases' contexts below the first `draw()` put them in the
+  temporal dead zone; the view died during construction and its key handlers
+  threw in every game played after it. Only the browser run showed it — views
+  never run in Node — which is why `tools/lockcheck.mjs` exists.
+
+`smoke.js` holds the seal (an edited, unsealed, re-dated or hand-sealed backup
+is refused; a round trip through a file is not; a record sealed by every
+earlier version still opens), the lock's reading of Chrome, Firefox and Safari
+stacks, where it switches on — only in a browser where it can read its own
+frame back, so one that writes stacks some unknown way gets no lock rather
+than a game refusing itself — and every engine playing with the language
+frozen. `tools/lockcheck.mjs --net` holds the rest in a real Chrome: 73
+checks, from `typeof PV` to two locked tabs starting a match over PeerJS.

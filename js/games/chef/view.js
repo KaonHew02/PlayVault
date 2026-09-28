@@ -24,7 +24,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.ChefData, A = PV.ChefArt, LO = PV.ChefLayout, M = PV.ChefMeta;
   // A level with no rule that ends a run on the spot: a race is ranked on
   // takings, and one customer walking off should cost coins, not the race.

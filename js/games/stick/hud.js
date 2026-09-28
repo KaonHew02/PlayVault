@@ -13,7 +13,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.StickData, A = PV.StickArt, R = D.RULES;
   const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 

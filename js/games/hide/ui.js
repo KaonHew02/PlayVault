@@ -19,7 +19,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.HideData;
   const el = (...a) => PV.el(...a);
 

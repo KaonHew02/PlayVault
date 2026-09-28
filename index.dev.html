@@ -8,21 +8,22 @@
 <meta name="theme-color" content="#0B0F14">
 <meta name="referrer" content="no-referrer">
 <!-- The page's own limits. Everything this app runs is its own file, with two
-     exceptions named here: the PeerJS broker client, pinned by hash below,
-     and Google's sign-in script for the Drive copy, which drive.js fetches
-     only when Drive is used — Google serves it unversioned, so it cannot be
-     pinned, and SECURITY.md says what that means. The Drive calls themselves
-     go to www.googleapis.com. That library also tries to add an inline
-     stylesheet for Google's own sign-in button, which PlayVault never shows;
-     `style-src` refuses it on purpose, so one console error when Drive loads
-     is expected and harmless. No inline script, no eval, nowhere to post a
-     form to, and nothing loadable as a plugin. `frame-ancestors` is
-     deliberately absent: browsers ignore it in a meta tag, and a static host
-     cannot send headers, so that one is honestly out of reach rather than
-     quietly listed. -->
+     exceptions named here: the PeerJS broker client, named down to the one
+     file (the whole of cdnjs would let in any library it hosts) and pinned
+     by hash below, and Google's sign-in script for the Drive copy, which
+     drive.js fetches only when Drive is used — Google serves it unversioned,
+     so it cannot be pinned, and SECURITY.md says what that means. The Drive
+     calls themselves go to www.googleapis.com. That library also tries to
+     add an inline stylesheet for Google's own sign-in button, which
+     PlayVault never shows; `style-src` refuses it on purpose, so one console
+     error when Drive loads is expected and harmless. No inline script, no
+     eval, nowhere to post a form to, and nothing loadable as a plugin.
+     `frame-ancestors` is deliberately absent: browsers ignore it in a meta
+     tag, and a static host cannot send headers, so that one is honestly out
+     of reach rather than quietly listed. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client;
+  script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js https://accounts.google.com/gsi/client;
   style-src 'self';
   img-src 'self' data:;
   font-src 'self';
@@ -32,6 +33,14 @@
   object-src 'none';
   base-uri 'none';
   form-action 'none'">
+<!-- The lock, before anything else on the page can run: after this, the
+     console cannot reach PlayVault's saves or change what is on screen, and
+     a change made in the Elements panel is put back. Off on localhost; add
+     ?guard to the address to try it there. It stays its own file, outside
+     the bundle — it tells PlayVault's scripts from a stranger's by address,
+     and the bundle is one address for all of them. js/core/guard.js says
+     what it does and, as plainly, what it cannot. -->
+<script src="js/core/guard.js"></script>
 <link rel="icon" href="assets/logo/favicon.svg">
 <link rel="apple-touch-icon" href="assets/logo/icon.svg">
 <link rel="stylesheet" href="css/app.css">

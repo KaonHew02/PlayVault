@@ -67,6 +67,7 @@ window.PV = window.PV || {};
       'settings.importOk': 'Restored {n} store(s).',
       'settings.importBadFormat': 'That file is not a PlayVault save.',
       'settings.importBadJson': 'That file could not be read.',
+      'settings.importTampered': 'That file was changed after PlayVault saved it, or saved by an older version, so nothing was restored. Export a fresh copy from the browser that has your progress.',
       'settings.about': 'About',
       'settings.aboutText': 'PlayVault runs entirely in your browser — no PlayVault account and no server of its own. Your save leaves this browser only when you send it to your own Google Drive.',
 
@@ -97,6 +98,7 @@ window.PV = window.PV || {};
       'drive.httpError': 'Drive refused the request ({status}).',
       'drive.nothing': 'This Google account has no PlayVault save in its Drive yet. First press “To Drive” on the device that has your progress, signed in as the same account.',
       'drive.notOurs': 'The file in Drive is not a PlayVault save, so nothing was changed.',
+      'drive.tampered': 'The copy in Drive was changed outside PlayVault, or saved by an older version, so nothing was changed. Press “To Drive” in the browser that has your progress to save a fresh one.',
       'drive.replaceAsk': 'Replace everything in this browser with the Drive copy?\n\nDrive: {drive} (saved {when}).\nThis browser: {here}.\n\nIf this browser has the newer progress, cancel and press “To Drive” instead.',
       'drive.holds': 'level {level}, {games} games played',
       'drive.holdsNothing': 'no progress yet',
@@ -1354,6 +1356,7 @@ window.PV = window.PV || {};
       'settings.importOk': '已恢复 {n} 项数据。',
       'settings.importBadFormat': '这不是 PlayVault 的存档文件。',
       'settings.importBadJson': '无法读取该文件。',
+      'settings.importTampered': '这个文件在 PlayVault 保存之后被改动过，或是旧版本保存的，所以没有恢复任何数据。请在有进度的浏览器里重新导出一份。',
       'settings.about': '关于',
       'settings.aboutText': 'PlayVault 完全在你的浏览器中运行——没有 PlayVault 账号，也没有自己的服务器。只有你把存档存到自己的 Google Drive 时，它才会离开这个浏览器。',
 
@@ -1384,6 +1387,7 @@ window.PV = window.PV || {};
       'drive.httpError': 'Drive 拒绝了请求（{status}）。',
       'drive.nothing': '这个 Google 账号的 Drive 里还没有 PlayVault 存档。请先在有进度的设备上，用同一个账号点“存到 Drive”。',
       'drive.notOurs': 'Drive 里的文件不是 PlayVault 存档，所以没有做任何更改。',
+      'drive.tampered': 'Drive 里的副本在 PlayVault 之外被改动过，或是旧版本保存的，所以没有做任何更改。请在有进度的浏览器里点“存到 Drive”，重新保存一份。',
       'drive.replaceAsk': '要用 Drive 中的副本替换这个浏览器里的全部数据吗？\n\nDrive：{drive}（保存于 {when}）。\n这个浏览器：{here}。\n\n如果这个浏览器的进度更新，请取消，然后点“存到 Drive”。',
       'drive.holds': '等级 {level}，已玩 {games} 局',
       'drive.holdsNothing': '还没有进度',

@@ -12,7 +12,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const TAU = Math.PI * 2, DEG = Math.PI / 180;
   const FONT = '"Rajdhani", "Bahnschrift", "Segoe UI", system-ui, sans-serif';
   const TEAM = ['#4C8DF0', '#EC4B40'];

@@ -16,7 +16,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.StickData, A = PV.StickArt;
 
   const nm = f => (PV.I18n && PV.I18n.lang === 'zh' ? f.nameZh : f.name);

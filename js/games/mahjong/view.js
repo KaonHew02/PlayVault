@@ -11,7 +11,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const SAVE = 'mahjong.saved';
   const CJK = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Heiti SC", serif';
   const RED = '#B3261E';

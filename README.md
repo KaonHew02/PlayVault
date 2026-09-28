@@ -8,7 +8,8 @@ MiniShoppingMall.
 
 See [SECURITY.md](SECURITY.md) for what a static site can and cannot defend —
 including the short answer to "can you hide the JavaScript?" (no, and here is
-what to do instead).
+what to do instead), and what a friend with F12 can still do to the published
+site (much less than before: `js/core/guard.js` locks it).
 
 ```
 node tools/serve.js 8099     # then open http://localhost:8099/index.dev.html
@@ -16,6 +17,7 @@ node tools/smoke.js          # headless engine tests; [scale] for a longer run
 node tools/smoke.js --min    # ...the same tests against the minified source
 node tools/smoke.js --only "blend in"   # just the sections whose name has that in it
 node tools/build.js          # write js/playvault.min.js and the deployed index.html
+node tools/lockcheck.mjs     # the lock, in a real headless Chrome; --net adds Drive and a room
 node tools/build-logo.mjs    # regenerate every logo asset
 ```
 
@@ -23,6 +25,14 @@ node tools/build-logo.mjs    # regenerate every logo asset
 debugger shows real filenames and real line numbers. `index.html` is
 generated: it loads one bundle and is what GitHub Pages serves. Run
 `node tools/build.js` before pushing; the smoke tests fail if you forget.
+
+**The lock is off here and on there.** On the published site
+`js/core/guard.js` hides `PV`, refuses the console any change to the page or
+the saves, and puts back what the Elements panel changes. On `localhost`,
+`127.0.0.1` or a file on disk it stays off, so the console, `PV.raf` patches
+and the rest of a debugging session work as they always did. Add `?guard` to
+the address (`/index.html?guard`, `/index.dev.html?guard#/games`) to switch it
+on locally and see the published site's behaviour.
 
 ## What is built
 
@@ -80,6 +90,7 @@ harness so a game only writes its rules and its painting.
 index.html                  script order matters: core, contracts, harnesses, games, shell
 css/app.css                 one stylesheet, tokens for dark and light
 js/core/
+  guard.js                  the lock: loaded alone, first, in the head — never bundled
   util.js rng.js store.js   helpers, seeded random, persistence
   icons.js                  the few line icons (Bootstrap Icons, MIT), and the pill button
   i18n.js profile.js        English + 简体中文, the player and their records
@@ -253,6 +264,18 @@ the link is replaced. That is why the wire protocol lives in `boardnet.js`
 rather than inside the canvas-owning harness. It still does not replace two
 real browsers, which is what caught the two bugs above.
 
+**The lock is tested in a real browser**, because what it guards is a page.
+`node tools/lockcheck.mjs` serves the repository, starts a headless Chrome and
+drives the built bundle with the lock on over the DevTools protocol: every
+console paste and Elements-panel edit in SECURITY.md's table, all sixteen games
+played into a match, Export and Import through the real file input — and, with
+`--net`, Google's sign-in and two locked tabs opening, joining and starting a
+room. Run it after `node tools/build.js` whenever a game changes how it draws
+its HUD or panels: a game that changes the page in a way the lock cannot see
+fails it with "nothing of its own put back", which on the published site would
+be the lock undoing the game. It needs Chrome or Edge (`CHROME=` to point at
+one); the Node smoke tests cover the rest of the lock without one.
+
 **Drive is tested against a fake Google** — a sign-in library that answers the
 way Google's does, and a Drive behind `fetch()` that keeps files per account
 and shows each account only its own, as `drive.file` does. So the real
@@ -299,8 +322,24 @@ game interiors and `#EAF0F7` / `#8494A8` for text. Alternate: **neon vault**,
   seam must stay narrow, the play triangle must overlap **both** doors, and the
   bloom must stay small (r≈34–44) or the mark turns into an amber blob.
 - `PV.t()` must be looked up **lazily** inside a module — `const t = (k, p) =>
-  window.PV.t(k, p)` — never captured at module scope, because i18n.js may load
-  after the file using it and a captured `undefined` never recovers.
+  PV.t(k, p)` — never captured at module scope, because i18n.js may load
+  after the file using it and a captured `undefined` never recovers. And
+  through the module's own `PV`, **never `window.PV`**: on the published site
+  `window.PV` answers nobody once the page has loaded (the lock), so a lookup
+  through it works on localhost and fails in production.
+- **The page is a picture of the game, never where it keeps anything.** No
+  handler may trust a button's `disabled` or read a price, level or count back
+  out of the DOM — re-check the save it was handed, as every shop does. And
+  keep state out of `data-` attributes: a `dataset` write goes through the
+  lock's stand-in and is fine, but anything that changes the page without a
+  DOM call the lock can see (a raw attribute set by the browser, say) is put
+  back as a stranger's edit on the published site. A "put back" line in the
+  console during normal play, with `?guard` on, is a bug in the game.
+- The rule about declaring above the first call (the first bullet here)
+  covers caches too: `ctx2d` and the Tetris view's `minis` sit beside their
+  canvas because `draw()` first runs during construction. Put one lower and
+  the view dies half-built, leaving its key listeners behind to throw in
+  every game played after it.
 - A new persisted store that is not in `BACKUP_STORES` (`js/core/store.js`) is
   silently left out of every export and every Drive copy. Theme, language and
   the Drive switches are excluded on purpose: they belong to the device.

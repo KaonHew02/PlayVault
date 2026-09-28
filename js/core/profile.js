@@ -14,7 +14,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);   // lazy — i18n.js may load after this
+  const t = (k, p) => PV.t(k, p);   // lazy — i18n.js may load after this
 
   /** XP to go from level L to L+1. Gentle, no wall. */
   const stepFor = L => 100 + 50 * (L - 1);

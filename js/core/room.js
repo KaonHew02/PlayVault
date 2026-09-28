@@ -24,7 +24,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
 
   /** A room is at most this many players, whatever the game asks for. */
   const MAX_SEATS = 6;

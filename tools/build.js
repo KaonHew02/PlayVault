@@ -20,6 +20,12 @@
  * What this is NOT is a security control. It makes the source inconvenient to
  * read; devtools still shows every line of it, and anyone can still change
  * anything in their own browser. SECURITY.md says what actually holds.
+ *
+ * One script stays out of the bundle on purpose: the lock, js/core/guard.js,
+ * loaded in the head before everything else. It tells PlayVault's own
+ * scripts from a stranger's by the address on the call stack, and inside the
+ * bundle its frames would carry the same address as everybody's. It is
+ * copied into the deployed page as it stands, with the same `?v=<stamp>`.
  */
 'use strict';
 
@@ -33,8 +39,10 @@ const DEV = path.join(ROOT, 'index.dev.html');
 const OUT_HTML = path.join(ROOT, 'index.html');
 const OUT_JS = path.join(ROOT, 'js', 'playvault.min.js');
 const BUNDLE_REL = 'js/playvault.min.js';
+const GUARD = 'js/core/guard.js';
+const GUARD_TAG = '<script src="' + GUARD + '"></script>';
 
-/** The ordered list of local scripts, straight out of the development page. */
+/** The ordered list of bundled scripts, straight out of the development page. */
 function sources(devHtml) {
   const block = devHtml.slice(
     devHtml.indexOf('<!-- app:start -->'),
@@ -45,6 +53,12 @@ function sources(devHtml) {
   let m;
   while ((m = re.exec(block))) out.push(m[1]);
   return out;
+}
+
+/** Everything the stamp covers: the lock, then the bundle's sources. A new
+    lock is a new version as much as a new game is. */
+function stamped(devHtml) {
+  return [GUARD].concat(sources(devHtml));
 }
 
 function stampOf(files) {
@@ -84,6 +98,8 @@ function buildHtml(devHtml, stamp) {
   // Take the head comment above app:start out of the deployed page too.
   let head = devHtml.slice(0, a);
   head = head.replace(/<!-- THE DEVELOPMENT PAGE[\s\S]*?-->\n/, '');
+  // The lock keeps its own tag, versioned like the bundle.
+  head = head.replace(GUARD_TAG, '<script src="' + GUARD + '?v=' + stamp + '"></script>');
   return head + tag + devHtml.slice(b);
 }
 
@@ -92,8 +108,12 @@ function main() {
   const devHtml = fs.readFileSync(DEV, 'utf8');
   const files = sources(devHtml);
   if (!files.length) { console.error('build: no scripts found in index.dev.html'); process.exit(1); }
+  if (devHtml.indexOf(GUARD_TAG) < 0 || devHtml.indexOf(GUARD_TAG) > devHtml.indexOf('</head>')) {
+    console.error('build: index.dev.html must load ' + GUARD + ' in its <head>, as its own tag');
+    process.exit(1);
+  }
 
-  const stamp = stampOf(files);
+  const stamp = stampOf(stamped(devHtml));
   const bundle = buildBundle(files, stamp);
   const html = buildHtml(devHtml, stamp);
 
@@ -115,5 +135,5 @@ function main() {
     + ' (stamp ' + stamp + ')');
 }
 
-module.exports = { sources: sources, stampOf: stampOf, buildBundle: buildBundle };
+module.exports = { sources: sources, stamped: stamped, stampOf: stampOf, buildBundle: buildBundle, GUARD: GUARD };
 if (require.main === module) main();

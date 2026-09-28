@@ -29,7 +29,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
 
   const LIBRARY = 'https://accounts.google.com/gsi/client';
   const SCOPE = 'https://www.googleapis.com/auth/drive.file';
@@ -431,6 +431,10 @@ window.PV = window.PV || {};
       if (!found) return ui.say(t('drive.nothing'));
       const env = found.envelope;
       if (!env || typeof env !== 'object' || env.format !== PV.Store.FORMAT) return ui.say(t('drive.notOurs'));
+      // The file is in the player's own Drive, where anyone with the account
+      // can download it, change a number and upload it again. A copy that no
+      // longer matches its seal is turned away before it is even described.
+      if (!PV.Store.sealed(env)) return ui.say(t('drive.tampered'));
 
       const ask = t('drive.replaceAsk', {
         drive: summary(env),

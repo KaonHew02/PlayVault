@@ -26,7 +26,7 @@ window.PV = window.PV || {};
 (function (PV) {
   'use strict';
 
-  const t = (k, p) => window.PV.t(k, p);
+  const t = (k, p) => PV.t(k, p);
   const D = PV.HideData, B = PV.HideBody;
   const DEG = Math.PI / 180;
   const SETTINGS = 'hide.settings';
