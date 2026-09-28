@@ -75,6 +75,7 @@ const FILES = [
   'js/games/fps/engine.js', 'js/games/fps/meta.js',
   'js/games/hide/data.js', 'js/games/hide/body.js', 'js/games/hide/maps.js', 'js/games/hide/world.js',
   'js/games/hide/bots.js', 'js/games/hide/engine.js', 'js/games/hide/meta.js',
+  'js/games/stick/data.js', 'js/games/stick/bot.js', 'js/games/stick/engine.js', 'js/games/stick/meta.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
   'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
@@ -2019,6 +2020,292 @@ section('blend in — paint, water, rounds and replays', () => {
   const got = M.bank(mm, fakeWin);
   ok(mm.xp === got.xp && mm.coins === got.coins && mm.life.rounds === 1 && mm.life.survived === 1 && mm.life.wins === 1, 'a round was not banked');
 });
+
+/* ------------------------------------------------------------ stick clash */
+
+section('stick clash — the roster, and ' + (16 * scale) + ' bot fights', () => {
+  const SD = PV.StickData, G = PV.StickGame;
+
+  /* The catalogue holds together: every fighter has every move, a chain
+     names a move that exists, its window sits inside the move, and the
+     ladder and the stages name real things. */
+  for (const k of SD.KEYS) {
+    const f = SD.FIGHTERS[k];
+    for (const mk of ['j1', 'up', 'air', 'sp', 'fwd', 'back', 'ult']) ok(!!f.moves[mk], k + ' has no ' + mk);
+    ok(f.special.length === 4 && f.stats.length === 4, k + ' is missing its specials or stats');
+    for (const mk in f.moves) {
+      const m = f.moves[mk];
+      const len = m.f[0] + m.f[1] + m.f[2];
+      ok(m.f.every(n => Number.isInteger(n) && n >= 0) && m.f[1] >= 1, k + '.' + mk + ' has bad frames');
+      if (m.chain) {
+        ok(!!f.moves[m.chain], k + '.' + mk + ' chains into a move that does not exist');
+        ok(m.win[0] > 0 && m.win[1] < len && m.win[0] < m.win[1], k + '.' + mk + ' has its window outside the move');
+      }
+      if (m.box) ok(m.box[0] < m.box[2] && m.box[1] < m.box[3], k + '.' + mk + ' has an inside-out hitbox');
+      if (m.proj) ok(!!SD.PROJ[m.proj.kind], k + '.' + mk + ' throws something unknown');
+    }
+    ok(!!f.moves.ult.lock && f.moves.ult.cine, k + '\'s ultimate does not hold its target');
+  }
+  ok(SD.LADDER.every(s => SD.isFighter(s.foe) && SD.STAGES.indexOf(s.stage) >= 0), 'the ladder names somebody or somewhere unknown');
+  ok(SD.LADDER.every((s, i) => i === 0 || s.lvl > SD.LADDER[i - 1].lvl), 'the ladder does not get harder');
+  ok(!SD.isFighter('__proto__') && !SD.isFighter('constructor') && !SD.isFighter(7), 'the roster lookup believed a prototype key');
+
+  /* Bots fight every fighter to the end, and nothing ever goes NaN. */
+  const K = SD.KEYS;
+  let decided = 0;
+  for (let i = 0; i < 16 * scale; i++) {
+    const p1 = K[i % K.length], p2 = K[(i * 3 + 1) % K.length];
+    const g = new G({ seed: 900 + i, mode: 'versus', p1: p1, p2: p2, level: [0.16, 0.42, 0.7, 0.93][i % 4], stage: SD.STAGES[i % 6] });
+    g.f[0].human = false;
+    g.f[0].bot = PV.StickBot.create([0.93, 0.7, 0.42, 0.16][i % 4]);
+    let n = 0, sane = true;
+    while (!g.over && n++ < 60 * 60 * 8) {
+      g.advance();
+      for (const f of g.f) if (!isFinite(f.x) || !isFinite(f.y) || !(f.hp >= 0 && f.hp <= f.hpMax) || f.sta < 0 || f.meter > 100) sane = false;
+    }
+    ok(sane, p1 + ' v ' + p2 + ': a fighter went out of range');
+    ok(g.over && g.overReason === 'match', p1 + ' v ' + p2 + ' never finished');
+    ok(g.round <= g.maxRounds && (g.winner < 0 || g.wins[g.winner] >= g.wins[1 - g.winner]), p1 + ' v ' + p2 + ': the winner is not the one with the rounds');
+    ok(g.score >= 0 && Number.isInteger(g.score), 'a score was not a whole number');
+    if (g.winner >= 0) decided++;
+  }
+  ok(decided >= 14 * scale, 'only ' + decided + ' of ' + (16 * scale) + ' fights had a winner');
+
+  /* A better bot beats a worse one, most of the time. */
+  let strong = 0;
+  for (let i = 0; i < 8; i++) {
+    const g = new G({ seed: 50 + i, mode: 'versus', p1: K[i], p2: K[i], level: 0.16, stage: 'dojo' });
+    g.f[0].human = false; g.f[0].bot = PV.StickBot.create(0.93);
+    while (!g.over) g.advance();
+    if (g.winner === 0) strong++;
+  }
+  ok(strong >= 7, 'an expert bot beat an easy one only ' + strong + ' times in 8');
+
+  /* A fight replays from its seed: same seed, same fight. */
+  const replay = seed => {
+    // No opponent and no stage: the seed picks both.
+    const g = new G({ seed: seed });
+    g.begin({ mode: 'versus', p1: 'nox', p2: null, level: 0.6, stage: null });
+    g.f[0].human = false; g.f[0].bot = PV.StickBot.create(0.6);
+    let n = 0;
+    while (!g.over && n++ < 60 * 60 * 8) g.advance();
+    return [g.tick, g.winner, g.score, g.f[1].id, g.stage, g.f[0].stats.hits, g.f[1].stats.hits].join(',');
+  };
+  ok(replay(77) === replay(77), 'the same seed fought a different fight');
+  ok(new Set([1, 2, 3, 4, 5].map(replay)).size > 2, 'different seeds fought the same fight');
+});
+
+section('stick clash — combos, guards, breakers, ultimates and the save', () => {
+  const SD = PV.StickData, G = PV.StickGame, M = PV.StickMeta;
+  // Two people on one keyboard: nothing moves unless an input says so.
+  const two = (p1, p2, gap) => {
+    const g = new G({ seed: 3, mode: 'two', p1: p1 || 'ink', p2: p2 || 'blaze', stage: 'dojo' });
+    while (g.phase !== 'fight') g.advance();
+    g.f[0].x = 640; g.f[1].x = 640 + (gap || 60);
+    g.advance();
+    return g;
+  };
+  const seen = (g, k, from) => g.events.some(e => e.k === k && e.seq > (from || 0));
+  const until = (g, fn, cap) => { let n = 0; while (!fn(g) && n++ < (cap || 600)) g.advance(); return fn(g); };
+
+  /* A timed press continues the chain; an early one drops it. */
+  {
+    const g = two(), me = g.f[0];
+    g.input('a1'); g.advance();
+    ok(me.state === 'attack' && me.mv.key === 'j1', 'J did not start a jab');
+    const w = me.mv.win[0];
+    until(g, x => x.f[0].mt >= w);
+    g.input('a1'); g.advance();
+    ok(until(g, x => x.f[0].mv && x.f[0].mv.key === 'j2', 60), 'a press inside the window did not continue the combo');
+    ok(g.f[1].combo >= 1, 'the combo did not count');
+  }
+  {
+    const g = two(), me = g.f[0];
+    g.input('a1'); g.advance(); g.advance();
+    g.input('a1'); g.advance();
+    ok(me.early === true, 'a press before the window was not noticed');
+    const seq = me.mseq;
+    until(g, x => x.f[0].state !== 'attack' || x.f[0].mseq !== seq, 90);
+    ok(me.mseq === seq, 'mashing continued the combo anyway');
+  }
+
+  /* Holding back blocks from in front: chip damage and stamina, not a hit. */
+  {
+    const g = two(), foe = g.f[1];
+    g.input('a1');
+    until(g, x => { x.input('d2'); return x.f[1].bs > 0 || x.f[1].state === 'hit'; }, 60);
+    ok(foe.state === 'block' && foe.hp > foe.hpMax - 1 && foe.sta < SD.RULES.staMax, 'a jab into a guard was not blocked');
+    // ...and a guard with no stamina left breaks.
+    const g2 = two(), f2 = g2.f[1];
+    g2.input('d2'); g2.advance();
+    f2.sta = 2;
+    g2.input('a1');
+    until(g2, x => { if (x.f[1].state === 'block') x.input('d2'); return x.f[1].state === 'stun'; }, 60);
+    ok(f2.state === 'stun' && seen(g2, 'guardbreak'), 'an empty guard did not break');
+  }
+
+  /* Down and attack is an uppercut, and it launches. */
+  {
+    const g = two(), foe = g.f[1];
+    g.input('d1'); g.input('a1'); g.advance();
+    ok(g.f[0].mv && g.f[0].mv.key === 'up', 'down and attack was not an uppercut');
+    ok(until(g, x => x.f[1].state === 'hit' && x.f[1].air, 40), 'the uppercut did not launch');
+    ok(until(g, x => x.f[1].state === 'down', 200), 'a launched fighter did not land in a heap');
+    ok(until(g, x => x.f[1].state === 'idle', 200) && foe.combo === 0, 'nobody got up, or the combo never ended');
+  }
+
+  /* Specials cost stamina: without it, K does nothing but say so. */
+  {
+    const g = two(), me = g.f[0];
+    me.sta = 4;
+    const at = g.seq;
+    g.input('s1'); g.advance();
+    ok(me.state !== 'attack' && seen(g, 'tired', at), 'a special went off with no stamina');
+    me.sta = 100;
+    g.input('s1'); g.advance();
+    ok(me.state === 'attack' && me.mv.key === 'sp' && me.sta < 100, 'a special with stamina did not go off');
+    // Point blank it lands the tick it is thrown, so look for the throw, not the ball.
+    ok(until(g, x => seen(x, 'proj', at), 30), 'Ki Blast threw nothing');
+    g.input('s1'); g.advance();
+    until(g, x => x.f[0].state !== 'attack', 60);
+    g.input('s1'); g.advance();
+    ok(g.proj.length <= 1 || g.f[0].state !== 'attack', 'a second Ki Blast went while the first was still out');
+  }
+
+  /* The direction held with K picks the special. */
+  {
+    const g = two('ink', 'blaze', 300);
+    g.input('r1'); g.input('s1'); g.advance();
+    ok(g.f[0].mv && g.f[0].mv.key === 'fwd', 'forward and K was not the forward special');
+    const g2 = two('ink', 'blaze', 300);
+    g2.input('l1'); g2.input('s1'); g2.advance();
+    ok(g2.f[0].mv && g2.f[0].mv.key === 'back', 'back and K was not the back special');
+  }
+
+  /* A breaker needs half the meter, and pushes the attacker off. */
+  {
+    const g = two(), foe = g.f[1];
+    g.input('a1');
+    until(g, x => x.f[1].state === 'hit', 30);
+    foe.meter = 0;
+    const at = g.seq;
+    g.input('s2'); g.advance();
+    ok(!seen(g, 'breaker', at), 'a breaker went off with an empty meter');
+    const g2 = two(), f2 = g2.f[1];
+    g2.input('a1');
+    until(g2, x => x.f[1].state === 'hit', 30);
+    f2.meter = 60;
+    g2.input('s2');
+    until(g2, x => seen(x, 'breaker'), 12);
+    ok(seen(g2, 'breaker') && Math.abs(f2.meter - 10) < 1e-6 && f2.inv > 0, 'a breaker with meter did not burst');
+    ok(g2.f[0].state === 'hit', 'the breaker did not knock the attacker off');
+  }
+
+  /* An ultimate needs a full meter, holds the screen, and lands a flurry. */
+  {
+    const g = two(), me = g.f[0], foe = g.f[1];
+    me.meter = 99;
+    g.input('d1'); g.input('s1'); g.advance();
+    ok(!g.cine && (!me.mv || me.mv.key !== 'ult'), 'an ultimate went off without a full meter');
+    const g2 = two(), m2 = g2.f[0], f2 = g2.f[1];
+    until(g2, x => x.f[0].state === 'idle', 30);
+    m2.meter = 100;
+    g2.input('d1'); g2.input('s1'); g2.advance();
+    ok(!!g2.cine && m2.meter === 0 && m2.mv.key === 'ult', 'a full meter did not start the ultimate');
+    ok(until(g2, x => x.f[1].state === 'held', 120), 'the ultimate did not hold its target');
+    ok(until(g2, x => x.f[1].state === 'hit' || x.f[1].state === 'down', 200), 'the flurry never finished');
+    ok(f2.hp < f2.hpMax - 20, 'the ultimate hardly hurt: ' + (f2.hpMax - f2.hp).toFixed(1));
+    void me; void foe;
+  }
+
+  /* Nobody drives the computer's fighter. */
+  {
+    const g = new G({ seed: 4, mode: 'versus', p1: 'ink', p2: 'blaze', stage: 'dojo' });
+    while (g.phase !== 'fight') g.advance();
+    g.f[1].bot = null;
+    for (let i = 0; i < 120; i++) { g.input('a2'); g.input('s2'); g.input('l2'); g.advance(); }
+    ok(g.f[1].stats.specials === 0 && g.f[1].mseq === 0, 'a keyboard drove the computer\'s fighter');
+  }
+
+  /* Training never ends, and nobody is ever knocked out. */
+  {
+    const g = new G({ seed: 5, mode: 'train', p1: 'brick', p2: 'ink', stage: 'dojo' });
+    while (g.phase !== 'fight') g.advance();
+    for (let i = 0; i < 4000; i++) {
+      const me = g.f[0], d = g.f[1];
+      if (Math.abs(me.x - d.x) > 90) g.input(me.x < d.x ? 'r1' : 'l1');
+      else if (i % 9 === 0) g.input(i % 45 === 0 ? 's1' : 'a1');
+      g.advance();
+    }
+    ok(!g.over && g.phase === 'fight' && g.f[1].hp >= 1 && g.f[1].stats.hits === 0, 'training finished or knocked the dummy out');
+    ok(g.f[0].stats.hits > 20, 'training landed hardly anything');
+  }
+
+  /* A whole match against somebody who never moves: two knockouts, one winner. */
+  {
+    const g = new G({ seed: 6, mode: 'two', p1: 'blaze', p2: 'ink', stage: 'dojo', rounds: 3 });
+    let n = 0;
+    while (!g.over && n++ < 60 * 60 * 5) {
+      const me = g.f[0], d = g.f[1];
+      if (g.phase === 'fight') {
+        if (Math.abs(me.x - d.x) > 80) g.input(me.x < d.x ? 'r1' : 'l1');
+        else if (me.state === 'idle' || me.state === 'walk' || (me.mv && me.mt >= me.mv.win && me.mv.win && me.mt >= me.mv.win[0])) g.input('a1');
+      }
+      g.advance();
+    }
+    ok(g.over && g.winner === 0 && g.wins[0] === 2 && g.wins[1] === 0, 'a match against a statue did not end 2-0');
+    ok(g.perfects[0] === 2 && g.kos[0] === 2, 'two untouched knockouts were not two perfect KOs');
+  }
+
+  /* A start from the page is checked, not believed. */
+  {
+    const g = new G({ seed: 8 });
+    g.input({ start: { mode: 'hack', p1: '__proto__', p2: 'constructor', rounds: 99, level: 9, stage: '<img>', tour: 1e9 } });
+    g.advance();
+    ok(g.phase === 'intro' && g.f[0].id === 'ink' && SD.isFighter(g.f[1].id), 'a hostile start chose nonsense fighters');
+    ok(g.mode === 'versus' && g.cfg.rounds === 3 && g.cfg.level === SD.LEVELS.normal && SD.STAGES.indexOf(g.stage) >= 0 && g.cfg.tour === SD.LADDER.length - 1, 'a hostile start was believed');
+    g.input({ start: { mode: 'two' } }); g.advance();
+    ok(g.mode === 'versus', 'a second start restarted a fight already going');
+    g.input(null); g.input(42); g.input({ dummy: 'x' }); g.input('zz'); g.advance();
+    ok(g.phase === 'intro' || g.phase === 'fight', 'junk input broke the fight');
+  }
+
+  /* The save: rebuilt on read, paid for fights, spent on fighters. */
+  {
+    ok(M.clean('x') === undefined && M.clean(null) === undefined, 'a nonsense save was accepted');
+    const c = M.clean({ coins: -5, owned: ['blaze', 'blaze', 'ghost', '__proto__', 7], pick: 'nox', tour: 99, life: { wins: 'lots', best: 12 } });
+    ok(c.coins === 0 && c.owned.join() === 'ink,blaze' && c.pick === 'ink' && c.tour === SD.LADDER.length - 1 && c.life.wins === 0 && c.life.best === 12, 'the save validator let something through');
+    const m = M.fresh();
+    ok(!M.shop.buy(m, 'blaze') && m.owned.length === 1, 'a fighter was bought with no coins');
+    m.coins = 200;
+    ok(M.shop.buy(m, 'blaze') && m.coins === 50 && m.pick === 'blaze' && !M.shop.buy(m, 'blaze'), 'buying a fighter went wrong');
+    ok(!M.shop.pick(m, 'oni') && M.shop.pick(m, 'ink') && m.pick === 'ink', 'a fighter not owned could be picked');
+    // A tournament win pays and climbs; the last one crowns and unlocks the boss.
+    const fake = (mode, winner, tour) => ({ mode: mode, winner: winner, perfects: [1, 0], kos: [2, 0], wins: [2, 0], cfg: { tour: tour }, f: [{ stats: { best: 5 } }, { stats: { best: 0 } }] });
+    const mm = M.fresh();
+    const r1 = M.bank(mm, fake('tour', 0, 0), 'normal');
+    ok(r1.coins === SD.PAY.tour(0) + SD.PAY.perfect && mm.tour === 1 && mm.life.wins === 1 && mm.life.best === 5, 'a tournament win was not banked');
+    mm.tour = SD.LADDER.length - 1;
+    const r2 = M.bank(mm, fake('tour', 0, SD.LADDER.length - 1), 'normal');
+    ok(r2.champion && r2.unlocked === 'oni' && mm.owned.indexOf('oni') >= 0 && mm.tour === 0 && mm.life.champs === 1, 'the champion was not crowned');
+    const lost = M.bank(mm, fake('tour', 1, 0), 'normal');
+    ok(lost.coins === SD.PAY.loss && mm.tour === 0, 'a loss climbed the ladder or paid like a win');
+    const before = mm.coins;
+    M.bank(mm, fake('two', 0, 0), 'normal');
+    ok(mm.coins === before, 'two players on one keyboard earned coins');
+    ok(M.rewards(fake('versus', 0, 0), 'expert').coins > M.rewards(fake('versus', 0, 0), 'easy').coins, 'an expert win paid no more than an easy one');
+    PV.Store.set(M.KEY, mm);
+    ok(M.load().owned.indexOf('oni') >= 0 && PV.Store.BACKUP_STORES.indexOf(M.KEY) >= 0, 'the save did not round-trip, or is not backed up');
+    // Sealed: coins typed in through devtools are not believed.
+    const raw = JSON.parse(localStorage.getItem('playvault.' + M.KEY));
+    ok(raw && typeof raw.c === 'string' && raw.d, 'the save was not sealed');
+    raw.d.coins = 999999;
+    localStorage.setItem('playvault.' + M.KEY, JSON.stringify(raw));
+    ok(M.load().coins === 0 && M.load().owned.length === 1, 'an edited save was believed');
+    PV.Store.del(M.KEY);
+  }
+});
+
 
 /* --------------------------------------------------------------- security */
 

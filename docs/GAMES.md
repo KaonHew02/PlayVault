@@ -1150,3 +1150,71 @@ in the browser on the built bundle, at a laptop's size and a phone's, in
 English and Chinese: the lobby and its Settings tab, a crosshair picked there
 and drawn in the match, brightness on the 3D picture, P to the pause card and
 Resume out of it, no console errors.
+
+### Phase 29 — Stick Clash
+
+Asked for 2026-09-28 as a copy of CrazyGames' *Stickman Kombat 2D*. The
+reference's store page was read for how it plays — its controls, combo
+rule, stamina, breakers, tournament and unlocks — and that is what was
+built. Its code, art, fighters and names are someone else's and none of it
+is here: the eight fighters, their looks, moves and names are this game's
+own, drawn from shapes on a 2D canvas.
+
+- **The reference's keys.** One player: WASD, J to attack, K special,
+  forward or back with K for the other two specials, S+J uppercut, hold S
+  to block. Two players on one keyboard: WASD F G and IJKL ; '. Arrows with
+  Z and X work for one player too; a phone gets a six-button thumb pad.
+- **What makes it a fighting game rather than a brawler**, all from the
+  reference's page: a timed combo (a press inside the window continues it,
+  a press before the window drops it, so mashing loses), launchers and
+  air juggles, an *aerial strike* when an air attack lands on a back,
+  stamina that attacks and blocking spend and that breaks a guard when it
+  runs out, a meter that fills from hits landed and taken, a **breaker**
+  for half of it, an **ultimate** for all of it — the screen holds, a
+  cut-in names it, and a connecting hit holds the target for a flurry.
+- **Eight fighters**: Ink (fists, free), Blaze (sword), Nox (scythe),
+  Brick (hammer), Zephyr (daggers), Volt (staff), Pike (spear), and Oni,
+  the tournament's boss, won by beating it or bought for 1500. Ten moves
+  each, all data (`data.js`); one skeleton posed by angles draws them all
+  (`art.js`), so a new move needs a hitbox and the name of a pose.
+- **Modes**: an eight-fight tournament whose bots get sharper fight by
+  fight, versus the computer on four levels, two players, and training
+  with a dummy that stands, blocks, jumps or fights back and a meter that
+  refills. Six stages. Coins for every fight, more the harder it was.
+
+Decisions:
+
+- **Everything that changes the fight is a tick.** Hitstop, the knockout's
+  slow motion and an ultimate's held screen are counted in ticks in the
+  engine; the shakes, flashes, zooms, sparks and trails the reference is
+  known for live in the view and are driven by the engine's events. So a
+  fight replays exactly from its seed, and a race with friends (everyone
+  as Ink against the same seeded opponent) is fair.
+- **Hits are collected, then applied**: two attacks landing on one tick
+  trade, instead of whoever is first in the array winning.
+- **A bot has a player's controls and a player's limits.** It holds and
+  presses the same six controls, notices a threat after a reaction delay
+  (23 ticks on easy, 5 on expert), decides once per attack whether to
+  guard it, and sometimes presses a chain early and drops it, as a person
+  does. It never moves its fighter itself.
+
+What measuring found (bots against bots, the engine alone):
+
+- Each level beats the one below it 12–14 times in 16; expert beat easy
+  16 of 16. The first roster had Zephyr winning 3 fights of 42 and Nox 31;
+  two passes of health, power and a few moves brought the seven regular
+  fighters to 32–45 wins of 84 each, inside the noise of that many fights,
+  with the boss at 70 on purpose.
+
+`smoke.js` holds it: every move's frames, chain windows and hitboxes; 16
+bot fights to the end with nothing out of range; an expert beating easy;
+the same seed fighting the same fight; and each mechanic driven through
+inputs — a timed chain, an early press dropping it, a block, a guard
+break, the uppercut launch, stamina refusing a special, the direction
+choosing it, a breaker with and without meter, an ultimate's flurry,
+training never ending, and a match against a statue ending 2–0 on two
+perfect knockouts — plus the save validator, the shop and the ladder.
+Played in the browser at a laptop's size and a phone's: the select, a
+purchase, a tournament fight with a timed combo, the ultimate's cut-in in
+training, a two-player match to its end card, the thumb pad, the move
+list pausing the fight, no console errors.

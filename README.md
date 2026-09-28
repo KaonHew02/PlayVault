@@ -26,14 +26,14 @@ generated: it loads one bundle and is what GitHub Pages serves. Run
 
 ## What is built
 
-**All fourteen games on the roster are playable, alone or with friends.**
+**All fifteen games on the roster are playable, alone or with friends.**
 Nothing is a stub.
 
 | family | games |
 | --- | --- |
 | board | 五子棋 · 黑白棋 · Chess · 中国象棋 |
 | puzzle | Sudoku · Spider Solitaire · Mahjong Solitaire |
-| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush · Strike Squad · Blend In |
+| arcade | Tetris · Snake · Worm Arena · Tower Defense · Crowd Rush · Strike Squad · Blend In · Stick Clash |
 
 Strike Squad is a first-person shooter against bots: seven modes on eight
 maps, twenty-two guns with upgrades, attachments, camos and keychains,
@@ -49,6 +49,16 @@ eyes compare each bit of a hider with what is behind it, lit as the screen
 lights it — so a good paint job hides you from the bots for the reason it
 hides you from a person. Fourteen files in `js/games/hide/`; `docs/GAMES.md`
 (phase 26) is the record.
+
+Stick Clash is a one-on-one stickman fighter in the mould of the web
+fighters: J to attack, K for specials, a direction with K for the other two,
+S to block, S+J to launch, S+K for an ultimate on a full meter, K while
+being hit to break out. Combos are timed — a press too early drops the
+chain — and blocking costs stamina and only covers your front. Eight
+fighters of its own (one free, six bought with coins, a boss won in the
+tournament), six stages, an eight-fight ladder of smarter bots, versus the
+computer, two players on one keyboard, and training. Plain 2D canvas, ten
+files in `js/games/stick/`; `docs/GAMES.md` (phase 29) is the record.
 
 Each family sits on its own engine contract, and each contract has a shared
 harness so a game only writes its rules and its painting.
