@@ -1,7 +1,7 @@
 // Lays the screenshots from screenshots.mjs out into the proposal's four
 // photographic figures. The recipe below is the one behind the committed
 // figures: which frame of which game, in which order, with which label.
-//   node compose.mjs [--out=<dir>]        default: docs/img
+//   node compose.mjs [<figure.png>…] [--out=<dir>]     default: all of them, into docs/img
 import fs from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SHOTS = join(HERE, '.build', 'shots');
 const outArg = (process.argv.find(a => a.startsWith('--out=')) || '').slice(6);
 const OUT = outArg ? resolve(outArg) : resolve(HERE, '..', 'img');
+const ONLY = process.argv.slice(2).filter(a => !a.startsWith('--'));
 
 const NAMES = {
   gomoku: 'Gomoku', reversi: 'Reversi', chess: 'Chess', xiangqi: 'Chinese Chess', sudoku: 'Sudoku',
@@ -30,6 +31,7 @@ const FIGURES = [
     ['snake-a'], ['worms-b'], ['crowd-b'], ['towerdef-b'], ['fps-play'], ['hide-b'], ['chef-level'], ['stick-b']] },
   { file: 'arcade3d.png', cols: 3, w: 520, h: 325, tiles: [
     ['fps-play', 'Strike Squad, first person'], ['crowd-b', 'Crowd Rush, in 3D'], ['hide-b', 'Blend In, paint to hide']] },
+  { file: 'save-strip.png', duo: ['save-desk', 'save-phone'], h: 300, scale: 1 },
 ];
 
 const png = (name) => fs.readFileSync(join(SHOTS, name + '.png'));
@@ -57,21 +59,21 @@ function sheet({ cols, w, h, tiles }) {
 }
 
 // A desktop screenshot and a phone one side by side, the same height.
-function duo([desk, phone]) {
+function duo([desk, phone], H = 470, scale = 2) {
   const d = png(desk), p = png(phone), [dw, dh] = size(d), [pw, ph] = size(p);
-  const H = 470, GAP = 28, PAD = 12, CAP = 28;
+  const GAP = 28, PAD = 12, CAP = 28;
   const dW = Math.round(H * dw / dh), pW = Math.round(H * pw / ph);
   const W = PAD * 2 + dW + GAP + pW, T = PAD * 2 + H + CAP;
   const img = (b, x, w, id) => `<clipPath id="${id}"><rect x="${x}" y="${PAD}" width="${w}" height="${H}" rx="8"/></clipPath>`
     + `<image clip-path="url(#${id})" x="${x}" y="${PAD}" width="${w}" height="${H}" xlink:href="${uri(b)}"/>` + frame(x, PAD, w, H);
   const px = PAD + dW + GAP;
   const body = img(d, PAD, dW, 'd') + img(p, px, pW, 'p') + label(PAD + 4, PAD + H + 20, 'Desktop') + label(px + 4, PAD + H + 20, 'Phone');
-  return { svg: svgDoc(W, T, body), scale: 2 };
+  return { svg: svgDoc(W, T, body), scale };
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-for (const f of FIGURES) {
-  const { svg, scale } = f.duo ? duo(f.duo) : sheet(f);
+for (const f of FIGURES.filter(f => !ONLY.length || ONLY.includes(f.file))) {
+  const { svg, scale } = f.duo ? duo(f.duo, f.h, f.scale) : sheet(f);
   const width = Number(/width="(\d+)"/.exec(svg)[1]) * scale;
   const out = new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { loadSystemFonts: true, defaultFontFamily: 'Segoe UI' } }).render().asPng();
   fs.writeFileSync(join(OUT, f.file), out);

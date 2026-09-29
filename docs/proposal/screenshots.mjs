@@ -1,5 +1,5 @@
 // Screenshots of the real built site, for the proposal's figures.
-//   node screenshots.mjs [lobby] [<game code>…] [fps-play] [chef]
+//   node screenshots.mjs [lobby] [<game code>…] [fps-play] [save] [chef]
 // writes .build/shots/*.png; compose.mjs lays them out into docs/img/.
 // It drives the BUILT bundle (run `node tools/build.js` first) from a
 // throwaway server on a random port, in a headless Chrome with a throwaway
@@ -191,6 +191,22 @@ try {
     for (const k of ['KeyW', 'KeyW', 'KeyD']) { await page.key(k, k.slice(3).toLowerCase()); await sleep(200); }
     await sleep(2500);
     await page.shot('fps-play');
+  }
+  if (want('save')) {
+    // A storage that refuses the next write, and the strip that says so.
+    // Only possible on this unlocked origin; setItem is put back after.
+    const failSave = () => page.run("window.__set = window.__set || Storage.prototype.setItem;"
+      + " Storage.prototype.setItem = function () { const e = new Error('full'); e.name = 'QuotaExceededError'; throw e; };"
+      + " PV.Profile.addXp(10); 'ok'");
+    await fresh('#/games');
+    await page.run("if (!PV.Profile.data().name) { PV.Profile.setName('Kaon'); PV.Profile.addXp(4700); } 'ok'");
+    await fresh('#/games'); await failSave(); await sleep(600);
+    await page.shot('save-desk', { x: 0, y: 0, width: 1280, height: 330 });
+    await page.view(390, 844, true, 2);
+    await fresh('#/games'); await failSave(); await sleep(800);
+    await page.shot('save-phone', { x: 0, y: 0, width: 390, height: 360 });
+    await page.view(1280, 800);
+    await page.run("if (window.__set) Storage.prototype.setItem = window.__set; 'ok'");
   }
   if (want('chef')) {
     await page.go(URL_ + '#/games');

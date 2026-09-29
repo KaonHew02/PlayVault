@@ -39,10 +39,10 @@ const OUT = arg('out') || join(DOCS, NAME + '.docx');
    then build again with --pages. Word can still refresh the field itself. */
 const PAGES = arg('pages') ? JSON.parse(readFileSync(arg('pages'), 'utf8')) : null;
 
-const REVISION = '1';
+const REVISION = '2';
 const DATE = '29 September 2026';
 const DECIDE_BY = '2 October 2026';
-const BASELINE = 'dec459c';
+const BASELINE = 'da85e98';
 const TAGLINE = 'One Hub. Endless Games.';
 
 // brass on steel, with the brass darkened wherever it carries text on white
@@ -481,6 +481,7 @@ function control() {
     new Paragraph({ style: 'FrontSub', children: [new TextRun('Revision history')] }),
     table(['Rev', 'Date', 'Summary'], [
       ['1', '29 Sep 2026', 'First issue — the case, objectives and players; the sixteen-game roster; architecture, playing with friends, data, and security with the lock of 29 September; design and stack; the plan, testing with that day\'s runs, risks, budget and roadmap; sign-off and glossary. Figures drawn from the source, and screenshots captured from the built bundle'],
+      ['2', '29 Sep 2026', 'The silent save, fixed the same day (commit `1b334bc`): O15 met and R6 lowered, a new subsection and figure on a save that cannot be written, and week 3 and MS-2 without it; the repository\'s docs corrected (`da85e98`), so innerHTML again writes only the game icons; every figure refreshed to commit `da85e98` — lines, keys, checks (2,555,907), lock checks (79) and commits (44)'],
     ], { widths: [800, 1500, CONTENT_W - 2300] }),
     spacer(240),
     new Paragraph({ style: 'FrontSub', children: [new TextRun('How to read this proposal')] }),

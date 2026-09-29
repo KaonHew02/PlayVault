@@ -22,8 +22,8 @@ Run from this folder.
 ```
 powershell -ExecutionPolicy Bypass -File build.ps1   # the .docx and the PDF
 node diagrams.mjs                                    # the seven diagrams in docs/img/*.svg
-node screenshots.mjs                                 # retake the screenshots into .build/shots/
-node compose.mjs                                     # lay them out as docs/img/*.png
+node screenshots.mjs [lobby] [<game>…] [save]        # retake the screenshots into .build/shots/
+node compose.mjs [<figure.png>…]                     # lay them out as docs/img/*.png (all, or the ones named)
 ```
 
 | File | Does |
@@ -34,7 +34,7 @@ node compose.mjs                                     # lay them out as docs/img/
 | `outline.py` | Reads the PDF's bookmarks and writes the page each heading landed on |
 | `diagrams.mjs` | The architecture, families, friends, lock, commits, codebase and Phase 4 figures, drawn as SVG |
 | `screenshots.mjs` | Plays the built bundle in headless Chrome and saves frames |
-| `compose.mjs` | The recipe for the four screenshot figures: which frame, which order, which label |
+| `compose.mjs` | The recipe for the five screenshot figures: which frame, which order, which label |
 
 ## Things that are not obvious
 

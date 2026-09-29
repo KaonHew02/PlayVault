@@ -55,7 +55,7 @@ const files = {};
   b += line(308, 108, 308, 126, { arrow: true });
   // the bundle
   b += rect(36, 126, 544, 338, { fill: K.brassTint, stroke: K.brass, sw: 2 });
-  b += text(52, 151, 'playvault.min.js — 122 files, 1.24 MB (about 400 KB gzipped)', { size: 15, weight: 700, fill: K.brassDk });
+  b += text(52, 151, 'playvault.min.js — 122 files, 1.25 MB (about 400 KB gzipped)', { size: 15, weight: 700, fill: K.brassDk });
   const rows = [
     ['Shell', ['js/app.js — lobby, play, stats, settings, friends,', 'and the hash route. It names no game.']],
     ['Games', ['16 folders, js/games/<code>/ — each one registers itself:', 'PV.Registry.add({ family, options, start })']],
@@ -237,10 +237,10 @@ const files = {};
     ['24 Sep', 8, 'Crowd Rush levels, then rebuilt in 3D · Worm Arena rebuilt · playing-with-friends fixes'],
     ['25 Sep', 4, 'Google Drive copy · Strike Squad (first-person shooter) · Blend In (paint to hide)'],
     ['28 Sep', 8, 'Bot difficulty measured and eased · Stick Clash · Street Chef, 680 levels · full screen on every game'],
-    ['29 Sep', 1, 'The lock: console, Elements panel and backups'],
+    ['29 Sep', 4, 'The lock · the project proposal · a save that cannot be written says so · the docs corrected'],
   ];
   const W = 820, rowH = 46, top = 52;
-  let b = text(16, 28, '41 commits on 8 working days — bar length is commits that day', { size: 13.5, weight: 700, fill: K.ink });
+  let b = text(16, 28, '44 commits on 8 working days — bar length is commits that day', { size: 13.5, weight: 700, fill: K.ink });
   let y = top;
   days.forEach((d) => {
     if (!d) { b += rect(16, y + 2, 788, 22, { stroke: K.rule, dash: '4 4', r: 4 }); b += text(410, y + 18, '9 – 21 Sep · no commits', { size: 12.5, fill: K.muted, anchor: 'middle', italic: true }); y += 30; return; }
@@ -258,15 +258,15 @@ const files = {};
 /* ------------------------------------------------------------ 6. codebase */
 {
   const items = [
-    ['Strike Squad', 8018, 'arcade'], ['Core (js/core/)', 7680, 'shared'], ['Blend In', 5996, 'arcade'], ['Tests and tools', 5075, 'tools'],
+    ['Strike Squad', 8018, 'arcade'], ['Core (js/core/)', 7734, 'shared'], ['Blend In', 5996, 'arcade'], ['Tests and tools', 5172, 'tools'],
     ['Street Chef', 5021, 'arcade'], ['Crowd Rush', 3836, 'arcade'], ['Stick Clash', 3695, 'arcade'], ['Worm Arena', 2861, 'arcade'],
-    ['Stylesheet', 1393, 'shared'], ['Tower Defense', 1391, 'arcade'], ['Spider Solitaire', 903, 'puzzle'], ['Chess', 797, 'board'],
+    ['Stylesheet', 1410, 'shared'], ['Tower Defense', 1391, 'arcade'], ['Spider Solitaire', 903, 'puzzle'], ['Chess', 797, 'board'],
     ['Mahjong Solitaire', 733, 'puzzle'], ['Tetris', 707, 'arcade'], ['Chinese Chess', 628, 'board'], ['Sudoku', 627, 'puzzle'],
-    ['Shell (js/app.js)', 561, 'shared'], ['Snake', 482, 'arcade'], ['Gomoku', 381, 'board'], ['Reversi', 378, 'board'],
+    ['Shell (js/app.js)', 581, 'shared'], ['Snake', 482, 'arcade'], ['Gomoku', 381, 'board'], ['Reversi', 378, 'board'],
   ];
   const col = { arcade: K.arcade, board: K.board, puzzle: K.puzzle, shared: K.shared, tools: K.ink };
   const W = 820, rowH = 23, top = 62, lx = 170, maxLen = 520;
-  let b = text(16, 26, 'Lines by part — 44,709 lines of JavaScript in 123 files, plus the stylesheet, tests and tools', { size: 13.5, weight: 700, fill: K.ink });
+  let b = text(16, 26, 'Lines by part — 44,783 lines of JavaScript in 123 files, plus the stylesheet, tests and tools', { size: 13.5, weight: 700, fill: K.ink });
   // legend
   [['Arcade', K.arcade], ['Board', K.board], ['Puzzle', K.puzzle], ['Shared', K.shared], ['Tests and tools', K.ink]].reduce((x, [n, c]) => {
     b += rect(x, 38, 12, 12, { fill: c, r: 2 }); b += text(x + 18, 49, n, { size: 12, fill: K.muted }); return x + 18 + n.length * 6.6 + 22;
@@ -285,7 +285,7 @@ const files = {};
   const W = 820, x0 = 214, x1 = 804, weeks = 12, ww = (x1 - x0) / weeks;
   const tasks = [
     ['Friends that connect: a TURN relay', 1, 2, K.puzzle, [['MS-1', 2]]],
-    ['CI, Drive for everyone, loud save failures', 3, 3, K.shared, [['MS-2', 3]]],
+    ['CI, Drive for everyone, the Tetris name', 3, 3, K.shared, [['MS-2', 3]]],
     ['Own address: decide on paper', 4, 4, K.board, [['MS-3', 4]]],
     ['Move to the chosen address', 5, 5, K.board, []],
     ['Game 17: a circuit racer', 6, 7, K.arcade, [['MS-4', 7]]],
