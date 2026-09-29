@@ -82,7 +82,7 @@ const FILES = [
   'js/games/chef/menu.js', 'js/games/chef/data.js', 'js/games/chef/engine.js', 'js/games/chef/bot.js', 'js/games/chef/meta.js', 'js/games/chef/layout.js',
   // Playing with friends. net.js is loaded for PV.Net.Emitter, which Room
   // extends; nothing here opens a socket — the tests pair rooms in memory.
-  'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
+  'js/core/relay-config.js', 'js/core/net.js', 'js/core/room.js', 'js/core/boardnet.js', 'js/core/race.js'
 ];
 /* `node tools/smoke.js --min` runs this whole suite against the MINIFIED
    source instead of the readable source. The deploy bundle is built by the
@@ -3328,6 +3328,43 @@ section('room — routing, roster and who is allowed to decide', () => {
    whose first try did not get through used to find every later try refused as
    "full", because the try had been handed the only chair and never gave it
    back. */
+/* The relay: what reaches RTCPeerConnection from js/core/relay-config.js.
+   A bad entry would not fail loudly — the browser would just never get a
+   relay — so the shape is checked here, entry by entry. */
+section('net — the relay: what reaches the browser', () => {
+  const ice = PV.Net._iceFor;
+  const good = { urls: ['turn:relay.example.com:3478', 'turns:relay.example.com:443?transport=tcp'], username: 'u1', credential: 'p1' };
+  ok(Object.isFrozen(PV.RelayConfig) && Object.isFrozen(PV.RelayConfig.servers), 'the relay config can be changed at run time');
+  ok(PV.Net.relays() === PV.RelayConfig.servers.length && !PV.Net.relayOnly(), 'the page does not use the relays its config holds, or is relay-only with no address to say so');
+
+  let c = ice([], false);
+  ok(c.iceServers.length === 2 && c.iceServers.every(s => [].concat(s.urls).every(u => /^stun:/.test(u))), 'without a relay the browser should get STUN and nothing else');
+  ok(c.iceTransportPolicy === 'all', 'without a relay, connections were not left free to go direct');
+  ok(ice([], true).iceTransportPolicy === 'all', 'relay-only with no relay would make every connection fail');
+
+  c = ice([good], false);
+  ok(c.iceServers.length === 3 && c.iceServers[2].username === 'u1' && c.iceServers[2].urls.length === 2, 'a good relay did not reach the browser whole');
+  ok(c.iceTransportPolicy === 'all', 'a relay made every connection go through it');
+  ok(ice([good], true).iceTransportPolicy === 'relay', '?relay did not force the connection through the relay');
+  ok(ice([{ urls: 'turn:one.example.com:3478', username: 'u', credential: 'p' }], false).iceServers[2].urls[0] === 'turn:one.example.com:3478', 'a single url was not taken');
+
+  const bad = [
+    { urls: 'http://relay.example.com', username: 'u', credential: 'p' },
+    { urls: 'stun:stun.example.com:3478', username: 'u', credential: 'p' },
+    { urls: 'turn://relay.example.com:3478', username: 'u', credential: 'p' },
+    { urls: 'turn:relay.example.com:3478', credential: 'p' },
+    { urls: 'turn:relay.example.com:3478', username: 'u', credential: 'has space' },
+    { urls: 'turn:relay.example.com:3478', username: 'u', credential: 'x'.repeat(300) },
+    { urls: ['turn:relay.example.com:3478'], username: 7, credential: 'p' },
+    null, 'turn:relay.example.com:3478', 42
+  ];
+  ok(ice(bad, true).iceServers.length === 2 && ice(bad, true).iceTransportPolicy === 'all', 'a malformed relay entry reached the browser');
+  ok(ice('not a list', false).iceServers.length === 2, 'a config that is not a list was not ignored');
+  ok(ice(Array(20).fill(good), false).iceServers.length === 2 + 8, 'the number of relays was not capped');
+  const mixed = ice([{ urls: ['turn:ok.example.com:3478', 'http://nope', 'turns:ok.example.com:443'], username: 'u', credential: 'p' }], false);
+  ok(mixed.iceServers[2].urls.join(' ') === 'turn:ok.example.com:3478 turns:ok.example.com:443', 'the bad url in an entry was kept, or took the good ones with it');
+});
+
 section('net — a chair goes to whoever got through, and comes back', () => {
   const timers = [];
   const realSet = global.setTimeout;

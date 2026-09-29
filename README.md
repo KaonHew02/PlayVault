@@ -202,9 +202,14 @@ Three more that cost a browser session each to find:
   begins the game already on screen, so `room.on('begin')` re-routes by hand.
 - **Two tabs on one machine prove nothing about two networks.** They always
   find a direct path; a friend on mobile data often cannot, and then only a TURN
-  relay gets through. PeerJS's built-in relay no longer resolves, so `RELAYS` in
-  `js/core/net.js` is where a relay's credentials go. An attempt also holds no
-  chair until it opens — one that never got through used to fill a room of two.
+  relay gets through. PeerJS's built-in relay no longer resolves, and no free
+  relay without an account is left (checked in Chrome on 2026-09-29), so a
+  relay's credentials go in `js/core/relay-config.js` — public by design, as in
+  every browser app that uses TURN; that file says why. Add `?relay` to the
+  address to force every connection through it: the only way two tabs on one
+  machine can show the relay works, and what `node tools/lockcheck.mjs --net`
+  does when one is set. An attempt also holds no chair until it opens — one
+  that never got through used to fill a room of two.
 
 And three that only show once a match is played through to its end and back:
 

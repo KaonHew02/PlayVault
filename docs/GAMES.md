@@ -92,6 +92,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **28** | Strike Squad: a clearer lobby, settings in the match, softer hits | **2026-09-28** — "the interface look to dark and messy make it clear a bit and then add on the setting can like change the mouse sensitive cursor something", and "the bot dont too power, to hard to fight them". A frosted lobby with the guns on light tiles and the keys as key caps; sensitivity, aiming sensitivity, aim assist, crosshair and brightness, also on a pause card in the match; a bot's hit on the person playing lands at half on easy and 0.6 on normal. Measured with a simulated person first; hard is untouched. See below |
 | **32** | The lock | **2026-09-28** — "my friend programmer he go f12 change the element, so block all the action that modify the data and element". `js/core/guard.js`, first in the head, on for the published site: the console cannot reach `PV`, the saves or the page, the Elements panel's edits are put back, the built-ins are frozen, and F12 and right-click do nothing. Backups are sealed, so an edited export or Drive copy is refused. Checked in a real Chrome by `tools/lockcheck.mjs`; `SECURITY.md` has the table of what a friend can and cannot still do. See below |
 | **33** | A save that cannot be written says so | **2026-09-29** — found while writing the project proposal (objective O15, risk R6). A write the storage refused vanished silently, and a full storage still reads, so the game read back the older value and progress stopped adding up at once. Failed keys are now read from memory, each write that lands retries the rest, and a strip over every screen offers Export until everything has landed. See below |
+| **34** | Ready for a relay | **2026-09-29** — "add the TURN relay so friends can connect". A relay takes an account now — every free one without an account was tried in Chrome and none works — so this is everything but the account: `js/core/relay-config.js` for the credentials, entries checked in `net.js`, `?relay` to force a connection through the relay, and a relay-only two-tab match in `lockcheck.mjs --net` once one is set. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1484,3 +1485,56 @@ blocked. `lockcheck.mjs` holds it in a real Chrome with the lock on: this
 origin's storage filled to the last character from the unlocked page, a real
 click that makes the app write, the strip over that screen and the next, no
 errors and nothing of its own put back, and the storage emptied again.
+
+### Phase 34 — ready for a relay
+
+Asked for as "add the TURN relay so friends can connect". Two tabs on one
+machine always find a direct path, and so does a lot of home broadband; a
+friend on mobile data, or on office or school Wi-Fi, often cannot, and then
+only a TURN relay carries the traffic. PeerJS's own relay stopped resolving
+on 2026-09-23, so on the defaults those friends could not get in.
+
+**No free relay without an account is left.** Checked on 2026-09-29 in a
+headless Chrome, asking each for a relay allocation with relay-only ICE:
+freeturn.net and freeturn.tel no longer resolve, nor do PeerJS's us-0 and
+eu-0, and Metered's shared "openrelayproject" relay refuses every
+connection, over UDP and over TCP. A relay takes an account now — the free
+plans at Metered (500 MB a month, TURN over TLS on 443 included) and
+ExpressTURN (1,000 GB a month, TLS paid) need no card — and making the
+account is for whoever runs PlayVault, not for the code. So this phase is
+everything else:
+
+- **`js/core/relay-config.js`** holds the credentials, frozen, beside a
+  comment saying why they are public: a browser has to be handed them, as in
+  every browser app that uses TURN, and the worst they cost is the plan's
+  quota. The relay sees only encrypted packets, never a move.
+- **`net.js` checks every entry** — `turn:` or `turns:` urls, a username and
+  a credential, each a sane string, at most eight of each — and drops the
+  rest. A bad entry would not fail loudly; the browser would simply never get
+  a relay, which is why the shape is tested.
+- **`?relay` in the address forces every connection through the relay**
+  (`iceTransportPolicy: 'relay'`): the only way two tabs on one machine can
+  show that a relay works. Without a relay it changes nothing.
+
+Measured, with a relay that could not answer injected before the page's own
+scripts ran (no file touched):
+
+- **A relay that is down costs nothing to players who can go direct.**
+  Without `?relay`, two tabs still joined when the relay's name did not
+  resolve and when its address dropped every packet.
+- **`?relay` is real.** With the same dead relay and `?relay`, the join
+  failed as "Found the room, but your two networks would not let a connection
+  through." Without `?relay` it had joined directly.
+- One oddity worth not rediscovering: a relay on this machine's own loopback
+  address (`turn:127.0.0.1:9`, nothing listening) stopped even direct joins
+  in Chrome. No provider sits on loopback, but a local test relay should not
+  either.
+
+`smoke.js` holds the entry checking (`--only "the relay"`: good entries whole,
+a lone url taken, bad schemes, missing or spaced credentials, over-long
+values, non-lists and caps dropped, relay-only only with a relay).
+`lockcheck.mjs --net` repeats its two-tab match with `?relay` on both tabs
+whenever `relay-config.js` holds a relay, so the match can only start through
+it, and says it is skipping while it holds none. What no test here can do is
+a phone on mobile data joining a laptop on Wi-Fi; that is the check to make
+by hand once the credentials are in.

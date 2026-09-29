@@ -208,6 +208,17 @@ server, a patched client can claim a score it did not earn. That is inherent
 to peer-to-peer play without an authority, it is written here rather than
 pretended away, and the rooms are six digits read out loud to people you know.
 
+**The relay, when there is one.** Friends whose networks cannot reach each
+other directly go through a TURN relay, set in `js/core/relay-config.js`.
+It carries WebRTC's packets, which are encrypted end to end, so it never
+sees a move, a name or a save — only that two addresses are talking. Its
+credentials are public by design: a browser has to be handed them, as in
+every browser app that uses TURN, and anyone with the developer tools open
+can read them. The worst that costs is the relay plan's monthly quota; if
+it is ever abused, new credentials at the provider replace these. `net.js`
+takes only well-formed `turn:`/`turns:` entries from that file, and a relay
+that is down leaves direct connections alone.
+
 ## The Drive copy
 
 `Settings → Your data` has **To Drive**, **From Drive** and an **Auto**

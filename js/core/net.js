@@ -49,26 +49,49 @@ window.PV = window.PV || {};
      got in only when both routers happened to allow a direct path — which
      every test on one machine does, and a friend on 4G often does not.
 
-     No free relay that needs no account is left (Metered's shared
-     "openrelayproject" login is refused too). RELAYS takes the credentials
-     from one that does — a free Metered or ExpressTURN account gives a
-     username and password for entries like the example below. They are
-     readable by anyone who opens devtools; that is how every browser-only
-     app uses TURN, and the worst it costs is the free plan's monthly quota.
+     No free relay that needs no account is left. Checked again on
+     2026-09-29, in Chrome, asking each for an allocation: freeturn.net no
+     longer resolves, and Metered's shared "openrelayproject" relay refuses
+     every connection, over UDP and over TCP. So a relay takes an account, and
+     its credentials live in js/core/relay-config.js, which says why they are
+     public and what that costs.
 
-       { urls: ['turn:global.relay.metered.ca:80',
-                'turn:global.relay.metered.ca:443?transport=tcp'],
-         username: '…', credential: '…' }
+     Without one, play still works wherever a direct path exists, and a guest
+     who cannot get one is told that in words rather than to check the digits.
+     `?relay` in the address forces every connection through the relay — the
+     only way two tabs on one machine, which always find a direct path, can
+     show that it works. */
+  const STUN = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    { urls: 'stun:stun.cloudflare.com:3478' }
+  ];
 
-     Empty, play still works wherever a direct path exists, and a guest who
-     cannot get one is told that in words rather than to check the digits. */
-  const RELAYS = [];
-  const ICE = {
-    iceServers: [
-      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-      { urls: 'stun:stun.cloudflare.com:3478' }
-    ].concat(RELAYS)
-  };
+  /** The relay entries worth handing to the browser: turn: or turns: urls, a
+      username and a credential, each a sane string. Anything else is dropped. */
+  function cleanRelays(list) {
+    const ok = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max && !/\s/.test(v);
+    const out = [];
+    for (const s of (Array.isArray(list) ? list : []).slice(0, 8)) {
+      if (!s || typeof s !== 'object') continue;
+      const urls = (Array.isArray(s.urls) ? s.urls : [s.urls])
+        .filter(u => ok(u, 256) && /^turns?:[^/]/.test(u)).slice(0, 8);
+      if (!urls.length || !ok(s.username, 256) || !ok(s.credential, 256)) continue;
+      out.push({ urls: urls, username: s.username, credential: s.credential });
+    }
+    return out;
+  }
+
+  /** What each RTCPeerConnection is given. Relay-only needs a relay to relay through. */
+  function iceFor(servers, relayOnly) {
+    const relays = cleanRelays(servers);
+    return {
+      iceServers: STUN.concat(relays),
+      iceTransportPolicy: relayOnly && relays.length ? 'relay' : 'all'
+    };
+  }
+
+  const RELAY_ONLY = typeof location !== 'undefined' && /[?&]relay(?:[=&]|$)/.test(location.search || '');
+  const ICE = iceFor(PV.RelayConfig && PV.RelayConfig.servers, RELAY_ONLY);
 
   const available = () => typeof window.Peer === 'function';
 
@@ -395,6 +418,10 @@ window.PV = window.PV || {};
     PREFIX: PREFIX,
     available: available,
     ready: ready,
+    /** How many relays this page will use, and whether it uses nothing else. */
+    relays: () => ICE.iceServers.length - STUN.length,
+    relayOnly: () => ICE.iceTransportPolicy === 'relay',
+    _iceFor: iceFor,                  // for the tests
     newCode: newCode,
     idFor: idFor,
     Emitter: Emitter,

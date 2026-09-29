@@ -3,7 +3,9 @@
  *
  *   node tools/lockcheck.mjs            console, Elements panel, every game, files
  *   node tools/lockcheck.mjs --net      ...and Google's sign-in and a two-tab room
- *                                       (both need the internet)
+ *                                       (both need the internet), and the same
+ *                                       room forced through the TURN relay when
+ *                                       js/core/relay-config.js holds one
  *   CHROME=/path/to/chrome node tools/lockcheck.mjs
  *
  * js/core/guard.js cannot be tested in Node: what it guards is a page. So this
@@ -402,6 +404,38 @@ try {
       check(await page.until("location.hash.indexOf('#/play/') === 0", 10000) && await guest.until("location.hash.indexOf('#/play/') === 0", 15000), 'and the match starts on both');
       check(guest.errors(CSP_STYLE).length === 0 && guest.putBacks().length === 0, 'the guest had no errors', guest.errors(CSP_STYLE));
       check(page.errors(CSP_STYLE).length === 0 && page.putBacks().length === 0, 'nor did the host', page.errors(CSP_STYLE));
+    }
+
+    /* Through the relay alone. Two tabs on one machine always find a direct
+       path, so only `?relay` — every connection forced through TURN — shows
+       that the relay in js/core/relay-config.js works. Skipped, and said so,
+       while none is set. */
+    await page.go(SITE + 'index.dev.html#/games');
+    const relays = (await page.run('PV.Net.relays()')).value | 0;
+    if (!relays) {
+      console.log('  skip  the relay: none in js/core/relay-config.js, so nothing to force through');
+    } else {
+      await page.go(LOCKED + '&relay&g=relayhost#/friends');
+      await page.until("typeof Peer === 'function'", 10000);
+      await page.press('.pick-grid .pick');
+      await sleep(300);
+      await page.press('.pick-setup .btn.primary');
+      const up = await page.until("/Room code\\s*\\d{3}\\s?\\d{3}/.test(document.querySelector('#app').textContent)", 20000);
+      check(up, 'with ?relay, a locked tab opens a room');
+      if (up) {
+        const code = (await page.run("(m => m[1] + m[2])(document.querySelector('#app').textContent.match(/Room code\\s*(\\d{3})\\s?(\\d{3})/))")).value;
+        const guest = await newPage();
+        await guest.go(LOCKED + '&relay&g=relayguest#/friends');
+        await sleep(1200);
+        await guest.send('DOM.focus', { nodeId: await guest.node('.code-input') });
+        await guest.send('Input.insertText', { text: code });
+        await guest.key('Enter', 'Enter');
+        check(await page.until("!/Waiting for somebody to join/.test(document.querySelector('#app').textContent)", 30000),
+          'and a second joins it through the relay alone (' + relays + (relays === 1 ? ' relay' : ' relays') + ')');
+        await page.press('#app button', /start/i);
+        check(await page.until("location.hash.indexOf('#/play/') === 0", 10000) && await guest.until("location.hash.indexOf('#/play/') === 0", 15000),
+          'and the match starts on both, through the relay');
+      }
     }
   }
 
