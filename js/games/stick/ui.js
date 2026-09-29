@@ -83,7 +83,7 @@ window.PV = window.PV || {};
       coins.textContent = '🪙 ' + m.coins;
       coins.hidden = mode === 'two';
       // Tabs.
-      tabs.innerHTML = '';
+      PV.clear(tabs);
       const names = mode === 'two' ? [t('stick.tab.p1'), t('stick.tab.p2')]
         : mode === 'versus' ? [t('stick.tab.you'), t('stick.tab.foe')]
           : mode === 'train' ? [t('stick.tab.you'), t('stick.tab.dummy')] : [];
@@ -95,7 +95,7 @@ window.PV = window.PV || {};
       });
       tabs.hidden = !names.length;
       // Cards.
-      grid.innerHTML = '';
+      PV.clear(grid);
       cards.length = 0;
       list().forEach((id, i) => {
         const cv = PV.el('canvas', { width: 84, height: 100 });
@@ -116,7 +116,7 @@ window.PV = window.PV || {};
       // The picked fighter's card.
       drawInfo();
       // The ladder.
-      ladder.innerHTML = '';
+      PV.clear(ladder);
       ladder.hidden = mode !== 'tour';
       if (mode === 'tour') {
         D.LADDER.forEach((step, i) => {
@@ -144,7 +144,7 @@ window.PV = window.PV || {};
     function drawInfo() {
       const m = h.meta();
       const id = sel.look || current() || (side() === 'foe' ? 'random' : 'ink');
-      info.innerHTML = '';
+      PV.clear(info);
       if (id === 'random') {
         drawRandom(big);
         info.appendChild(big);
@@ -244,7 +244,7 @@ window.PV = window.PV || {};
     function showMoves(on, g) {
       moves.hidden = !on;
       if (!on) { if (h.onMoves) h.onMoves(false); return; }
-      movesBody.innerHTML = '';
+      PV.clear(movesBody);
       movesClose.textContent = t('common.close');
       const who = g ? g.f.filter(f => f.human || g.mode === 'train' && f.side === 0) : [];
       const two = h.mode === 'two';
@@ -280,7 +280,7 @@ window.PV = window.PV || {};
     function showTrain(on, now) {
       train.hidden = !on;
       if (!on) return;
-      train.innerHTML = '';
+      PV.clear(train);
       train.appendChild(PV.el('span', { class: 'k' }, t('stick.tab.dummy')));
       PV.StickGame.DUMMY.forEach(k => train.appendChild(PV.el('button', {
         class: 'stk-chip' + (now === k ? ' on' : ''),

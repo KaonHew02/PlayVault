@@ -3844,6 +3844,10 @@ sectionAsync('drive — save, load and auto-save against a fake Google', async (
     // ids kept from before would point into the wrong Drive.
     G.account = 'a';
     const beforeSwitch = ours('a')[0].body;
+    // A backup differs from the last only by its `saved` time, to the
+    // millisecond; on a fast run both saves shared one, the body came out
+    // the same, and the check below failed with the save where it belonged.
+    await new Promise(r => setTimeout(r, 2));
     await PV.Drive.push(ui());
     ok(last() === 'drive.saved', 'switching accounts in the sign-in window said ' + last());
     ok(ours('a').length === 1 && ours('b').length === 1 && ours('a')[0].body !== beforeSwitch,

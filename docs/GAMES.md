@@ -35,7 +35,8 @@ piece movement and the terminal test differ.
 ### 2. Solo puzzle — Sudoku, Spider Solitaire, Mahjong Solitaire
 
 One player, a deal from a seed, undo/redo, hints, a timer, a win test. No
-opponent, no turn order.
+opponent, no turn order. (As built there is undo but no redo:
+`js/core/puzzle.js` keeps an undo stack only.)
 
 - "Play with friends" here is a **race on a shared seed**, not turn-taking:
   same deal, everyone solves it, times compared. Cheap to build and it reuses
@@ -818,7 +819,8 @@ What the page lists, and where it is now:
   (to 30), domination (A, B and C, a point every two seconds, to 200), capture
   the flag (to 3), search and destroy and elimination (rounds, no respawns,
   first to 4), and gun race (twenty guns, finish with the knife; a knife kill
-  sends the victim back one). Quick battle is the reference's button: a mode
+  sends the victim back one — as built, the ladder is twenty rungs in all,
+  nineteen guns and then the knife, `LADDER` in `fps/data.js`). Quick battle is the reference's button: a mode
   and a map drawn from the seed, so a room's quick battle is the same one for
   everybody.
 - **Eight maps for close fighting**: Depot, Dust Town, Village, Frostbite,

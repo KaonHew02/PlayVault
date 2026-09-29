@@ -119,9 +119,10 @@ window.PV = window.PV || {};
     ? cancelAnimationFrame(id) : clearTimeout(id));
 
   /**
-   * The ⛶ at the end of a game's bar, the same in every game: the two
+   * The ⛶ at the end of a game's bar, the same in twelve games: the two
    * harnesses put it there, and the games that draw their own bar (Tetris
-   * and the puzzles) do.
+   * and the puzzles) do. Strike Squad, Blend In, Stick Clash and Street Chef
+   * bring their own (`fullscreen: false` to the harness).
    *
    * `target` is what goes on the whole screen — the game's host, bar and
    * all, so Undo, Pause and New game come along, and so does a race's

@@ -89,8 +89,9 @@ chef level. A bot in `bot.js` plays every level in the tests and points
 the way on a truck's first level. Plain 2D canvas, thirteen files in
 `js/games/chef/`; `docs/GAMES.md` (phases 30 and 31) is the record.
 
-Each family sits on its own engine contract, and each contract has a shared
-harness so a game only writes its rules and its painting.
+Each family sits on its own engine contract. The board games and every
+real-time game but Tetris also share a harness, so they only write their
+rules and their painting; the puzzles and Tetris draw their own bar.
 
 ```
 index.html                  script order matters: core, contracts, harnesses, games, shell
@@ -115,10 +116,14 @@ tools/                      build-logo.mjs, serve.js, smoke.js
 
 ### The rule that keeps this cheap
 
-**A new game touches nothing outside `js/games/<code>/`.** Its `index.js` calls
-`PV.Registry.add({...})` and the lobby, the statistics screen, the option sheet
-and the save format all follow. The moment a screen special-cases a game code,
-the next game costs twice as much.
+**A new game changes no screen outside `js/games/<code>/`.** Its `index.js`
+calls `PV.Registry.add({...})` and the lobby, the statistics screen, the option
+sheet and the save format all follow. The moment a screen special-cases a game
+code, the next game costs twice as much. Outside its folder a game is only
+listed: its `<script>` tags in `index.dev.html` (where `tools/build.js` reads
+the script list), its strings in both dictionaries in `js/core/i18n.js`, and,
+if it saves progress, its key in `BACKUP_STORES` — and `SIGNED`, if the save
+holds anything earned — in `js/core/store.js`.
 
 ### The three contracts
 
@@ -137,13 +142,14 @@ computer's turn, key repeat, the thumb pad and the end-of-game card. A board
 game supplies `create/draw/hit/status/outcome`; a real-time game supplies
 `create/draw/keymap/pad/outcome`.
 
-Every game's bar ends in the same ⛶ Fullscreen, from `PV.fullscreen` in
+Twelve games' bars end in the same ⛶ Fullscreen, from `PV.fullscreen` in
 `util.js`: the harnesses add it, and the games that draw their own bar (Tetris
 and the puzzles) add it themselves. The game's host goes on the whole screen,
 bar and all, and the game measures the room its stage has there instead of
-`PV.stage()`'s page caps.
+`PV.stage()`'s page caps. The shared button hides itself where a browser
+cannot go full screen.
 Strike Squad, Blend In, Stick Clash and Street Chef bring their own
-(`fullscreen: false` to the harness).
+(`fullscreen: false` to the harness), each placed and labelled its own way.
 
 ## Playing with friends
 
@@ -254,8 +260,11 @@ how a green headless run and a broken browser happen at the same time.
 Two checks are worth knowing about because they are the ones that catch real
 rule bugs rather than crashes:
 
-- **Chess perft**: 20 / 400 / 8902 / 197281 nodes from the opening position.
-  If pins, checks or any piece's movement is wrong, one of those numbers moves.
+- **Chess perft**: 20 / 400 / 8902 nodes from the opening position on every
+  run, and 197281 at depth 4 when the suite runs at scale 2 or more
+  (`node tools/smoke.js 2`, or `node tools/smoke.js 2 --only chess` for just
+  that). If pins, checks or any piece's movement is wrong, one of those
+  numbers moves.
 - **Xiangqi opens with exactly 44 legal moves.** That single number catches a
   broken horse leg, elephant eye or river rule.
 

@@ -1,9 +1,13 @@
 /* PlayVault — one stylesheet.
 
-   Colours come from the logo: brass on steel. Every colour is a token defined
-   once on :root and overridden once under [data-theme="light"] — a colour whose
-   only definition sits inside the light block will be missing in dark, and vice
-   versa, which is the usual way a theme toggle half-works.
+   Colours come from the logo: brass on steel. Every colour of the hub's own
+   interface is a token defined once on :root and overridden once under
+   [data-theme="light"] — a colour whose only definition sits inside the light
+   block will be missing in dark, and vice versa, which is the usual way a theme
+   toggle half-works. The four big games' own panels (Strike Squad, Blend In,
+   Stick Clash and Street Chef, further down) paint with fixed colours that
+   look the same in either theme, as do a few pieces of game art: health
+   bars, coins, stones.
 
    Mobile first. Nothing may scroll horizontally at 360px. */
 
