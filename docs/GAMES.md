@@ -90,6 +90,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **27** | Strike Squad: easy and normal eased | **2026-09-28** — "for the fps shooter game the bot normal mode or easy mode 太厉害了 降低下power" (too strong, turn the power down). Measured before anything was changed: easy killed a player standing in the open in 1.4 s and normal in 1.1 s, hard in 0.7. Now about four seconds and two; hard is untouched. See below |
 | **28** | Strike Squad: a clearer lobby, settings in the match, softer hits | **2026-09-28** — "the interface look to dark and messy make it clear a bit and then add on the setting can like change the mouse sensitive cursor something", and "the bot dont too power, to hard to fight them". A frosted lobby with the guns on light tiles and the keys as key caps; sensitivity, aiming sensitivity, aim assist, crosshair and brightness, also on a pause card in the match; a bot's hit on the person playing lands at half on easy and 0.6 on normal. Measured with a simulated person first; hard is untouched. See below |
 | **32** | The lock | **2026-09-28** — "my friend programmer he go f12 change the element, so block all the action that modify the data and element". `js/core/guard.js`, first in the head, on for the published site: the console cannot reach `PV`, the saves or the page, the Elements panel's edits are put back, the built-ins are frozen, and F12 and right-click do nothing. Backups are sealed, so an edited export or Drive copy is refused. Checked in a real Chrome by `tools/lockcheck.mjs`; `SECURITY.md` has the table of what a friend can and cannot still do. See below |
+| **33** | A save that cannot be written says so | **2026-09-29** — found while writing the project proposal (objective O15, risk R6). A write the storage refused vanished silently, and a full storage still reads, so the game read back the older value and progress stopped adding up at once. Failed keys are now read from memory, each write that lands retries the rest, and a strip over every screen offers Export until everything has landed. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1441,3 +1442,43 @@ frame back, so one that writes stacks some unknown way gets no lock rather
 than a game refusing itself — and every engine playing with the language
 frozen. `tools/lockcheck.mjs --net` holds the rest in a real Chrome: 73
 checks, from `typeof PV` to two locked tabs starting a match over PeerJS.
+
+### Phase 33 — a save that cannot be written says so
+
+Found while writing the project proposal (`docs/PROPOSAL.md`), which listed
+it as objective O15, "a failed save is never silent", not met, and as risk
+R6. Looking at it again for the fix turned up worse than the proposal said:
+
+- **A refused write vanished.** `writeRaw()` caught the error and kept the
+  value in memory only; nothing said so, and it was gone at the next reload.
+- **And a full storage still reads.** Only the write fails, so the very next
+  read went back to `localStorage` and handed over the older value: XP, coins
+  and stars stopped adding up the moment the storage filled, not at the next
+  reload. Memory was only asked when reads failed too, the rarer case (some
+  private windows).
+- The quota is not PlayVault's alone. Every site on `kaonhew02.github.io`
+  shares one `localStorage`, so another app can fill it.
+
+What changed, in `js/core/store.js` and `js/app.js`:
+
+- **A key whose write failed is read from memory** until a write of it lands,
+  so the game keeps counting — and Export, which reads through the same
+  store, keeps what it counted.
+- **Every write that lands retries the keys still waiting**, so it is all
+  saved as soon as there is room again.
+- `PV.Store.saving()` says whether everything has landed and, if not, why
+  (`'full'` or `'blocked'`) and which keys; a `pv:saving` event tells the page
+  when that changes.
+- **`syncSaving()` puts a strip at the top of every screen**, in both
+  languages, with Export, until everything has landed. It lives inside
+  `#app`, so the lock guards it like the rest of the screen.
+
+`smoke.js` holds it (`--only store`): a quota refusal reported as a full
+storage and the key named, the page told, reads coming from memory and
+progress still adding up, Export carrying what only memory holds while the
+disk keeps the old value, a later write taking the pending one with it and
+the page told again, and a storage refusing reads and writes reported as
+blocked. `lockcheck.mjs` holds it in a real Chrome with the lock on: this
+origin's storage filled to the last character from the unlocked page, a real
+click that makes the app write, the strip over that screen and the next, no
+errors and nothing of its own put back, and the storage emptied again.

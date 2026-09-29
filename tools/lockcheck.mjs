@@ -22,6 +22,8 @@
  *      page in a way the lock could not see, and the published site would
  *      undo it — that is a bug in the game, and this is where it shows.
  *   3. Export, Import and the refused edited file, through the real file input.
+ *   4. A storage too full to take a write says so, in a strip the lock
+ *      leaves alone, until there is room again.
  *
  * Zero dependencies, like everything in tools/: Node 22+ (global WebSocket and
  * fetch) and a Chrome or Edge on the machine.
@@ -402,6 +404,38 @@ try {
       check(page.errors(CSP_STYLE).length === 0 && page.putBacks().length === 0, 'nor did the host', page.errors(CSP_STYLE));
     }
   }
+
+  /* ------------------------------ a storage that is full, under the lock */
+  console.log('\n== a storage that is full says so, under the lock');
+  // Filled from the unlocked page on this origin: the locked one refuses the
+  // console. Halving until even one character will not go, then topping up
+  // the last key a character at a time, leaves no room for anything larger.
+  await page.go(SITE + 'index.dev.html#/games');
+  const filled = (await page.run(`(() => {
+    let n = 0, size = 1 << 20;
+    while (size >= 1) { try { localStorage.setItem('pv-fill-' + n, 'x'.repeat(size)); n++; } catch (e) { size >>= 1; } }
+    const last = 'pv-fill-' + (n - 1);
+    let v = localStorage.getItem(last) || '';
+    for (;;) { try { localStorage.setItem(last, v + 'x'); v += 'x'; } catch (e) { break; } }
+    return n;
+  })()`)).value;
+  check(filled > 0, 'the storage fills up', filled);
+  await page.go(LOCKED + '&g=full#/settings');
+  await sleep(300);
+  page.log.length = 0;
+  // A real click: the app writes the theme, and the storage refuses it.
+  const light = await page.press('.seg-btn', /^Light$/);
+  const shown = await page.until("!!document.querySelector('.save-strip') && document.querySelector('.save-strip').offsetParent !== null", 5000);
+  check(light && shown, 'a refused write puts a strip over the screen', { light, shown });
+  const says = (await page.run("(document.querySelector('.save-strip') || {}).textContent || ''")).value;
+  check(/not being saved/.test(says) && /Export/.test(says), 'which says progress is not being saved, and offers Export', says);
+  await page.press('a[data-nav="games"]');
+  check(await page.until("location.hash === '#/games' && !!document.querySelector('.save-strip')", 3000), 'and stays over the next screen');
+  check(page.errors(CSP_STYLE).length === 0 && page.putBacks().length === 0, 'with no errors, and nothing of its own put back',
+    { errs: page.errors(CSP_STYLE), putBacks: page.putBacks().length });
+  await page.go(SITE + 'index.dev.html#/games');
+  await page.run("Object.keys(localStorage).filter(k => k.indexOf('pv-fill-') === 0).forEach(k => localStorage.removeItem(k))");
+  check((await page.run("Object.keys(localStorage).some(k => k.indexOf('pv-fill-') === 0)")).value === false, 'the storage is emptied again');
 
   /* ------------------------------------------ and off, on this machine */
   console.log('\n== off on this machine');

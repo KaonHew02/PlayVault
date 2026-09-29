@@ -3181,6 +3181,65 @@ section('core — rng, store, profile', () => {
   }
 });
 
+/* A write the storage refuses used to vanish: the game carried on, and a
+   full storage still READS, so it read back the older value and progress
+   stopped adding up. Driven through the store's real callers. */
+section('store — a save that cannot be written says so', () => {
+  const ls = global.localStorage, realSet = ls.setItem, realGet = ls.getItem;
+  const keep = { profile: realGet('playvault.profile'), stats: realGet('playvault.stats') };
+  const heard = [];
+  const realDispatch = global.document.dispatchEvent;
+  global.document.dispatchEvent = ev => { if (ev && ev.type === 'pv:saving') heard.push(ev.detail); return true; };
+  const refuse = name => () => { const e = new Error(name); e.name = name; throw e; };
+  const realWarn = console.warn;
+  console.warn = () => {};           // the store says once that storage is unavailable; expected here
+  try {
+    ok(PV.Store.saving().ok, 'the store reported a failed save before any write failed');
+
+    // A full storage: writes are refused, reads still work.
+    PV.Store.set('profile', { name: 'Full', xp: 400, created: 'x' });
+    ls.setItem = refuse('QuotaExceededError');
+    PV.Profile.addXp(100);
+    let s = PV.Store.saving();
+    ok(!s.ok && s.reason === 'full', 'a write refused for quota was not reported as a full storage: ' + JSON.stringify(s));
+    ok(s.keys.indexOf('profile') >= 0, 'the key that failed was not named');
+    ok(heard.some(d => d && d.ok === false), 'nothing told the page that saving had stopped');
+    ok(PV.Profile.data().xp === 500, 'a read handed back the older value still on disk: ' + PV.Profile.data().xp);
+    PV.Profile.addXp(50);
+    ok(PV.Profile.data().xp === 550, 'progress stopped adding up while the storage was full');
+    ok(PV.Store.exportAll().data.profile.xp === 550, 'Export left out progress that lives only in memory');
+    ok(JSON.parse(realGet('playvault.profile')).d.xp === 400, 'the refused write reached the disk anyway');
+
+    // Room again: the next write that lands takes the pending one with it.
+    ls.setItem = realSet;
+    PV.Store.set('theme', 'dark');
+    s = PV.Store.saving();
+    ok(s.ok, 'the store still reported a failure after writes landed again');
+    ok(JSON.parse(realGet('playvault.profile')).d.xp === 550, 'the pending save was not written once there was room');
+    ok(heard.length >= 2 && heard[heard.length - 1].ok === true, 'nothing told the page that saving had resumed');
+
+    // A storage that refuses everything, as some private windows do.
+    ls.setItem = refuse('SecurityError');
+    ls.getItem = refuse('SecurityError');
+    PV.Store.set('stats', { games: { snake: { played: 3 } } });
+    s = PV.Store.saving();
+    ok(!s.ok && s.reason === 'blocked', 'a storage that refuses writes was not reported as blocked: ' + JSON.stringify(s));
+    ok(PV.Profile.forGame('snake').played === 3, 'with reads refused too, the game lost what it had just written');
+  } finally {
+    ls.setItem = realSet;
+    ls.getItem = realGet;
+    global.document.dispatchEvent = realDispatch;
+    console.warn = realWarn;
+    // Leave what the core section wrote, through the store so it forgets its failures.
+    for (const k of ['profile', 'stats']) {
+      if (keep[k] == null) PV.Store.del(k);
+      else PV.Store.set(k, JSON.parse(keep[k]).d);    // sealed: the same value seals the same way
+    }
+  }
+  ok(PV.Store.saving().ok, 'the store did not recover once the storage came back');
+  ok(realGet('playvault.profile') === keep.profile, 'the profile the core section left was not put back as it was');
+});
+
 /* ------------------------------------------------- playing with friends */
 
 /* Two rooms wired to each other in memory. Everything above the link is the

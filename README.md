@@ -349,6 +349,15 @@ game interiors and `#EAF0F7` / `#8494A8` for text. Alternate: **neon vault**,
 - A new persisted store that is not in `BACKUP_STORES` (`js/core/store.js`) is
   silently left out of every export and every Drive copy. Theme, language and
   the Drive switches are excluded on purpose: they belong to the device.
+- **Every write goes through `PV.Store.set()`, which knows when the storage
+  refuses it** — full (every site on `kaonhew02.github.io` shares one
+  quota) or blocked (some private windows). A full storage still reads, so
+  a key whose write failed is read back from memory until a write of it
+  lands, or the game would read the older value and progress would stop
+  adding up; each write that lands retries the rest; and `syncSaving()` in
+  `js/app.js` keeps a strip over every screen, with Export, until all of it
+  has landed. Never call `localStorage` directly: a write around the store
+  fails silently again.
 - Editing a JS file and then navigating by hash alone shows you the **old**
   code — a hash change does not reload scripts. Change the query string to
   force a real reload before believing a fix failed.

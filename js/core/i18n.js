@@ -68,6 +68,8 @@ window.PV = window.PV || {};
       'settings.importBadFormat': 'That file is not a PlayVault save.',
       'settings.importBadJson': 'That file could not be read.',
       'settings.importTampered': 'That file was changed after PlayVault saved it, or saved by an older version, so nothing was restored. Export a fresh copy from the browser that has your progress.',
+      'save.full': 'Your progress is not being saved: the storage this browser gives PlayVault is full. Export a copy to keep it.',
+      'save.blocked': 'Your progress is not being saved: this browser will not let PlayVault store anything (some private windows do this). Export a copy to keep it.',
       'settings.about': 'About',
       'settings.aboutText': 'PlayVault runs entirely in your browser — no PlayVault account and no server of its own. Your save leaves this browser only when you send it to your own Google Drive.',
 
@@ -1357,6 +1359,8 @@ window.PV = window.PV || {};
       'settings.importBadFormat': '这不是 PlayVault 的存档文件。',
       'settings.importBadJson': '无法读取该文件。',
       'settings.importTampered': '这个文件在 PlayVault 保存之后被改动过，或是旧版本保存的，所以没有恢复任何数据。请在有进度的浏览器里重新导出一份。',
+      'save.full': '你的进度没有保存：这个浏览器给 PlayVault 的存储空间已满。请导出一份副本来保留进度。',
+      'save.blocked': '你的进度没有保存：这个浏览器不允许 PlayVault 存储任何内容（有些无痕窗口会这样）。请导出一份副本来保留进度。',
       'settings.about': '关于',
       'settings.aboutText': 'PlayVault 完全在你的浏览器中运行——没有 PlayVault 账号，也没有自己的服务器。只有你把存档存到自己的 Google Drive 时，它才会离开这个浏览器。',
 

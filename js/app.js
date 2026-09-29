@@ -80,6 +80,7 @@ window.PV = window.PV || {};
     else if (r.name === 'stats') screenStats();
     else if (r.name === 'settings') screenSettings();
     else screenLobby();
+    syncSaving();
     window.scrollTo(0, 0);
   }
 
@@ -91,6 +92,24 @@ window.PV = window.PV || {};
     // Whatever measured itself while the screen was off the page measured
     // nothing. Every game sizes itself on a resize, so give it one.
     window.dispatchEvent(new Event('resize'));
+  }
+
+  /* ----------------------------------------------------------------- saving */
+
+  /* A save that could not be written says so, over every screen, until a
+     write lands again: the storage is full or refusing, and the progress
+     lives only in this tab. Export reads the same memory, so it keeps it.
+     Inside #app, where the lock guards it like the rest of the screen. */
+  let saveStrip = null;
+
+  function syncSaving() {
+    if (saveStrip) { saveStrip.remove(); saveStrip = null; }
+    const s = PV.Store.saving();
+    if (s.ok || !app) return;
+    saveStrip = el('div', { class: 'save-strip', role: 'alert' },
+      el('p', {}, t(s.reason === 'full' ? 'save.full' : 'save.blocked')),
+      PV.pill('download', t('settings.export'), { onclick: doExport }));
+    app.insertBefore(saveStrip, app.firstChild);
   }
 
   /* ------------------------------------------------------------------ lobby */
@@ -536,6 +555,7 @@ window.PV = window.PV || {};
     applyTheme(PV.Store.get('theme', 'dark'));
 
     window.addEventListener('hashchange', route);
+    document.addEventListener('pv:saving', syncSaving);
     document.addEventListener('pv:lang', () => {
       PV.Registry.localize();
       PV.I18n.apply();

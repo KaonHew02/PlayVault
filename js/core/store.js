@@ -19,8 +19,22 @@ window.PV = window.PV || {};
   'use strict';
 
   const PREFIX = 'playvault.';
-  const mem = Object.create(null);   // fallback when localStorage throws
+  const mem = Object.create(null);   // every value written; the fallback when localStorage throws
   let warned = false;
+
+  /* Keys whose newest value never reached localStorage: the storage is full
+     (every app on this origin shares one quota) or takes no writes at all
+     (some private windows). This used to be silent, and worse than silent:
+     a full storage still READS, so the game read back the older value on
+     disk and progress stopped adding up the moment a write failed, not just
+     at the next reload. Now a key that failed is read from memory until a
+     write of it lands, every write that does land retries the rest, and the
+     shell puts a strip over every screen saying progress is not being saved,
+     with Export, which reads the same memory. */
+  const unsaved = Object.create(null);
+  let pending = 0;                   // how many keys are in `unsaved`
+  let failure = null;                // 'full' | 'blocked': why the newest write failed
+  const state = () => (pending ? 'unsaved:' + failure : 'ok');
 
   /* Records carry a checksum of themselves. It is a SPEED BUMP and is
      described as one in SECURITY.md: the salt is in the same JavaScript the
@@ -56,15 +70,41 @@ window.PV = window.PV || {};
   }
 
   function readRaw(key) {
+    if (key in unsaved) return mem[key];
     try { return localStorage.getItem(PREFIX + key); }
     catch (e) {
       if (!warned) { warned = true; console.warn('PlayVault: localStorage unavailable, using memory'); }
       return key in mem ? mem[key] : null;
     }
   }
+
+  const isFull = e => !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    || e.code === 22 || e.code === 1014);
+
+  /** True when the value reached localStorage. */
+  function land(key, val) {
+    try { localStorage.setItem(PREFIX + key, val); return true; }
+    catch (e) { failure = isFull(e) ? 'full' : 'blocked'; return false; }
+  }
+
   function writeRaw(key, val) {
+    const was = state();
     mem[key] = val;
-    try { localStorage.setItem(PREFIX + key, val); } catch (e) { /* memory only */ }
+    if (land(key, val)) {
+      if (key in unsaved) { delete unsaved[key]; pending--; }
+      // There was room for this one: try the ones that failed before it.
+      for (const k in unsaved) if (land(k, mem[k])) { delete unsaved[k]; pending--; }
+    } else if (!(key in unsaved)) {
+      unsaved[key] = true;
+      pending++;
+    }
+    if (state() !== was) told();
+  }
+
+  /** Tell the page when saving stops, starts again, or fails another way. */
+  function told() {
+    try { document.dispatchEvent(new CustomEvent('pv:saving', { detail: PV.Store.saving() })); }
+    catch (e) { /* no page to tell */ }
   }
 
   /* key -> (value) => cleaned value, or undefined to reject it outright.
@@ -117,8 +157,17 @@ window.PV = window.PV || {};
     },
 
     del(key) {
+      const was = state();
       delete mem[key];
+      if (key in unsaved) { delete unsaved[key]; pending--; }
       try { localStorage.removeItem(PREFIX + key); } catch (e) { /* ignore */ }
+      if (state() !== was) told();
+    },
+
+    /** Whether everything written has reached storage: {ok, reason, keys}.
+        `reason` is 'full' or 'blocked' while something has not. */
+    saving() {
+      return { ok: pending === 0, reason: pending ? failure : null, keys: Object.keys(unsaved) };
     },
 
     /** The backup envelope. Keep `format` stable — importAll() checks it. */

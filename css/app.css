@@ -28,6 +28,7 @@
   --sq-dark: #7E8AA0;
   --good: #34D399;
   --bad: #F87171;
+  --bad-soft: rgba(248, 113, 113, .14);
   --shadow: 0 10px 30px rgba(0, 0, 0, .45);
 }
 
@@ -51,6 +52,7 @@
   --sq-dark: #A98B63;
   --good: #0E9F6E;
   --bad: #D64545;
+  --bad-soft: rgba(214, 69, 69, .10);
   --shadow: 0 8px 24px rgba(16, 23, 32, .10);
 }
 
@@ -633,6 +635,17 @@ main {
 }
 .drive-offer > p { margin: 0; flex: 1 1 240px; }
 .drive-offer > .msg { flex-basis: 100%; }
+
+/* A save that could not be written: at the top of every screen until a
+   write lands again (syncSaving in js/app.js). */
+.save-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px 14px; flex-wrap: wrap;
+  background: var(--bad-soft); border: 1px solid var(--line-2);
+  border-left: 3px solid var(--bad);
+  border-radius: 12px; padding: 12px 15px; margin-bottom: 16px;
+}
+.save-strip > p { margin: 0; flex: 1 1 240px; font-weight: 600; }
 
 /* the game picker in the friends screen */
 .pick-grid {
