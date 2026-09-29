@@ -1,0 +1,15 @@
+{
+  "name": "playvault-proposal",
+  "private": true,
+  "type": "module",
+  "description": "Builds the PlayVault project proposal's Word and PDF editions and its figures from docs/PROPOSAL.md. Documentation tooling only: PlayVault itself has no dependencies.",
+  "scripts": {
+    "diagrams": "node diagrams.mjs",
+    "screenshots": "node screenshots.mjs && node compose.mjs",
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "docx": "9.7.1"
+  }
+}

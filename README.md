@@ -11,6 +11,12 @@ including the short answer to "can you hide the JavaScript?" (no, and here is
 what to do instead), and what a friend with F12 can still do to the published
 site (much less than before: `js/core/guard.js` locks it).
 
+See [docs/PROPOSAL.md](docs/PROPOSAL.md) for the project proposal — the case,
+the roster, the architecture, the risks and a twelve-week Phase 4 with its
+budget. Its Word and PDF editions sit beside it, built by the scripts in
+[docs/proposal/](docs/proposal/), which carry their own `package.json` so that
+PlayVault itself stays dependency-free.
+
 ```
 node tools/serve.js 8099     # then open http://localhost:8099/index.dev.html
 node tools/smoke.js          # headless engine tests; [scale] for a longer run
