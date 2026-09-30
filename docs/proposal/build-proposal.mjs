@@ -39,10 +39,10 @@ const OUT = arg('out') || join(DOCS, NAME + '.docx');
    then build again with --pages. Word can still refresh the field itself. */
 const PAGES = arg('pages') ? JSON.parse(readFileSync(arg('pages'), 'utf8')) : null;
 
-const REVISION = '2';
-const DATE = '29 September 2026';
+const REVISION = '3';
+const DATE = '30 September 2026';
 const DECIDE_BY = '2 October 2026';
-const BASELINE = 'da85e98';
+const BASELINE = '10ffeec';
 const TAGLINE = 'One Hub. Endless Games.';
 
 // brass on steel, with the brass darkened wherever it carries text on white
@@ -474,7 +474,7 @@ function control() {
       ['Revision', `${REVISION}, ${DATE}`],
       ['Author', 'Kaon'],
       ['Status', `Submitted for approval — decision requested by ${DECIDE_BY}`],
-      ['Baseline', `Repository \`KaonHew02/PlayVault\` at commit \`${BASELINE}\` (29 September 2026)`],
+      ['Baseline', `Repository \`KaonHew02/PlayVault\` at commit \`${BASELINE}\` (${DATE})`],
       ['Source of truth', '`docs/PROPOSAL.md` in the repository. This Word document and the PDF are generated from it by `docs/proposal/build.ps1`, so they never disagree'],
     ], { widths: [2400, CONTENT_W - 2400] }),
     spacer(240),
@@ -482,6 +482,7 @@ function control() {
     table(['Rev', 'Date', 'Summary'], [
       ['1', '29 Sep 2026', 'First issue — the case, objectives and players; the sixteen-game roster; architecture, playing with friends, data, and security with the lock of 29 September; design and stack; the plan, testing with that day\'s runs, risks, budget and roadmap; sign-off and glossary. Figures drawn from the source, and screenshots captured from the built bundle'],
       ['2', '29 Sep 2026', 'The silent save, fixed the same day (commit `1b334bc`): O15 met and R6 lowered, a new subsection and figure on a save that cannot be written, and week 3 and MS-2 without it; the repository\'s docs corrected (`da85e98`), so innerHTML again writes only the game icons; every figure refreshed to commit `da85e98` — lines, keys, checks (2,555,907), lock checks (79) and commits (44)'],
+      ['3', '30 Sep 2026', 'Everything since revision 2, to commit `10ffeec`: the relay made ready but for its account (`7a5a342`) — O9, the lessons from real browsers, weeks 1–2, R3 and the relay\'s line in the budget; thumb controls on every touch screen, and a stick for Stick Clash (`2b0c506`, `a8a6393`) — the touch line, the browser matrix and weeks 8–9; the stylesheet versioned with the scripts (`10ffeec`); the plan\'s "four open objectives" corrected to three; the saving strip\'s contrast measured (14.05:1 and 14.36:1); every figure refreshed — lines (45,014), checks (2,555,922 in 39 sections), lock checks (80), commits (49) and phases (37)'],
     ], { widths: [800, 1500, CONTENT_W - 2300] }),
     spacer(240),
     new Paragraph({ style: 'FrontSub', children: [new TextRun('How to read this proposal')] }),

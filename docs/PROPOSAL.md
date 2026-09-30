@@ -2,7 +2,7 @@
 
 **Browser Game Hub — Board, Puzzle and Arcade**
 
-29 September 2026 · Kaon · Revision 2
+30 September 2026 · Kaon · Revision 3
 
 *A formatted edition of this proposal, with a cover page, contents and figures, sits beside it as [PlayVault-Project-Proposal.docx](PlayVault-Project-Proposal.docx) and [PlayVault-Project-Proposal.pdf](PlayVault-Project-Proposal.pdf). This Markdown file is the source; the two are generated from it by the scripts in [proposal/](proposal/).*
 
@@ -10,7 +10,7 @@
 
 PlayVault is a browser game hub: sixteen games in three families — board, puzzle and arcade — behind one lobby, one profile and one save, with no account, no server, no advert and nothing to install. A working build is live at [kaonhew02.github.io/PlayVault](https://kaonhew02.github.io/PlayVault/): four board games against the computer or a second player, three puzzles — every Sudoku with exactly one answer, every Mahjong board clearable — and nine arcade games that run from a two-minute Snake to a first-person shooter with seven modes and a cooking game with 680 levels. Every one of them can be played with friends from a six-digit room code, browser to browser, in English or 简体中文.
 
-It is 44,783 lines of hand-written JavaScript in 123 files and one stylesheet, with no npm package, no framework and no game engine — the three 3D games draw with raw WebGL. On 29 September 2026 the test suite ran 2,555,907 checks with no failure, on the source and again on that source minified the way the build minifies it, and a real Chrome driving the shipped bundle played all sixteen games and confirmed that nothing typed into the console can reach a save.
+It is 45,014 lines of hand-written JavaScript in 125 files and one stylesheet, with no npm package, no framework and no game engine — the three 3D games draw with raw WebGL. On 30 September 2026 the test suite ran 2,555,922 checks with no failure, on the source and again on that source minified the way the build minifies it, and a real Chrome driving the shipped bundle played all sixteen games and confirmed that nothing typed into the console can reach a save.
 
 The product exists because casual games on the web come with a bill — adverts, trackers, sign-ups, energy timers and progress kept on somebody else's server — and a hub of honest, well-made games that runs from a static folder costs almost nothing to offer without any of it.
 
@@ -24,7 +24,7 @@ The product exists because casual games on the web come with a bill — adverts,
 | Security | The lock (`guard.js`) · sealed saves and backups · strict Content-Security-Policy · SRI on the one third-party library |
 | Dependencies | No npm packages, no framework, no game engine; two outside scripts — PeerJS, fetched with the page but used only for rooms, and Google's sign-in client, fetched only when Drive is about to be used |
 | Running cost | RM 0 a month — hosting, rooms and the Drive copy all run on free tiers or the player's own storage |
-| Effort to date | 44 commits on eight working days, 7–29 September 2026 |
+| Effort to date | 49 commits on nine working days, 7–30 September 2026 |
 | Proposed next phase | 12 weeks: friends who connect from any network, Drive for everyone, an address of its own, a seventeenth game, sound, touch and contrast, and a verified v1.0 |
 
 **The ask.** Approval to run the twelve-week Phase 4 in [Project plan and timeline](#project-plan-and-timeline) at the resourcing set out in [Resources and budget](#resources-and-budget) — one developer, part-time, about 120 hours, with RM 0 committed and any spend (at most about RM 230 in the first year) gated behind a written decision.
@@ -110,7 +110,7 @@ The project succeeds if anybody can open PlayVault in a modern browser, play any
 | O6 | Difficulty is measured, not guessed | Difficulty or balance changes shipped without a before-and-after measurement | 0 | Met |
 | O7 | Nothing to install, anywhere | npm packages, frameworks or game engines needed to run or build it; server-side code | 0 | Met |
 | O8 | Playing alone needs no network | Games playable with the network off once the page has loaded | 16 of 16 | Met — by design; no offline first load yet |
-| O9 | Friends connect from different networks | A room between mobile data and home broadband that completes a match | Yes | Partial — direct routes only; no relay |
+| O9 | Friends connect from different networks | A room between mobile data and home broadband that completes a match | Yes | Partial — the code is ready for a relay (29 Sep 2026); the relay needs an account |
 | O10 | Progress survives a cleared browser | Export → Import round trip; Drive copy for any Google account | Every store; any account | Partial — Drive open to test users only |
 | O11 | A hand-edited save does not count | Edited exports, Drive copies or stored records accepted | 0 | Met |
 | O12 | The console cannot reach a save | App functions or storage reachable from the console with the lock on | 0 | Met (29 Sep 2026) |
@@ -122,7 +122,7 @@ The project succeeds if anybody can open PlayVault in a modern browser, play any
 
 ### What done means for Phase 4
 
-O9, O10 and O16 are the open rows, and with the question of an address of its own they are the whole of the proposed next phase. O9 is one relay's credentials and two weeks of testing between real networks. O10 is a consent screen to publish. O16 is one colour token and a re-measure. None of them needs a server, and none of them changes the architecture. O15 was planned for week 3 and is already met: fixed on 29 September, while this proposal was being checked — see [When a save cannot be written](#when-a-save-cannot-be-written).
+O9, O10 and O16 are the open rows, and with the question of an address of its own they are the whole of the proposed next phase. O9 is an account at a relay provider and two weeks of testing between real networks: the file its credentials go in, the checks on them and a switch to prove the relay are already built. O10 is a consent screen to publish. O16 is one colour token and a re-measure. None of them needs a server, and none of them changes the architecture. O15 was planned for week 3 and is already met: fixed on 29 September, while this proposal was being checked — see [When a save cannot be written](#when-a-save-cannot-be-written). Part of weeks 8–9 has shipped early too: since 30 September the thumb controls appear on every touch screen, tablets included, and Stick Clash has a stick.
 
 ### Explicit non-objectives
 
@@ -174,14 +174,14 @@ The roster given on 7 September 2026 had eleven games. Spider Solitaire and Worm
 | G5 | Puzzle | Sudoku | 数独 | Four difficulties; every puzzle has exactly one answer | 4 | 627 | Delivered |
 | G6 | Puzzle | Spider Solitaire | 蜘蛛纸牌 | Two decks, ten columns; one, two or four suits | 3 | 903 | Delivered |
 | G7 | Puzzle | Mahjong Solitaire | 麻将连连看 | The turtle, two free tiles at a time; every board can be cleared | 4 | 733 | Delivered |
-| G8 | Arcade | Tetris | 俄罗斯方块 | 7-bag, SRS wall kicks, hold and ghost | 3 | 707 | Delivered — name to change (R9) |
+| G8 | Arcade | Tetris | 俄罗斯方块 | 7-bag, SRS wall kicks, hold and ghost | 3 | 709 | Delivered — name to change (R9) |
 | G9 | Arcade | Snake | 贪吃蛇 | Three speeds, walls or wrap, and three rules for biting your own tail | 3 | 482 | Delivered |
 | G10 | Arcade | Worm Arena | 蠕虫竞技场 | Grow the biggest worm in a round arena; three modes, eighteen skins | 4 | 2,861 | Delivered |
 | G11 | Arcade | Tower Defense | 塔防 | Six maps, three difficulties, twenty waves | 4 | 1,391 | Delivered |
 | G12 | Arcade | Crowd Rush | 人潮冲锋 | A 3D crowd runner, level by level, ending at a tower or a king | 6 | 3,836 | Delivered |
 | G13 | Arcade | Strike Squad | 突击小队 | A first-person shooter against bots: seven modes, eight maps, 22 guns | 14 | 8,018 | Delivered |
 | G14 | Arcade | Blend In | 变色躲猫猫 | Hide and seek in paint: six hiders, two seekers, six maps | 14 | 5,996 | Delivered |
-| G15 | Arcade | Stick Clash | 火柴人对决 | A one-on-one stickman fighter: eight fighters, a tournament, two players | 10 | 3,695 | Delivered |
+| G15 | Arcade | Stick Clash | 火柴人对决 | A one-on-one stickman fighter: eight fighters, a tournament, two players | 11 | 3,856 | Delivered |
 | G16 | Arcade | Street Chef | 街头大厨 | A food-truck cooking game: seventeen streets of forty levels | 13 | 5,021 | Delivered |
 
 ![All sixteen games, captured from the built bundle](img/games.png)
@@ -244,7 +244,7 @@ A one-on-one fighter with a fighting game's discipline: J to attack, K for a spe
 
 - **Timed combos.** A press inside the window continues the chain and a press before it drops it, so mashing loses. There are launchers and air juggles, stamina that attacks and blocks both spend and that breaks a guard when it runs out, and a meter for breakers (half of it) and ultimates (all of it).
 - **Eight fighters** — Ink (free), Blaze, Nox, Brick, Zephyr, Volt, Pike and Oni, the tournament's boss — with eight to ten moves each. The moves are data, and one skeleton posed by angles draws them all on a 2D canvas.
-- **Four modes**: an eight-fight tournament whose bots sharpen fight by fight, versus the computer on four levels, two players on one keyboard, and training against a dummy that stands, blocks, jumps or fights back. Six stages, and a six-button thumb pad on a phone.
+- **Four modes**: an eight-fight tournament whose bots sharpen fight by fight, versus the computer on four levels, two players on one keyboard, and training against a dummy that stands, blocks, jumps or fights back. Six stages. On any touch screen, a stick for the left thumb and four buttons for the right, so a direction and a button go together: under the fight on the page, and over it on the whole screen or on a phone on its side.
 - **Everything that changes the fight is a tick** — hitstop, the knockout's slow motion, an ultimate's held screen — so a fight replays exactly from its seed. The shakes, flashes and trails live in the view.
 
 Measured with bots: each level beats the one below it 12–14 times in 16, and expert beats easy 16 of 16. The first roster had one fighter winning 3 fights of 42 and another 31; two balance passes brought the seven regular fighters to 32–45 wins of 84 each, inside the noise, with the boss at 70 on purpose.
@@ -310,6 +310,7 @@ PlayVault is a static site: an HTML page, one stylesheet, one script bundle and 
 | 3D in raw WebGL, no library | 24 Sep | A 600 kB engine for one game would have been the first exception to both no-dependencies and the page's policy | three.js, Babylon.js |
 | The Google Drive copy, ported from CardVerse | 25 Sep | The shared GameHub client already covered this origin; nothing to set up | A PlayVault account |
 | The lock | 29 Sep | A programmer friend changed a save from the console, and it survived a refresh | Obfuscation, which protects nothing |
+| A relay made ready, all but its account | 29 Sep | No free relay without an account is left; its credentials get a file of their own, checked before use, and `?relay` proves one from two tabs | Running a relay ourselves, which is a server |
 
 ### Script order and the pieces
 
@@ -321,17 +322,17 @@ PlayVault is a static site: an HTML page, one stylesheet, one script bundle and 
 | `js/core/guard.js` | 786 | The lock — first in the head, never bundled |
 | `js/core/drive.js` | 701 | The Drive copy: sign-in, the queue, *To*, *From* and *Auto* |
 | `js/app.js` | 581 | The shell: lobby, play, statistics, settings, the hash route and the saving strip — no game named |
-| `js/core/net.js` · `room.js` | 405 · 357 | The pipe (WebRTC and room codes) and the room over it |
-| `js/core/boardhost.js` · `loophost.js` | 350 · 346 | The two shared harnesses |
+| `js/core/net.js` · `room.js` | 432 · 357 | The pipe (WebRTC, room codes and the relay's checked entries) and the room over it |
+| `js/core/boardhost.js` · `loophost.js` | 350 · 357 | The two shared harnesses |
 | `js/core/race.js` · `boardnet.js` | 305 · 137 | The two ways a game is shared |
 | `js/core/store.js` · `profile.js` · `safe.js` | 247 · 185 · 124 | Persistence, seals and refused writes; the player and their records; rebuild, never adopt |
 | `js/core/board.js` · `puzzle.js` · `loop.js` | 120 · 91 · 121 | The three engine contracts |
-| Other core files | 794 | Helpers, the seeded RNG, the registry, icons, cards, the friends screen, the room's interface, Drive settings |
-| `js/games/` | 36,468 | Sixteen game folders (98 files) and the empty `stubs.js` |
-| `css/app.css` | 1,410 | One stylesheet: the hub's colours are tokens, dark and light; the big games' panels use fixed colours |
-| `tools/` | 5,172 | The test suite, the lock check, the build and minifier, the logo builder and a dev server |
+| Other core files | 824 | Helpers, the seeded RNG, the registry, icons, cards, the friends screen, the room's interface, Drive settings, the relay's credentials |
+| `js/games/` | 36,631 | Sixteen game folders (99 files) and the empty `stubs.js` |
+| `css/app.css` | 1,482 | One stylesheet: the hub's colours are tokens, dark and light; the big games' panels use fixed colours |
+| `tools/` | 5,296 | The test suite, the lock check, the build and minifier, the logo builder and a dev server |
 
-![Where the lines are: 44,783 lines of JavaScript, by part](img/codebase.svg)
+![Where the lines are: 45,014 lines of JavaScript, by part](img/codebase.svg)
 
 ### The game contract
 
@@ -361,13 +362,13 @@ The registry refuses a duplicate code, an unknown family and a game with no `sta
 | Solo puzzle | `js/core/puzzle.js` | — | The deal is a pure function of (seed, difficulty); every move returns its own inverse |
 | Real-time loop | `js/core/loop.js` | `loophost.js` | Fixed timestep, inputs applied on tick boundaries, so a run replays from its seed |
 
-A board game supplies `create/draw/hit/status/outcome`; a real-time game supplies `create/draw/keymap/pad/outcome`. Held keys come in two kinds and a game must say which it wants: `repeatable`, the Tetris kind — one press, a pause, then steady steps — and `sustained`, the steering kind, re-queued on every tick. Kart Racing felt wrong because a driving game was being fed a Tetris key repeat, and a held arrow delivered 78 degrees a second of the 189 it asked for.
+A board game supplies `create/draw/hit/status/outcome`; a real-time game supplies `create/draw/keymap/pad/outcome`. A game with touch controls of its own, like Stick Clash, leaves out `pad` and holds and releases actions through the harness, so a thumb holding the stick to one side is sampled on the tick exactly as a held key is. Held keys come in two kinds and a game must say which it wants: `repeatable`, the Tetris kind — one press, a pause, then steady steps — and `sustained`, the steering kind, re-queued on every tick. Kart Racing felt wrong because a driving game was being fed a Tetris key repeat, and a held arrow delivered 78 degrees a second of the 189 it asked for.
 
 ### Build, deployment and cache busting
 
-`node tools/build.js` reads the script list from `index.dev.html`, strips the comments and indentation from 122 files — about 1.96 MB of commented source — and writes `js/playvault.min.js` (1.25 MB, about 400 KB gzipped) and the deployed `index.html`. The live site is the `main` branch root of the public repository `KaonHew02/PlayVault`.
+`node tools/build.js` reads the script list from `index.dev.html`, strips the comments and indentation from 124 files — about 1.97 MB of commented source — and writes `js/playvault.min.js` (1.25 MB, about 400 KB gzipped) and the deployed `index.html`. The live site is the `main` branch root of the public repository `KaonHew02/PlayVault`.
 
-**The version is a hash of the sources**, stamped on the bundle's and the lock's `?v=`, so a browser holding an old bundle always fetches the new one and there is no manual version bump to forget. The lock goes in as its own tag and is never bundled: it tells PlayVault's code from a console's by the address on the call stack, and inside the bundle every frame would carry the same address. On 29 September the live page served `?v=7199eb862fa5`, the same stamp as the working tree.
+**The version is a hash of the sources** — the lock, the stylesheet and every bundled script — stamped on the `?v=` of all three, so a browser holding an old bundle or an old stylesheet always fetches the new one and there is no manual version bump to forget. The stylesheet joined the stamp on 30 September: GitHub Pages lets a browser keep a file for ten minutes, and until then a returning player could run the new scripts with yesterday's styles and see a new control laid out as nothing. The lock goes in as its own tag and is never bundled: it tells PlayVault's code from a console's by the address on the call stack, and inside the bundle every frame would carry the same address. On 30 September the live page served `?v=02c3661d0534` on all three, the same stamp as the working tree.
 
 Two guards make the build safe to trust. The whole suite runs against the minified source (`smoke.js --min`), and the bundle carries a hash of its inputs that the suite checks — so a bundle one edit behind the code fails the tests instead of failing in production.
 
@@ -398,7 +399,7 @@ Every game was walked through a room — join, play, finish, rematch, and *Back*
 
 - **Back is not leaving.** *Back* on an online game used to rebuild it from nothing: an empty board on the host, a guest stuck on the wrong turn, a race restarted on the same deal. A game still being played is now put aside, still connected, and *Back to the game* puts the same screen back.
 - **PeerJS loads `async defer`**, so the friends screen can appear before it arrives. The screen waits for it rather than announcing that online play is unavailable.
-- **Two tabs on one machine prove nothing about two networks.** They always find a direct route; a friend on mobile data often cannot, and then only a TURN relay gets through. PeerJS's own relay stopped resolving (checked on 23 September 2026), no free relay without an account remains, and `RELAYS` in `js/core/net.js` is empty. **This is Phase 4's first item.**
+- **Two tabs on one machine prove nothing about two networks.** They always find a direct route; a friend on mobile data often cannot, and then only a TURN relay gets through. PeerJS's own relay stopped resolving (checked on 23 September 2026), and no free relay without an account remains: checked again on 29 September in a headless Chrome asking each for a relay, freeturn.net and PeerJS's own no longer resolve, and Metered's shared relay refuses every connection. So everything but the account is built. `js/core/relay-config.js` holds the credentials, public by design as in every browser app that uses TURN; `net.js` takes only entries it can use, since a bad one would fail in silence; and `?relay` in the address forces every connection through the relay — the one way two tabs on one machine can show it works. Empty, play is exactly as before. **The account, and a match between two real networks, is Phase 4's first item.**
 - **What a room cannot do is make a peer honest.** On a shared seed with no server, a patched client can claim a score it did not earn. That is inherent to peer-to-peer play without an authority; it is written down rather than pretended away, and rooms are six digits read out loud to people you know.
 
 ### Limits of a room
@@ -573,6 +574,7 @@ Contrast was computed from the tokens, not eyeballed:
 | --- | --- | --- | --- |
 | Ink on a panel | 15.67:1 | 18.02:1 | Pass |
 | Muted on a panel | 5.81:1 | 5.28:1 | Pass |
+| Ink on the saving strip | 14.05:1 | 14.36:1 | Pass |
 | A label on a brass button | 10.43:1 (dark on brass) | 3.79:1 (white on brass) | Dark passes; **light fails** |
 | Brass text on the page | 10.43:1 | 3.44:1 | Dark passes; **light fails** |
 | Dim on a panel | 3.40:1 | 3.10:1 | Below AA — small capitals used as quiet labels |
@@ -586,7 +588,7 @@ A sticky top bar carries the mark and three tabs — Games, Stats and Settings �
 ![The light theme, the friends screen and the settings screen](img/screens.png)
 
 - **Every game has a Fullscreen button.** Twelve get it from one shared helper, at the end of the bar and hidden where a browser does not offer full screen; Strike Squad, Blend In, Stick Clash and Street Chef bring their own. The end-of-game card follows the game onto the full screen.
-- **Touch is part of the contract.** The loop harness brings a thumb pad, board games take taps, Street Chef takes taps and drags, Stick Clash has a six-button pad, and Worm Arena moves its map out of the turbo button's way on a touch screen.
+- **Touch is part of the contract.** A thumb pad appears on every touch screen — a tablet, or a phone on its side, as much as a phone upright — and on a tablet the board leaves it room, so both fit on the screen at once. Snake's comes from the loop harness; Tetris lays its six buttons in one row on a phone on its side. Stick Clash has a stick for the left thumb and four buttons for the right, over the fight on the whole screen or on a phone on its side. Board games take taps, Street Chef takes taps and drags, and Worm Arena moves its map out of the turbo button's way. Until 30 September those three pads showed only on screens narrower than 760 pixels, so on a tablet, or a phone on its side, Snake, Tetris and Stick Clash had no controls on the screen at all.
 - **Sound is made, not loaded.** Strike Squad, Blend In, Stick Clash and Street Chef synthesise every sound with the Web Audio API, because the page's policy forbids media files. The other twelve games are silent today; Phase 4 gives them sound and the hub one volume control.
 - **Two languages throughout.** 1,256 keys in each, the same set in both; the language is switched in Settings and remembered on the device. Half the roster had Chinese names from the start, and now every game has both.
 
@@ -608,11 +610,11 @@ Every choice here was made against one constraint: **the hub should still run fr
 | Randomness | Seeded `PV.RNG` | Replays, races and tests | `Math.random()`, banned in engines |
 | Storage | `localStorage`, with a memory fallback | A save is a few kilobytes | IndexedDB — not needed at this size; a server database |
 | Backup | A sealed JSON file; Google Drive with `drive.file` | A file the player owns, readable without PlayVault | Accounts; a proprietary format |
-| Friends | WebRTC through PeerJS 1.5.4, pinned by hash; Google and Cloudflare STUN | Browser to browser; the broker only introduces | A game server |
+| Friends | WebRTC through PeerJS 1.5.4, pinned by hash; Google and Cloudflare STUN; a TURN relay from `relay-config.js` once it holds one | Browser to browser; the broker only introduces | A game server |
 | Languages | One flat dictionary per language, looked up lazily | 1,256 keys, no library | i18next |
 | Icons | A few line icons from Bootstrap Icons (MIT), inlined | No font to request | An icon font from a CDN |
 | Hosting | GitHub Pages, `main` branch root | Free, versioned and public | Paid hosting |
-| Build | `tools/build.js` and `minify.js` — 305 lines, no npm | One stripped bundle, versioned by a hash of its sources | webpack, esbuild |
+| Build | `tools/build.js` and `minify.js` — 316 lines, no npm | One stripped bundle; it, the lock and the stylesheet versioned by a hash of their sources | webpack, esbuild |
 | Tests | `tools/smoke.js` in Node; `tools/lockcheck.mjs` driving Chrome over the DevTools protocol | 2.56 million checks and a real browser, with no dependencies | Jest, Playwright — dependency trees |
 | Logo | `tools/build-logo.mjs` | The art is code: one source for every file | Hand-edited SVGs |
 | Local server | `tools/serve.js`, 30 lines | Nothing to install | Vite, live-server |
@@ -626,7 +628,7 @@ Every choice here was made against one constraint: **the hub should still run fr
 1. Edit the sources, and work against `index.dev.html`, which loads every file separately with its real name and line numbers.
 2. `node tools/serve.js 8099`, then open `http://localhost:8099/index.dev.html`. The lock is off on `localhost`; add `?guard` to see the published site's behaviour.
 3. `node tools/smoke.js` — or `--only "<section>"` for one part — about half a minute for the whole suite.
-4. `node tools/build.js` to write the bundle and the deployed `index.html`, then `node tools/smoke.js --min`.
+4. `node tools/build.js` to write the bundle and the deployed `index.html` — after a change to the stylesheet as much as to a script — then `node tools/smoke.js --min`.
 5. `node tools/lockcheck.mjs` after anything that changes how a game draws its bar or panels; `--net` adds Drive and a two-tab room.
 6. Commit and push `main`, and GitHub Pages redeploys. Check that the live page's `?v=` stamp matches the build.
 
@@ -639,7 +641,7 @@ Every choice here was made against one constraint: **the hub should still run fr
 
 ## Project plan and timeline
 
-Three phases are complete. Phase 4 is what this proposal asks approval for: twelve weeks from 5 October to 27 December 2026, closing the four open objectives and releasing v1.0.
+Three phases are complete. Phase 4 is what this proposal asks approval for: twelve weeks from 5 October to 27 December 2026, closing the three open objectives and releasing v1.0.
 
 ### Phases 1–3 — delivered
 
@@ -647,22 +649,22 @@ Three phases are complete. Phase 4 is what this proposal asks approval for: twel
 | --- | --- | --- |
 | **1 · Foundation** | 7–8 Sep 2026 | The hub shell and the three contracts, each proved with the simplest game of its family; eleven games; the two harnesses; playing with friends, by host authority and by shared-seed race; Spider Solitaire and Worm Arena added and Klondike removed on request |
 | **2 · Rebuild and harden** | 22–24 Sep 2026 | Kart Racing made to drive properly by measurement, then removed on request; Tower Defense rebuilt with six maps and three difficulties; Crowd Rush built, then rebuilt in 3D; Worm Arena rebuilt and redrawn; untrusted input rebuilt everywhere it enters; the stripped bundle and sealed records; five fixes to playing with friends, found by walking every game through a room |
-| **3 · The big productions** | 25–29 Sep 2026 | The Google Drive copy; Strike Squad; Blend In; bot difficulty measured and eased; Stick Clash; Street Chef, grown to 680 levels; full screen on every game; the lock; this proposal; and, early from Phase 4's list, a save that says when it cannot be made |
+| **3 · The big productions** | 25–30 Sep 2026 | The Google Drive copy; Strike Squad; Blend In; bot difficulty measured and eased; Stick Clash; Street Chef, grown to 680 levels; full screen on every game; the lock; this proposal; the stylesheet versioned with the scripts; and, early from Phase 4's list, a save that says when it cannot be made, everything for a relay but its account, and thumb controls on every touch screen, with a stick for Stick Clash |
 
-Forty-four commits across those three phases, and 33 numbered phases in `docs/GAMES.md`, each recording what was asked for, what was measured before anything changed, and what shipped. Crowd Rush appears in six of the commits — built, repainted, given levels, sped up and finally rebuilt in 3D — which is the honest signal of where the difficulty was: not the rules, but matching what a player expects a crowd runner to feel like.
+Forty-nine commits across those three phases, and 37 numbered phases in `docs/GAMES.md`, each recording what was asked for, what was measured before anything changed, and what shipped. Crowd Rush appears in six of the commits — built, repainted, given levels, sped up and finally rebuilt in 3D — which is the honest signal of where the difficulty was: not the rules, but matching what a player expects a crowd runner to feel like.
 
-![Forty-four commits on eight working days](img/commits.svg)
+![Forty-nine commits on nine working days](img/commits.svg)
 
 ### Phase 4 — proposed
 
 | Week | Dates | Work | Deliverable |
 | --- | --- | --- | --- |
-| 1–2 | 5–18 Oct | **Friends who connect** — a TURN relay on a free plan in `RELAYS`; a room tested between mobile data and home broadband, both ways round; the failure sentence kept for when a relay is down | MS-1; O9 met |
+| 1–2 | 5–18 Oct | **Friends who connect** — an account on a relay provider's free plan, and its credentials in `relay-config.js`, where the code already expects them; the relay proved from two tabs with `?relay`; a room tested between mobile data and home broadband, both ways round; the failure sentence kept for when a relay is down | MS-1; O9 met |
 | 3 | 19–25 Oct | **Small, overdue fixes** — the suite and the lock check on every push, with a red run stopping the deploy; the GameHub consent screen published so that any Google account can use Drive; Tetris renamed; a check that every key a game saves is in the backup. (A failed save made loud was here too; it shipped early, on 29 September.) | MS-2; O10 met |
 | 4 | 26 Oct – 1 Nov | **An address of its own: the decision** — cost out staying, a GitHub organisation, a free host that sends headers, and a custom domain; how saves move across; no change to hosting yet | A written decision, signed off (MS-3) |
 | 5 | 2–8 Nov | **The move**, if decided — response headers where the host allows, the new origin added to the OAuth client, the old address kept as a signpost, and the Drive copy as the bridge for saves | PlayVault on its own origin, or the decision to stay recorded |
 | 6–7 | 9–22 Nov | **Game 17: a circuit racer** — Kart Racing's replacement, built on what phase 7 measured: sustained steering, a camera that turns with the car, grass that costs speed instead of stopping it, and rivals that stay on the road | MS-4 |
-| 8–9 | 23 Nov – 6 Dec | **Sound, touch and contrast** — sound for the twelve silent games and one volume for the hub; every game played on a touch screen; the light theme's brass darkened to `#9B630F` and every surface re-measured | MS-5; O16 met |
+| 8–9 | 23 Nov – 6 Dec | **Sound, touch and contrast** — sound for the twelve silent games and one volume for the hub; every game played on a real touch screen (the pads already reach every touch screen, and Stick Clash has a stick, since 30 September); the light theme's brass darkened to `#9B630F` and every surface re-measured | MS-5; O16 met |
 | 10 | 7–13 Dec | **Other browsers and real phones** — Firefox, Safari on macOS and iOS, and Chrome on a real Android phone: every game, the lock and the Drive copy in each | A browser matrix with no unverified row |
 | 11 | 14–20 Dec | **Regression and security re-review** — the full suite, `lockcheck --net`, every old save shape, and a review of anything the relay or the move added | MS-6 |
 | 12 | 21–27 Dec | **Release** — v1.0 tagged; README, SECURITY.md and GAMES.md refreshed; handover notes | MS-7; v1.0 |
@@ -699,14 +701,14 @@ A game hub's worst failure is not a crash. It is a rule that is quietly wrong, a
 
 ### The run behind this proposal
 
-On 29 September 2026, at commit `da85e98`:
+On 30 September 2026, at commit `10ffeec`:
 
 | Run | Result |
 | --- | --- |
-| `node tools/smoke.js` | 2,555,907 checks in 38 sections, 0 failures, about 22 s — three runs in a row |
-| `node tools/smoke.js --min` | The same 2,555,907 checks against the source minified the way the build minifies it, 0 failures, three runs in a row; the shipped bundle's hash matches its sources |
+| `node tools/smoke.js` | 2,555,922 checks in 39 sections, 0 failures, about 23 s — three runs of this code that day, and a fourth by the independent reader |
+| `node tools/smoke.js --min` | The same 2,555,922 checks against the source minified the way the build minifies it, 0 failures, the same four runs; the shipped bundle's hash matches its sources, and the stylesheet carries the same stamp |
 | `node tools/smoke.js 2 --only chess` | Chess perft at depth 4: 197,281 positions, as published |
-| `node tools/lockcheck.mjs --net` | 79 passed, 0 failed — every console paste and Elements-panel edit in the threat model, all sixteen games played on the shipped bundle under the lock with nothing of their own put back, Export and Import through the real file input, Google's sign-in library loading under the lock, *To Drive* opening its window, two locked tabs opening, joining and starting a match over PeerJS, and a storage filled to the last character bringing up the saving strip under the lock |
+| `node tools/lockcheck.mjs --net` | 80 passed, 0 failed — every console paste and Elements-panel edit in the threat model, all sixteen games played on the shipped bundle under the lock with nothing of their own put back, Stick Clash's stick dragged on the page and on the whole screen, and its attack button held, by real touches on an emulated phone, with nothing put back, Export and Import through the real file input, Google's sign-in library loading under the lock, *To Drive* opening its window, two locked tabs opening, joining and starting a match over PeerJS, and a storage filled to the last character bringing up the saving strip under the lock. The same match forced through the relay was skipped, as it is until `relay-config.js` holds one |
 
 The engines run in Node; the views and the shell run only in the browser, which is why the lock check plays every game on the shipped bundle.
 
@@ -721,6 +723,7 @@ The suite drives `apply()` and the ticker rather than the internals: driving a g
 - **Every Street Chef level is played** by the bot, every dish is checked makeable in its kitchen on every level, and every kitchen, fully upgraded, is laid out wide and tall with every tap landing where it should.
 - **Frozen, the engines still play.** With the language frozen and `Math.random`, `JSON.stringify` and `Object.prototype` hooks all failing, every engine still runs.
 - **A refused save is kept and reported.** With the storage refusing writes for quota, and then refusing everything, reads come from memory, progress keeps adding up, Export carries it, and the next write that lands saves it.
+- **A relay entry that would fail in silence is dropped.** A bad entry would not fail loudly — the browser would simply never get a relay — so the suite hands `net.js` good entries, a lone address, wrong schemes, missing or spaced credentials, over-long values and too many entries, and checks what survives; and that asking for relay-only connections forces the relay only when there is one to force.
 
 ### Difficulty and balance, measured
 
@@ -742,7 +745,7 @@ Every difficulty change since 22 September was measured with a bot before anythi
 | --- | --- | --- |
 | Chrome on a desktop | `lockcheck.mjs` in headless Chrome; the built bundle played by hand | Verified |
 | Edge | The same engine as Chrome, not run separately | Unverified — Phase 4, week 10 |
-| Chrome at a phone's size | The built bundle played at phone widths, emulated | Verified — emulated |
+| Chrome at a phone's and a tablet's size | The built bundle at phone and tablet sizes, upright and on its side, with touch emulated: every thumb pad on the screen, and full screen through a real tap; on a tablet every Snake and Tetris button reached its game, and on a phone Stick Clash's stick walked, blocked and jumped | Verified — emulated |
 | Firefox | The lock's reading of Firefox stacks tested in Node; the games not yet played | Unverified — Phase 4, week 10 |
 | Safari on macOS and iOS | The lock's reading of Safari stacks tested in Node; WebGL, full screen and storage not yet checked | Unverified — Phase 4, week 10 |
 | A real Android or iOS phone | Not yet | Unverified — Phase 4, week 10 |
@@ -759,7 +762,7 @@ Safari needs the most care: it deletes a site's script-writable storage — `loc
 ### Release checklist
 
 - [ ] `node tools/smoke.js` green
-- [ ] `node tools/build.js` run, and the bundle and `index.html` committed together
+- [ ] `node tools/build.js` run — after a stylesheet change too — and the bundle and `index.html` committed together
 - [ ] `node tools/smoke.js --min` green, with the same number of checks
 - [ ] `node tools/lockcheck.mjs` green; `--net` as well for any change near Drive or rooms
 - [ ] No "put back" line in the console during normal play with `?guard` on
@@ -778,26 +781,26 @@ The design trades a server for privacy, cost and simplicity, and most of the ser
 | --- | --- | --- | --- | --- | --- |
 | R1 | **The save has one copy, and the player's browser holds it.** Clearing browsing data deletes it | High over a year | High | Export; the Drive copy with *Auto*; a *Load from Drive* offer on an empty browser | Medium — every route needs the player to have acted once |
 | R2 | **Safari deletes storage after seven days without a visit** | Medium | High | The Drive copy; week-10 verification; a note for iPhone players | Medium — not fixable from the page |
-| R3 | **Friends on different networks often cannot connect** — there is no TURN relay, and PeerJS's own no longer resolves | High on mobile data | Medium | A plain sentence instead of a hang; a relay in weeks 1–2 | Open until MS-1, then Low |
+| R3 | **Friends on different networks often cannot connect** — there is no TURN relay yet: PeerJS's own no longer resolves, and every free relay now needs an account | High on mobile data | Medium | A plain sentence instead of a hang; the code ready for a relay since 29 Sep, with `?relay` to prove one; the account and a relay in weeks 1–2 | Open until MS-1, then Low |
 | R4 | **Only test users can sign in to Drive** — the GameHub consent screen is in Testing | Certain today | Medium | Publish the consent screen in week 3; `drive.file` needs no review | Low after MS-2 |
 | R5 | **One origin with every `kaonhew02.github.io` app** — a shared `localStorage`, a shared quota, and unlocked consoles next door | Medium | Medium | The seals still apply; an origin of its own decided at MS-3 | Medium until the move |
 | R6 | **A save that fails to write** — on a full or blocked storage the progress lives only in the tab | Low | Medium | Since 29 Sep: read from memory, so progress keeps adding up; retried on the next write that lands; a strip over every screen offers Export. It used to be silent, and a full storage handed back the older value | Low |
 | R7 | A new game's store is left out of `BACKUP_STORES` or the sealed list | Medium | High | The release checklist; per-game checks for Stick Clash, Street Chef and the puzzles | Medium — a generic check in week 3 makes it a class guarantee |
-| R8 | The deployed bundle drifts from its source | Low | High | A hash of the sources in the bundle, and the suite fails on a stale one; `--min` runs the engines' tests against minified source; the lock check plays the shipped bundle | Low — tests on every push in week 3 enforce it |
+| R8 | The deployed bundle drifts from its source | Low | High | A hash of the sources in the bundle and on the lock's and the stylesheet's addresses, and the suite fails on a stale one; `--min` runs the engines' tests against minified source; the lock check plays the shipped bundle | Low — tests on every push in week 3 enforce it |
 | R9 | **The Tetris name** — a trademark of The Tetris Company, which enforces it, free clones included | Medium | High | Rename in week 3, and keep the look PlayVault's own | Low after the rename |
 | R10 | A game challenged as a copy of its commercial reference | Low | High | None of any reference's art, names, characters or code; only the mechanics its store page describes; each game's phase in `docs/GAMES.md` records what was taken and what was drawn | Low |
 | R11 | A patched client claims a race score | Medium among programmer friends | Low | Rooms are six digits read aloud to people you know; no global board to poison | Accepted |
 | R12 | PeerJS's free public broker slows down or disappears | Medium | Medium — friends only | Everything else works without it; PeerJS's server is open source and could be self-hosted | Medium |
 | R13 | Google's sign-in script, which cannot be pinned, runs with full reach into the page | Low | High | Loaded only when Drive is about to be used; the page's policy names the exact file | Medium — a trust extended to Google |
 | R14 | Relay credentials are readable in the page, so anybody could spend the free quota | Medium | Low | A match moves a few hundred kilobytes at most; the quota is watched and the credentials rotated if abused | Low |
-| R15 | One developer: 44,800 lines in one head | Medium | High | `docs/GAMES.md` — 1,486 lines recording every phase's request, measurement and decision — plus the README and SECURITY.md | Medium |
+| R15 | One developer: 45,000 lines in one head | Medium | High | `docs/GAMES.md` — 1,641 lines recording every phase's request, measurement and decision — plus the README and SECURITY.md | Medium |
 | R16 | A new game needs an exception — a library, a server, a CDN | Medium | Medium | No dependencies is a standing rule; the WebGL decision shows what keeping it costs | Low |
 
 ### The three that deserve a decision, not just a mitigation
 
 **R1 and R2 are the same risk.** Both end with a browser that no longer holds the save, and the only real answer is a copy that is not in the browser: the Drive copy. Today it is off by default and open only to test users. Phase 4 opens it to everybody at MS-2, and the hub should ask once — after a player's first real progress — for the first push, rather than waiting to be found in Settings.
 
-**R3 is the difference between "play with friends" and "play with friends on the same Wi-Fi".** Everything above the network is built and tested; what is missing is one relay's credentials in one list. It is Phase 4's first item because it is the cheapest fix with the largest effect.
+**R3 is the difference between "play with friends" and "play with friends on the same Wi-Fi".** Everything above the network is built and tested, and since 29 September so is everything for the relay but the relay: the file its credentials go in, the checks on them, and `?relay` to prove it. What is missing is an account at a relay provider. It is Phase 4's first item because it is the cheapest fix with the largest effect.
 
 **R5 is an architecture decision, not a bug.** An origin is where a browser draws its walls, and PlayVault shares its walls with every other app on the account. Moving is cheap; moving without stranding players' saves is the part that needs a plan, which is why MS-3 is a written decision before any change.
 
@@ -823,7 +826,7 @@ A second developer is not proposed. `docs/GAMES.md` records every phase's reques
 | GitHub Actions, for tests on every push | RM 0 | Free for public repositories |
 | Storage | RM 0 | The player's own browser; a save is a few kilobytes |
 | PeerJS public broker; Google and Cloudflare STUN | RM 0 | Free, with no account |
-| TURN relay | RM 0 | A relay provider's free plan, to be confirmed against its quota at MS-1 |
+| TURN relay | RM 0 | A relay provider's free plan, which now needs an account but no card — Metered's (500 MB a month, with TURN over TLS on port 443) or ExpressTURN's (1,000 GB a month, TLS paid); chosen and checked against its quota at MS-1 |
 | Google Cloud project and Drive API | RM 0 | The shared GameHub client; free at this volume |
 | Google Drive space | RM 0 | The player's own; a backup is a few kilobytes |
 | Node.js, Chrome and an editor | RM 0 | Development only; nothing ships |
@@ -892,12 +895,12 @@ These have each been considered and declined. The reasons are recorded so they a
 
 ## Conclusion and approval
 
-PlayVault already works. Sixteen games are live and playable alone or with friends, in two languages, at RM 0 a month; 2,555,907 checks pass on the source and on its minified form, and a real Chrome plays all sixteen games on the bundle that ships; and since 29 September a friend with the developer tools open can no longer reach a save, and a save the storage refuses is no longer lost in silence. What this proposal asks for is not a build from nothing. It is twelve weeks to close the gap between a hub that works for its developer and for friends on the same Wi-Fi, and one that works for anybody, anywhere, for years.
+PlayVault already works. Sixteen games are live and playable alone or with friends, in two languages, at RM 0 a month; 2,555,922 checks pass on the source and on its minified form, and a real Chrome plays all sixteen games on the bundle that ships; since 29 September a friend with the developer tools open can no longer reach a save, and a save the storage refuses is no longer lost in silence; and since 30 September a tablet, or a phone on its side, has its controls. What this proposal asks for is not a build from nothing. It is twelve weeks to close the gap between a hub that works for its developer and for friends on the same Wi-Fi, and one that works for anybody, anywhere, for years.
 
 The case rests on three things:
 
 1. **The architecture is paid for.** Three contracts and two harnesses carried sixteen games without the shell ever naming one, and engines that never touch the page or `Math.random()` gave replays, races and a 2.56-million-check suite for free. That was the expensive part, and it is done.
-2. **The remaining scope is small and known.** A relay is one list entry and two weeks of testing; the consent screen, tests on every push and the rename are a week between them — and the loud save failure planned beside them is already done. The one open question — an address of its own — is decided on paper at MS-3 before anything moves.
+2. **The remaining scope is small and known.** A relay is one account — the code is already waiting for its credentials — and two weeks of testing; the consent screen, tests on every push and the rename are a week between them — and the loud save failure planned beside them is already done. The one open question — an address of its own — is decided on paper at MS-3 before anything moves.
 3. **The downside is bounded.** If MS-3 decides to stay where it is, and even if the circuit racer slips, Phase 4 still delivers friends who connect from any network, a Drive copy open to everybody, sound, touch, contrast and a verified browser matrix — at RM 0.
 
 ### The decision requested
@@ -921,7 +924,7 @@ If Phase 4 is not approved, the recommendation is to do weeks 1 and 3 anyway, ab
 
 ### Sources
 
-Every figure in this proposal is taken from the PlayVault repository as it stands on 29 September 2026 (commit `da85e98`; revision 1 described `dec459c`) — `README.md`, `SECURITY.md` and `docs/GAMES.md`, the source under `js/`, `css/` and `tools/`, and 44 commits of history from 7 to 29 September 2026 — and from runs made that day: the smoke suite on the source and on minified source, a longer chess run, the lock check with its network tests in headless Chrome, a check of the live page's version stamp, and contrast computed from the stylesheet's tokens. The claims were then checked against the source a second time by an independent reader, and what it found wrong or overstated was corrected. The screenshots were captured from the built bundle in headless Chrome with a throwaway profile; the level-13 player in them is test data. The comparisons in [Background and problem statement](#background-and-problem-statement) are stated from general knowledge, and the trademark points in [Risks and mitigations](#risks-and-mitigations) are not legal advice; both should be checked before this document is shown outside the project.
+Every figure in this proposal is taken from the PlayVault repository as it stands on 30 September 2026 (commit `10ffeec`; revision 2 described `da85e98`, and revision 1 `dec459c`) — `README.md`, `SECURITY.md` and `docs/GAMES.md`, the source under `js/`, `css/` and `tools/`, and 49 commits of history from 7 to 30 September 2026 — and from runs made that day: the smoke suite on the source and on minified source, a longer chess run, the lock check with its network tests in headless Chrome, and a check of the live page's version stamp. Contrast was computed from the stylesheet's colour tokens for revision 1; no commit since has changed one, and the one added since — `--bad-soft`, behind the saving strip — was measured for this revision. The claims were checked against the source a second time by an independent reader, and what it found wrong or overstated was corrected. The screenshots were captured from the built bundle in headless Chrome with a throwaway profile; the level-13 player in them is test data. The comparisons in [Background and problem statement](#background-and-problem-statement) are stated from general knowledge, and the trademark points in [Risks and mitigations](#risks-and-mitigations) are not legal advice; both should be checked before this document is shown outside the project.
 
 ## Glossary
 
@@ -930,6 +933,7 @@ Every figure in this proposal is taken from the PlayVault repository as it stand
 | **Family** | Board, puzzle or arcade — the group a game belongs to, chosen by how it uses time |
 | **Contract** | What an engine must promise to belong to a family: `board.js`, `puzzle.js` or `loop.js` |
 | **Harness** | The shared code that hosts the board games and the real-time games: canvas, resizing, full screen, pause, undo, the thumb pad and the end card |
+| **Thumb pad** | The on-screen buttons a touch screen gets in place of keys; Stick Clash's adds a stick |
 | **Engine** | A game's rules, with no access to the page, the profile or `Math.random()` |
 | **Seed** | The number a deal, a map or a match is worked out from; the same seed gives the same game |
 | **Tick** | One step of a real-time game's fixed 60 Hz clock; input is applied only on a tick |
@@ -948,8 +952,8 @@ Every figure in this proposal is taken from the PlayVault repository as it stand
 | **Origin** | Scheme, host and port — the unit a browser uses to keep one site's storage apart from another's |
 | **`drive.file`** | The narrowest Google Drive permission: only files the app itself created |
 | **GameHub** | The Google OAuth client and Drive folder shared by PlayVault and CardVerse |
-| **Bundle** | `js/playvault.min.js` — the 122 source files, stripped into one |
-| **`?v=` stamp** | The hash on the bundle's address that makes a browser fetch a new version |
+| **Bundle** | `js/playvault.min.js` — the 124 source files, stripped into one |
+| **`?v=` stamp** | The hash on the addresses of the bundle, the lock and the stylesheet that makes a browser fetch a new version |
 | **Perft** | A count of every position reachable to a given depth — the standard test of a chess move generator |
 | **7-bag · SRS** | A shuffled bag of the seven falling pieces, and the standard rotation and wall-kick system |
 | **A\*** | The path-finding search Strike Squad's bots use over one-metre cells |
