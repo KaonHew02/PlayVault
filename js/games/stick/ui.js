@@ -166,7 +166,8 @@ window.PV = window.PV || {};
       });
       info.appendChild(bars);
       const sp = PV.el('ul', { class: 'stk-sp' });
-      const label = [t('stick.key.sp'), t('stick.key.fwd'), t('stick.key.back'), t('stick.key.ult')];
+      const label = h.touch ? ['✦', '▶ ✦', '◀ ✦', '🛡 ✦']
+        : [t('stick.key.sp'), t('stick.key.fwd'), t('stick.key.back'), t('stick.key.ult')];
       f.special.forEach((k, i) => sp.appendChild(PV.el('li', {}, PV.el('b', {}, label[i]), ' ', t('stick.sp.' + k))));
       info.appendChild(sp);
       if (locked) {
@@ -249,7 +250,7 @@ window.PV = window.PV || {};
       const who = g ? g.f.filter(f => f.human || g.mode === 'train' && f.side === 0) : [];
       const two = h.mode === 'two';
       (who.length ? who : []).forEach(f => {
-        const k = two ? (f.side === 0 ? K2P1 : K2P2) : K1;
+        const k = two ? (f.side === 0 ? K2P1 : K2P2) : h.touch ? KT : K1;
         const box = PV.el('div', { class: 'stk-movelist' });
         box.appendChild(PV.el('h4', {}, (two ? (f.side ? 'P2 · ' : 'P1 · ') : '') + nm(f.def), ' ', PV.el('small', {}, ttl(f.def))));
         const rows = [
@@ -273,6 +274,8 @@ window.PV = window.PV || {};
     }
 
     const K1 = { move: 'A D', jump: 'W', block: 'S', atk: 'J', spc: 'K', fwd: '→', back: '←', down: 'S' };
+    // The thumb controls (pad.js): 🕹 is the stick, the rest its buttons.
+    const KT = { move: '🕹 ◀ ▶', jump: '🕹 ▲ / ▲', block: '🕹 ▼ / 🛡', atk: '👊', spc: '✦', fwd: '🕹 ▶', back: '🕹 ◀', down: '🛡' };
     const K2P1 = { move: 'A D', jump: 'W', block: 'S', atk: 'F', spc: 'G', fwd: '→', back: '←', down: 'S' };
     const K2P2 = { move: 'J L', jump: 'I', block: 'K', atk: ';', spc: "'", fwd: '→', back: '←', down: 'K' };
 

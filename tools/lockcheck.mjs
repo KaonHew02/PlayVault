@@ -340,6 +340,43 @@ try {
   await sleep(1300);
   check(before !== await cells() && page.errors(CSP_STYLE).length === 0 && page.putBacks().length === 0, 'sudoku: digits typed in show up, nothing put back');
 
+  // And one a mouse never reaches: Stick Clash's thumb controls, on a touch
+  // phone, which move themselves into the box when it goes full screen.
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true, screenWidth: 390, screenHeight: 844 });
+  await page.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await page.go(LOCKED + '&g=stickpad#/games');
+  page.log.length = 0;
+  await page.run("location.hash = '#/play/stick'");
+  await page.until("!!document.querySelector('.stk-go')", 8000);
+  const touch = (type, pts) => page.send('Input.dispatchTouchEvent', { type, touchPoints: pts || [] });
+  const tap = async at => { if (!at) return false; await touch('touchStart', [{ x: at[0], y: at[1] }]); await touch('touchEnd'); return true; };
+  const knob = () => page.run("document.querySelector('.stk-knob').style.transform").then(r => r.value || '');
+  const drag = async () => {
+    const z = await page.where('.stk-zone');
+    await touch('touchStart', [{ x: z[0], y: z[1], id: 0 }]);
+    await touch('touchMove', [{ x: z[0] + 60, y: z[1], id: 0 }]);
+    await sleep(300);
+    const moved = await knob();
+    await touch('touchEnd');
+    await sleep(100);
+    return /translate\(\d/.test(moved) && !await knob();
+  };
+  const fought = await tap(await page.where('.stk-go'));
+  const padUp = await page.until("!!document.querySelector('.stk-pad:not(.off)') && !document.querySelector('.loop-pad')", 5000);
+  const walked = await drag();
+  const atk = await page.where('.stk-b[aria-label=attack]');
+  await touch('touchStart', [{ x: atk[0], y: atk[1], id: 1 }]);
+  const lit = (await page.run("document.querySelectorAll('.stk-b.on').length")).value === 1;
+  await touch('touchEnd');
+  await tap(await page.where('.bar-actions .btn', /^⛶$/));
+  const inBox = await page.until("document.fullscreenElement === document.querySelector('.stk-box') && document.querySelector('.stk-pad').parentElement === document.fullscreenElement", 3000);
+  const walkedFull = await drag();
+  check(fought && padUp && walked && lit && inBox && walkedFull && page.errors(CSP_STYLE).length === 0 && page.putBacks().length === 0,
+    'stick clash on a phone: the stick and a button work, on the page and full screen, nothing put back',
+    { fought, padUp, walked, lit, inBox, walkedFull, errs: page.errors(CSP_STYLE).slice(0, 2), putBacks: page.putBacks().length });
+  await page.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await page.send('Emulation.clearDeviceMetricsOverride');
+
   /* ---------------------------------------------- export and import */
   console.log('\n== Export, Import, and an edited file');
   await page.go(LOCKED + '&g=files#/settings');

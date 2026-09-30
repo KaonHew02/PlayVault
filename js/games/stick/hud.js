@@ -81,7 +81,7 @@ window.PV = window.PV || {};
       c.fillRect(left ? mx + mw * (1 - mk) : mx, my, mw * mk, 8 * u);
       if (full) c.restore();
       c.fillStyle = 'rgba(8,10,16,.9)'; c.fillRect(mx + mw / 2 - 1 * u, my, 2 * u, 8 * u);
-      const label = full ? 'ULT ' + (g.mode === 'two' ? '' : '↓+K') : (f.meter >= R.breaker ? t('stick.hud.breaker') : '');
+      const label = full ? 'ULT ' + (g.mode === 'two' ? '' : st.touch ? '🛡+✦' : '↓+K') : (f.meter >= R.breaker ? t('stick.hud.breaker') : '');
       if (label) text(c, label, left ? mx - 5 * u : mx + mw + 5 * u, my + 4 * u, 9.5 * u, full ? '#FFD34A' : '#9CC3FF', left ? 'right' : 'left', 900, 'rgba(0,0,0,.7)');
       // Rounds won.
       if (g.need) {

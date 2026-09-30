@@ -93,6 +93,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **32** | The lock | **2026-09-28** — "my friend programmer he go f12 change the element, so block all the action that modify the data and element". `js/core/guard.js`, first in the head, on for the published site: the console cannot reach `PV`, the saves or the page, the Elements panel's edits are put back, the built-ins are frozen, and F12 and right-click do nothing. Backups are sealed, so an edited export or Drive copy is refused. Checked in a real Chrome by `tools/lockcheck.mjs`; `SECURITY.md` has the table of what a friend can and cannot still do. See below |
 | **33** | A save that cannot be written says so | **2026-09-29** — found while writing the project proposal (objective O15, risk R6). A write the storage refused vanished silently, and a full storage still reads, so the game read back the older value and progress stopped adding up at once. Failed keys are now read from memory, each write that lands retries the rest, and a strip over every screen offers Export until everything has landed. See below |
 | **34** | Ready for a relay | **2026-09-29** — "add the TURN relay so friends can connect". A relay takes an account now — every free one without an account was tried in Chrome and none works — so this is everything but the account: `js/core/relay-config.js` for the credentials, entries checked in `net.js`, `?relay` to force a connection through the relay, and a relay-only two-tab match in `lockcheck.mjs --net` once one is set. See below |
+| **35** | Stick Clash: a stick for the thumbs | **2026-09-30** — "fix both and add a joystick too". Stick Clash's six buttons showed only below 760 px and vanished behind its own ⛶. Now `js/games/stick/pad.js` on every touch screen: a stick for the left thumb, 🛡 ▲ ✦ 👊 for the right, under the canvas on the page and over it on the whole screen or a phone on its side. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1538,3 +1539,49 @@ whenever `relay-config.js` holds a relay, so the match can only start through
 it, and says it is skipping while it holds none. What no test here can do is
 a phone on mobile data joining a laptop on Wi-Fi; that is the check to make
 by hand once the credentials are in.
+
+### Phase 35 — Stick Clash: a stick for the thumbs
+
+Asked about as "is it have joystick and the button for them?", then "fix
+both and add a joystick too". Strike Squad already had both — a stick where
+the left thumb lands, look with the right, buttons on the glass. Stick Clash
+had the harness's row of six buttons under the canvas, and two holes in it:
+
+- **It showed on narrow screens, not touch screens.** `.loop-pad` appears
+  below 760 px, so a tablet, or a phone on its side (an iPhone is 844 px
+  wide lying down), had no controls at all.
+- **Its own ⛶ hid it.** Only the canvas's box goes full screen, and the row
+  sat outside the box.
+
+Now **`js/games/stick/pad.js`**, on every `(pointer: coarse)` screen: a
+stick for the left thumb, coming to where it lands — left and right walk,
+down blocks, up jumps once a push — and 🛡 ▲ ✦ 👊 for the right. Each thumb
+is its own pointer, so a direction and a button go together (▶ + ✦, 🛡 +
+👊). The stick drives the harness's own `press`/`release`, now on `api`, so
+a held direction is sampled on the tick exactly as a held key is and a fight
+still replays from its inputs.
+
+- **On the page** it sits under the canvas, and the canvas leaves it room: a
+  1024×768 tablet shows both without scrolling.
+- **Full screen, and on a phone on its side** (too short for a canvas and a
+  pad), view.js moves it into the box, over the bottom of the canvas,
+  see-through and sized to the screen's height. Upright and full screen, the
+  floor rises to 64% of the height so the fight stands above the thumbs;
+  the training dummy's chips move up out of their way. It is re-placed on
+  `fullscreenchange` too, since going full screen does not always resize.
+- The move list, the fighter card and the ULT hint show 🕹 ✦ 🛡 👊 instead of
+  keys on a touch screen. Two players on one phone is still player one's
+  controls only.
+
+Checked in a headless Chrome over CDP with touch emulation and a real tap on
+⛶, at 390×844, 844×390 and 1024×768 (the pad's place, the canvas's size, no
+sideways scroll, the stick moving in full screen), and in the pane: walk
+both ways, block, one jump per push, stick and 👊 together. A desktop gets
+no pad and the keyboard help, as before.
+
+The lock had never seen it: `lockcheck.mjs` plays every game with a mouse
+and keys, and the pad exists only on a touch screen. It now opens Stick
+Clash as a touch phone too, under `?guard`, and with real touches fights,
+drags the stick, holds 👊, taps ⛶ and drags again in the box — the pad
+moving itself into the box, its knob's inline transform, its classes — and
+checks that nothing of the game's own is put back.

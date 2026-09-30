@@ -1248,7 +1248,59 @@ main {
 .stk-settings label { display: inline-flex; align-items: center; gap: 6px; }
 .stk-settings input[type=range] { width: 110px; accent-color: var(--accent); }
 
+/* The thumb controls (pad.js): a stick on the left, four buttons on the
+   right. Under the canvas on the page. On the whole screen, or a phone on
+   its side, view.js puts them in the box: they lie over the bottom of the
+   canvas, see-through, sized to the screen's height, and the dummy's chips
+   move up out of their way. Above the canvas, below the move list. */
+.stk-pad {
+  display: flex; align-items: stretch; gap: 12px;
+  width: 100%; max-width: 620px; height: 172px; margin: 12px auto 0;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.stk-pad.off { visibility: hidden; }
+.stk-zone {
+  position: relative; flex: 1 1 auto; overflow: hidden; touch-action: none;
+  border-radius: 14px; border: 1px dashed var(--line-2); background: var(--panel);
+}
+.stk-base {
+  position: absolute; left: 50%; top: 50%; width: 116px; height: 116px; margin: -58px 0 0 -58px;
+  border-radius: 50%; border: 2px solid rgba(140, 150, 165, .55); background: rgba(140, 150, 165, .16);
+  pointer-events: none;
+}
+.stk-knob {
+  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
+  border-radius: 50%; background: rgba(140, 150, 165, .55); box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+}
+.stk-zone.on .stk-knob { background: var(--accent); }
+.stk-btns { flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, 76px); grid-auto-rows: 76px; gap: 10px; align-content: center; }
+.stk-b {
+  appearance: none; cursor: pointer; font: inherit; font-size: 28px; line-height: 1; padding: 0;
+  border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink);
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.stk-b.on { background: var(--accent-soft); border-color: var(--accent); }
+
+.loop-box.stk-box > .stk-pad {
+  --b: min(72px, 16vh);
+  position: absolute; z-index: 1; left: 1px; right: 1px; bottom: 1px; top: auto;
+  width: auto; max-width: none; height: calc(var(--b) * 2 + 24px); margin: 0; transform: none; border-radius: 0;
+  padding: 0 max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.stk-box > .stk-pad .stk-zone { border: 0; background: transparent; }
+.stk-box > .stk-pad .stk-btns { grid-template-columns: repeat(2, var(--b)); grid-auto-rows: var(--b); gap: 8px; }
+.stk-box > .stk-pad .stk-b { font-size: calc(var(--b) * .38); border-color: rgba(255, 255, 255, .5); background: rgba(12, 16, 22, .45); color: #fff; }
+.stk-box > .stk-pad .stk-b.on { background: rgba(255, 211, 90, .45); }
+.stk-box > .stk-pad .stk-base { width: calc(var(--b) * 1.55); height: calc(var(--b) * 1.55); margin: calc(var(--b) * -.775) 0 0 calc(var(--b) * -.775); left: calc(var(--b) * 1.1); }
+.stk-box > .stk-pad .stk-knob { width: calc(var(--b) * .68); height: calc(var(--b) * .68); margin: calc(var(--b) * -.34) 0 0 calc(var(--b) * -.34); }
+.stk-box:has(> .stk-pad) .stk-train { top: 26%; bottom: auto; }
+
 @media (max-width: 759px) {
+  .stk-pad { height: 156px; gap: 10px; }
+  .stk-btns { grid-template-columns: repeat(2, 68px); grid-auto-rows: 68px; gap: 9px; }
+  .stk-b { font-size: 25px; }
+  .stk-base { width: 104px; height: 104px; margin: -52px 0 0 -52px; }
+  .stk-knob { width: 46px; height: 46px; margin: -23px 0 0 -23px; }
   .stk-select { padding: 10px; gap: 8px; }
   .stk-select .stk-foot { bottom: -10px; margin: 0 -10px -10px; padding: 6px 10px 10px; }
   .stk-title { font-size: 16px; }

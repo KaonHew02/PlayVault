@@ -40,7 +40,9 @@ window.PV = window.PV || {};
    *   keymap                       { 'ArrowLeft': 'left', ... }
    *   repeatable                   ['left','right'] actions that auto-repeat
    *   sustained                    ['accel'] actions re-sent every tick while held
-   *   pad                          [{label, action, aria}] or null
+   *   pad                          [{label, action, aria}] or null; a game
+   *                                with its own touch controls (Stick Clash)
+   *                                leaves it out and drives api.press/release
    *   build(api)                   optional: add side panels / HUD to api.side
    *   onFrame(game, api)           optional: called once per painted frame
    *   pauseVeil                    false: the game draws its own pause screen
@@ -103,6 +105,9 @@ window.PV = window.PV || {};
       resize: sizeCanvas,
       draw: draw,
       input: a => { if (game && !ended && !paused) game.input(a); },
+      // A game's own controls (Stick Clash's stick) hold and let go as a key does.
+      press: press,
+      release: release,
       finish: finish,
       pause: togglePause
     };

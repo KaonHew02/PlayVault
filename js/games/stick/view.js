@@ -14,8 +14,9 @@
      a dizzy fighter has stars round their head.
    - KEYS follow the reference: one player on WASD with J to attack and K
      for specials (or the arrows with Z and X); two players share the
-     keyboard, WASD F G and IJKL ; '. On a phone the thumb pad under the
-     canvas is the first player's controls.
+     keyboard, WASD F G and IJKL ; '. On a touch screen the first player
+     has a stick and four buttons (pad.js), under the canvas on the page
+     and over it on the whole screen.
 
    Coins are banked when a fight ends (meta.js). A race with friends
    skips the select, fights as Ink, and banks nothing, as every race here
@@ -63,12 +64,13 @@ window.PV = window.PV || {};
     const audio = PV.StickAudio(settings);
     let meta = PV.StickMeta.load();
 
+    let pad = null, padOver = false;
     let ui = null, panels = null, lastCfg = null, bank = null, seen = 0, lastNow = 0, ended = false, pausedByMoves = false;
     const cam = { x: D.ARENA / 2, s: 0.8, shake: 0, zoom: 0, zx: null, flash: 0, flashCol: '#fff', lift: 0 };
     const fx = [];                   // particles and popups
     const ghosts = [];               // after-images
     const trails = [[], []];         // weapon tips
-    const st = { trail: [0, 0], tired: [0, 0], combo: [null, null], now: 0 };
+    const st = { trail: [0, 0], tired: [0, 0], combo: [null, null], now: 0, touch: touch };
     let banners = [], cut = null, lastPhase = null;
 
     function saveSettings() { PV.Store.set(SETTINGS, settings); audio.setVolume(settings.vol); }
@@ -97,15 +99,7 @@ window.PV = window.PV || {};
       fullscreen: false,             // its own ⛶: the canvas alone, not the host
       get keymap() { return mode === 'two' ? KEYS2 : KEYS1; },
       sustained: ['l1', 'r1', 'd1', 'l2', 'r2', 'd2'],
-      pad: [
-        { label: '◀', action: 'l1', aria: 'left' },
-        { label: '▶', action: 'r1', aria: 'right' },
-        { label: '▲', action: 'u1', aria: 'jump' },
-        { label: '🛡', action: 'd1', aria: 'block' },
-        { label: '👊', action: 'a1', aria: 'attack' },
-        { label: '✦', action: 's1', aria: 'special' }
-      ],
-      padCols: 6,
+      // No harness pad: the thumbs have pad.js, on every touch screen.
 
       create() {
         meta = PV.StickMeta.load();
@@ -132,10 +126,15 @@ window.PV = window.PV || {};
 
       fit(availW, availH) {
         const box = ui && ui.canvas.parentElement;
+        const full = !!box && document.fullscreenElement === box;
+        placePad(box, full);
+        // Under the canvas, the thumb controls need room on the page, and
+        // the 30 px a canvas may run past it is theirs too.
+        if (pad && !padOver) availH -= pad.node.offsetHeight + 12 + 30;
         let w, h;
         // Full screen, the stage is the screen, as in Strike Squad: the
         // fighter select lies over the whole box, so the canvas fills it too.
-        if (box && document.fullscreenElement === box) {
+        if (full) {
           w = window.innerWidth; h = window.innerHeight;
         } else if (PV.stage().phone) {
           w = Math.max(280, availW);
@@ -193,12 +192,19 @@ window.PV = window.PV || {};
         api.below.appendChild(help);
         api.below.appendChild(opts2);
         api.btnMoves = btnMoves; api.btnFighters = btnFighters; api.help = help;
+        if (touch) {
+          pad = PV.StickPad({ press: api.press, release: api.release });
+          api.below.parentElement.insertBefore(pad.node, api.below);
+          // Going full screen does not always resize the window; the pad must move anyway.
+          document.addEventListener('fullscreenchange', onFullscreen);
+        }
         document.addEventListener('keydown', onKeyDown, true);
         api.canvas.addEventListener('pointerdown', () => audio.init());
       },
 
       onDestroy() {
         document.removeEventListener('keydown', onKeyDown, true);
+        if (pad) { pad.reset(); document.removeEventListener('fullscreenchange', onFullscreen); }
         if (document.fullscreenElement && ui && document.fullscreenElement === ui.canvas.parentElement) document.exitFullscreen().catch(() => {});
         audio.destroy();
       },
@@ -217,7 +223,7 @@ window.PV = window.PV || {};
         const P = g.f.map(f => ({ x: f.px + (f.x - f.px) * al, y: f.py + (f.y - f.py) * al }));
         camera(g, geom, P, dt);
         const W = geom.w, Hh = geom.h;
-        const floorY = Hh * (PV.stage().phone ? 0.8 : 0.86) + cam.lift;
+        const floorY = Hh * floorK(W, Hh) + cam.lift;
         const s = cam.s * (1 + cam.zoom);
         const cx = cam.zx != null ? cam.x + (cam.zx - cam.x) * Math.min(1, cam.zoom * 3) : cam.x;
         let ox = 0, oy = 0;
@@ -412,12 +418,32 @@ window.PV = window.PV || {};
       if (panels) panels.refresh();
     }
 
+    /* ---- the thumb controls ---- */
+
+    /* Under the canvas on the page; in the box, over the canvas, on the
+       whole screen (only the box goes full screen, so they must be in it)
+       and on a phone on its side, too short for a canvas and a pad. */
+    function placePad(box, full) {
+      if (!pad || !box) return;
+      padOver = full || (window.innerWidth > window.innerHeight && window.innerHeight < 560);
+      const home = padOver ? box : ui.below.parentElement;
+      if (pad.node.parentElement !== home) home.insertBefore(pad.node, padOver ? null : ui.below);
+    }
+    function onFullscreen() { if (ui) ui.resize(); }
+
+    /* Where the floor is, down the canvas. A phone held upright on the
+       whole screen has the controls over its bottom third: the fight
+       stands above them. */
+    function floorK(W, Hh) {
+      if (padOver && Hh > W) return 0.64;
+      return PV.stage().phone ? 0.8 : 0.86;
+    }
+
     /* ---- the camera ---- */
 
     function camera(g, geom, P, dt) {
       const W = geom.w, Hh = geom.h;
-      const phone = PV.stage().phone;
-      const floorY = Hh * (phone ? 0.8 : 0.86);
+      const floorY = Hh * floorK(W, Hh);
       const dist = Math.abs(P[0].x - P[1].x);
       const vw = Math.max(640, Math.min(1080, dist + 540));
       let s = Math.min(W / vw, floorY / 330);
@@ -440,6 +466,7 @@ window.PV = window.PV || {};
         panels.showSelect(g.phase === 'lobby' && !racing);
         panels.showTrain(g.mode === 'train' && g.phase !== 'lobby', g.dummy);
       }
+      if (pad) pad.show(g.phase !== 'lobby');
       relabel();
     }
 
