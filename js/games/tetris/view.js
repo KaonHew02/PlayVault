@@ -197,7 +197,9 @@ window.PV = window.PV || {};
           sideR.getBoundingClientRect().height) + 14 : 0);
       } else {
         rowW = Math.min(wrap.getBoundingClientRect().width || 320, stage.w);
-        maxH = stage.h;
+        // A tablet's thumb pad comes out of the well's height, so both are on
+        // the screen at once. A phone is as it was.
+        maxH = stage.h - (!stage.phone && pad.offsetHeight ? pad.offsetHeight + 14 : 0);
       }
       const availW = Math.max(120, rowW - sideW);
       cell = Math.floor(Math.min(availW / PV.Tetris.COLS, maxH / visRows));

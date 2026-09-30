@@ -83,8 +83,10 @@ window.PV = window.PV || {};
     wrap.appendChild(bar);
     wrap.appendChild(PV.el('div', { class: 'loop-stage' },
       PV.el('div', { class: 'loop-box' }, canvas), side));
-    wrap.appendChild(below);
+    // The thumb pad straight under the canvas, where the thumbs are; the
+    // game's hints after it.
     if (spec.pad && spec.pad.length) wrap.appendChild(pad);
+    wrap.appendChild(below);
     ctx.host.appendChild(wrap);
 
     /* Racing a friend on this seed: the scoreboard reads the run from here
@@ -255,7 +257,11 @@ window.PV = window.PV || {};
       } else {
         const availW = Math.max(140,
           Math.min(box.width || 320, stage.w) - sideW - (sideW ? 14 : 0));
-        size = fit(availW, stage.h);
+        // A thumb pad under the canvas on a tablet comes out of the canvas's
+        // height, so both are on the screen at once. A phone is as it was:
+        // its canvas is held by its width.
+        const padH = !stage.phone && pad.offsetHeight ? pad.offsetHeight + 14 : 0;
+        size = fit(availW, Math.max(140, stage.h - padH));
       }
       geom = { w: size.w, h: size.h, unit: Math.min(size.w, size.h) };
       const dpr = window.devicePixelRatio || 1;

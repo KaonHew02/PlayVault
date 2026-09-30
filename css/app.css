@@ -499,6 +499,26 @@ main {
 .loop-side:empty { display: none; }
 .loop-below { margin-top: 12px; }
 .loop-pad { display: none; gap: 8px; margin-top: 14px; grid-template-columns: repeat(3, 1fr); }
+/* A thumb pad (Snake's, Tetris's) is for thumbs, so it is on every touch
+   screen: a tablet, or a phone on its side, as much as a phone upright. The
+   width rule below adds narrow windows. Capped, so that a tablet's four
+   buttons are not each a quarter of its width. */
+@media (pointer: coarse) {
+  .loop-pad, .tetris-pad { display: grid; }
+}
+.loop-pad, .tetris-pad { width: 100%; max-width: 560px; margin-left: auto; margin-right: auto; }
+/* A phone on its side has the height for one row of buttons, not two: the
+   well gets the rest. Moving on the left thumb, turning and dropping on the
+   right. Tetris's panels shrink as on a phone upright, but stay either side
+   of a well only the screen's height tall. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .tetris-pad { grid-template-columns: repeat(6, 1fr); }
+  .tetris-side { min-width: 96px; gap: 6px; }
+  .tetris-side .mini-canvas { width: 78px; height: 58px; }
+  .tetris-side .mini-canvas.tall { height: 176px; }
+  .tetris-side .panel-mini.stats b { font-size: 14px; }
+  .tetris-side .panel-mini.stats b:not(:last-child) { margin-bottom: 3px; }
+}
 .panel-mini .wide, .btn.wide { width: 100%; }
 
 /* The card and tile canvases size themselves, so they only need centring */

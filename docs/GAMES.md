@@ -94,6 +94,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **33** | A save that cannot be written says so | **2026-09-29** — found while writing the project proposal (objective O15, risk R6). A write the storage refused vanished silently, and a full storage still reads, so the game read back the older value and progress stopped adding up at once. Failed keys are now read from memory, each write that lands retries the rest, and a strip over every screen offers Export until everything has landed. See below |
 | **34** | Ready for a relay | **2026-09-29** — "add the TURN relay so friends can connect". A relay takes an account now — every free one without an account was tried in Chrome and none works — so this is everything but the account: `js/core/relay-config.js` for the credentials, entries checked in `net.js`, `?relay` to force a connection through the relay, and a relay-only two-tab match in `lockcheck.mjs --net` once one is set. See below |
 | **35** | Stick Clash: a stick for the thumbs | **2026-09-30** — "fix both and add a joystick too". Stick Clash's six buttons showed only below 760 px and vanished behind its own ⛶. Now `js/games/stick/pad.js` on every touch screen: a stick for the left thumb, 🛡 ▲ ✦ 👊 for the right, under the canvas on the page and over it on the whole screen or a phone on its side. See below |
+| **36** | The thumb pads on every touch screen | **2026-09-30** — "fix the other games' button row on tablets too". Snake's and Tetris's buttons showed only below 760 px; now on every touch screen, capped in width, with the board leaving them room on a tablet, and Tetris laid out for a phone on its side. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1585,3 +1586,37 @@ Clash as a touch phone too, under `?guard`, and with real touches fights,
 drags the stick, holds 👊, taps ⛶ and drags again in the box — the pad
 moving itself into the box, its knob's inline transform, its classes — and
 checks that nothing of the game's own is put back.
+
+### Phase 36 — the thumb pads on every touch screen
+
+Asked for as "fix the other games' button row on tablets too". Two games
+still use a row of buttons: Snake (the harness's `.loop-pad`) and Tetris
+(its own `.tetris-pad`). Both showed only below 760 px, so a tablet, or a
+phone on its side, had no way to play them without a keyboard.
+
+- **On every `(pointer: coarse)` screen now**, as well as narrow windows,
+  and at most 560 px wide, so a tablet's four buttons are not each a quarter
+  of its width. `width: 100%` goes with the cap: auto margins alone shrink
+  the row to its buttons in full screen's column.
+- **The board leaves the pad room on a tablet.** `loophost.js` and Tetris
+  take the pad's height out of the canvas's when the screen is not a phone,
+  so both are on a 1024×768 screen at once (Snake's pad ends at 747 px,
+  Tetris's at 733). A phone is as it was: its canvas is held by its width.
+- **The harness's pad sits straight under the canvas**, before the game's
+  hints, where the thumbs are. On a phone the hint is hidden anyway.
+- **A phone on its side** gets Tetris's six buttons in one row, and Tetris's
+  panels at their phone size either side of the well. They were taller than
+  a 390 px screen and spilled over the bar in full screen; with a pad under
+  them they would have covered it too. Those rules are scoped to
+  `.tetris-side`: Snake and Tower Defense use `.panel-mini.stats` too.
+
+Checked in a headless Chrome with touch emulation, both games at 1024×768,
+768×1024, 390×844, 844×390 and a 1280×800 desktop without touch (no pad, as
+before), full screen through a real tap on ⛶ on the tablet and the phone on
+its side: every pad on the screen, nothing over the bar, no sideways scroll.
+On the tablet, a real touch on each button reached the engine as its move:
+◀ ▲ ▼ ▶ for Snake, and ◀ ▼ ▶ ⟳ ⤓ ⇄ for Tetris.
+
+`app.css` has no `?v=` stamp, unlike the scripts, so for up to the ten
+minutes GitHub Pages lets a browser keep it (`max-age=600`), a returning
+visitor can have the new scripts with the old stylesheet.
