@@ -30,7 +30,9 @@ node tools/build-logo.mjs    # regenerate every logo asset
 **Work against `index.dev.html`** — it loads every file separately, so the
 debugger shows real filenames and real line numbers. `index.html` is
 generated: it loads one bundle and is what GitHub Pages serves. Run
-`node tools/build.js` before pushing; the smoke tests fail if you forget.
+`node tools/build.js` before pushing, after a change to `css/app.css` as much
+as to a script: the lock, the stylesheet and the bundle all load with
+`?v=<stamp>`, a hash of all three's sources. The smoke tests fail if you forget.
 
 **The lock is off here and on there.** On the published site
 `js/core/guard.js` hides `PV`, refuses the console any change to the page or

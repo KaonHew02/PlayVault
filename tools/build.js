@@ -16,6 +16,9 @@
  *   only shows up in production, after a push, on someone else's machine.
  * - The script tag carries `?v=<stamp>`, so a browser that has the old bundle
  *   cached fetches the new one instead of serving yesterday's game for a week.
+ *   So does the stylesheet's, and the stamp covers the stylesheet too: new
+ *   scripts with yesterday's styles (GitHub Pages lets a browser keep a file
+ *   ten minutes) lay a new control out as nothing at all.
  *
  * What this is NOT is a security control. It makes the source inconvenient to
  * read; devtools still shows every line of it, and anyone can still change
@@ -41,6 +44,8 @@ const OUT_JS = path.join(ROOT, 'js', 'playvault.min.js');
 const BUNDLE_REL = 'js/playvault.min.js';
 const GUARD = 'js/core/guard.js';
 const GUARD_TAG = '<script src="' + GUARD + '"></script>';
+const CSS = 'css/app.css';
+const CSS_TAG = '<link rel="stylesheet" href="' + CSS + '">';
 
 /** The ordered list of bundled scripts, straight out of the development page. */
 function sources(devHtml) {
@@ -55,10 +60,11 @@ function sources(devHtml) {
   return out;
 }
 
-/** Everything the stamp covers: the lock, then the bundle's sources. A new
-    lock is a new version as much as a new game is. */
+/** Everything the stamp covers: the lock, the stylesheet, then the bundle's
+    sources. A new lock, or a new style, is a new version as much as a new
+    game is. */
 function stamped(devHtml) {
-  return [GUARD].concat(sources(devHtml));
+  return [GUARD, CSS].concat(sources(devHtml));
 }
 
 function stampOf(files) {
@@ -98,8 +104,9 @@ function buildHtml(devHtml, stamp) {
   // Take the head comment above app:start out of the deployed page too.
   let head = devHtml.slice(0, a);
   head = head.replace(/<!-- THE DEVELOPMENT PAGE[\s\S]*?-->\n/, '');
-  // The lock keeps its own tag, versioned like the bundle.
+  // The lock keeps its own tag, versioned like the bundle, and so does the stylesheet.
   head = head.replace(GUARD_TAG, '<script src="' + GUARD + '?v=' + stamp + '"></script>');
+  head = head.replace(CSS_TAG, '<link rel="stylesheet" href="' + CSS + '?v=' + stamp + '">');
   return head + tag + devHtml.slice(b);
 }
 
@@ -110,6 +117,10 @@ function main() {
   if (!files.length) { console.error('build: no scripts found in index.dev.html'); process.exit(1); }
   if (devHtml.indexOf(GUARD_TAG) < 0 || devHtml.indexOf(GUARD_TAG) > devHtml.indexOf('</head>')) {
     console.error('build: index.dev.html must load ' + GUARD + ' in its <head>, as its own tag');
+    process.exit(1);
+  }
+  if (devHtml.indexOf(CSS_TAG) < 0 || devHtml.indexOf(CSS_TAG) > devHtml.indexOf('</head>')) {
+    console.error('build: index.dev.html must load ' + CSS + ' in its <head> as ' + CSS_TAG + ', to be versioned');
     process.exit(1);
   }
 
@@ -135,5 +146,5 @@ function main() {
     + ' (stamp ' + stamp + ')');
 }
 
-module.exports = { sources: sources, stamped: stamped, stampOf: stampOf, buildBundle: buildBundle, GUARD: GUARD };
+module.exports = { sources: sources, stamped: stamped, stampOf: stampOf, buildBundle: buildBundle, GUARD: GUARD, CSS: CSS };
 if (require.main === module) main();

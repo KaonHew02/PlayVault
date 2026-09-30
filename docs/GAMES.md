@@ -95,6 +95,7 @@ rest as greyed "Coming soon" stubs in the lobby.
 | **34** | Ready for a relay | **2026-09-29** — "add the TURN relay so friends can connect". A relay takes an account now — every free one without an account was tried in Chrome and none works — so this is everything but the account: `js/core/relay-config.js` for the credentials, entries checked in `net.js`, `?relay` to force a connection through the relay, and a relay-only two-tab match in `lockcheck.mjs --net` once one is set. See below |
 | **35** | Stick Clash: a stick for the thumbs | **2026-09-30** — "fix both and add a joystick too". Stick Clash's six buttons showed only below 760 px and vanished behind its own ⛶. Now `js/games/stick/pad.js` on every touch screen: a stick for the left thumb, 🛡 ▲ ✦ 👊 for the right, under the canvas on the page and over it on the whole screen or a phone on its side. See below |
 | **36** | The thumb pads on every touch screen | **2026-09-30** — "fix the other games' button row on tablets too". Snake's and Tetris's buttons showed only below 760 px; now on every touch screen, capped in width, with the board leaving them room on a tablet, and Tetris laid out for a phone on its side. See below |
+| **37** | The stylesheet is versioned too | **2026-09-30** — "add the version tag to the stylesheet too". The deployed page loads `css/app.css?v=<stamp>` like the scripts, and the stamp covers the stylesheet, so a change to it alone reaches a browser holding the old copy. See below |
 | **15** | One bundled script, and sealed records | **2026-09-22** — `node tools/build.js` writes `js/playvault.min.js` and the deployed `index.html`; `index.dev.html` is the page to work against. Records carry a checksum so a devtools edit does not survive a refresh. Both are speed bumps and `SECURITY.md` says so; the guards that make the build safe are `smoke.js --min` (the whole suite against minified source) and a stamp the suite checks for staleness |
 | **14** | Untrusted input, everywhere it enters | **2026-09-22** — a validation layer (`js/core/safe.js`), a CSP, and SRI on the one third-party script. Written up in `SECURITY.md`; the rule is rebuild the value, never adopt it |
 | **13** | Snake: a third rule for your own tail | **2026-09-22** — `pass` puts the head straight through its own body and counts the crossing. With walls that leaves the wall as the only way to lose; with wrap it leaves none, and the run ends at a full board or when the player stops. That is the mode, not a bug |
@@ -1617,6 +1618,24 @@ its side: every pad on the screen, nothing over the bar, no sideways scroll.
 On the tablet, a real touch on each button reached the engine as its move:
 ◀ ▲ ▼ ▶ for Snake, and ◀ ▼ ▶ ⟳ ⤓ ⇄ for Tetris.
 
-`app.css` has no `?v=` stamp, unlike the scripts, so for up to the ten
+`app.css` had no `?v=` stamp then, unlike the scripts, so for up to the ten
 minutes GitHub Pages lets a browser keep it (`max-age=600`), a returning
-visitor can have the new scripts with the old stylesheet.
+visitor could have the new scripts with the old stylesheet. Phase 37 stamps it.
+
+### Phase 37 — the stylesheet is versioned too
+
+Asked for as "add the version tag to the stylesheet too". `tools/build.js`
+writes `css/app.css?v=<stamp>` into the deployed page, as it does for the
+lock and the bundle, and the stamp now covers the stylesheet: a tag on it
+alone would not have moved when only a style changed, which is the case it
+is for. A browser holding yesterday's copy fetches the new one on its next
+visit, rather than laying new controls out with old rules for ten minutes.
+
+`build.js` refuses an `index.dev.html` that does not load the stylesheet in
+its head as the one tag it versions, and `smoke.js` fails if the stamp stops
+covering the stylesheet or the deployed page loads it unversioned or at
+another version. Checked: a stamp computed with only `app.css` changed (in
+memory, nothing written) differs from the real one; the deployed page, served
+locally, fetched `css/app.css?v=<stamp>` with a 200 and its rules applied;
+and the tab it replaced still had a 676-rule copy cached, one rule behind the
+file, which is the problem this closes.

@@ -2957,6 +2957,11 @@ section('security — sealed records and a fresh bundle', () => {
   const html = fs2.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   ok(html.indexOf('js/playvault.min.js?v=' + stamp) > 0,
     'index.html points at a different bundle — run `node tools/build.js`');
+  // The stylesheet is versioned the same way, and the stamp covers it, so a
+  // change to it alone still reaches a browser holding yesterday's copy.
+  ok(build.stamped(dev).indexOf(build.CSS) >= 0, 'the stamp does not cover ' + build.CSS + ', so a new style keeps the old version');
+  ok(html.indexOf('<link rel="stylesheet" href="' + build.CSS + '?v=' + stamp + '">') > 0,
+    'index.html loads the stylesheet unversioned, or at another version — run `node tools/build.js`');
   // Exactly two of our own scripts: the lock, first thing in the head, then the bundle.
   const own = html.match(/<script src="js\/[^"]*"/g) || [];
   ok(own.length === 2, 'the deployed page loads ' + own.length + ' of its own scripts, not the lock and the bundle');
