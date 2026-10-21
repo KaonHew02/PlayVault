@@ -67,11 +67,14 @@ function stamped(devHtml) {
   return [GUARD, CSS].concat(sources(devHtml));
 }
 
+/* Hashed with LF line ends whatever the checkout has. Git on Windows writes
+   CRLF (core.autocrlf), so raw bytes gave every machine its own stamp for the
+   same commit, and a fresh clone always read as stale. */
 function stampOf(files) {
   const h = crypto.createHash('sha256');
   for (const f of files) {
     h.update(f);
-    h.update(fs.readFileSync(path.join(ROOT, f)));
+    h.update(fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g, '\n'));
   }
   return h.digest('hex').slice(0, 12);
 }
@@ -85,7 +88,7 @@ function buildBundle(files, stamp) {
     ' */'
   ];
   for (const f of files) {
-    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g, '\n');
     const code = minify(src);
     if (!code) continue;
     parts.push(code.endsWith(';') || code.endsWith('}') ? code : code + ';');
@@ -112,7 +115,9 @@ function buildHtml(devHtml, stamp) {
 
 function main() {
   const check = process.argv.indexOf('--check') >= 0;
-  const devHtml = fs.readFileSync(DEV, 'utf8');
+  // LF, as stampOf() hashes it: on a CRLF checkout the head comment's `-->\n`
+  // never matched, and the development note was deployed with the page.
+  const devHtml = fs.readFileSync(DEV, 'utf8').replace(/\r\n/g, '\n');
   const files = sources(devHtml);
   if (!files.length) { console.error('build: no scripts found in index.dev.html'); process.exit(1); }
   if (devHtml.indexOf(GUARD_TAG) < 0 || devHtml.indexOf(GUARD_TAG) > devHtml.indexOf('</head>')) {

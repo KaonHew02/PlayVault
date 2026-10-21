@@ -2968,6 +2968,8 @@ section('security — sealed records and a fresh bundle', () => {
   const lockAt = html.indexOf('<script src="' + build.GUARD + '?v=' + stamp + '"></script>');
   ok(lockAt > 0 && lockAt < html.indexOf('</head>'), 'the deployed page does not load the lock, versioned, in its head');
   ok(lockAt < html.indexOf('<link rel="stylesheet"'), 'something loads before the lock');
+  // A Windows checkout has CRLF line ends, and a build from one once kept this note.
+  ok(html.indexOf('THE DEVELOPMENT PAGE') < 0, 'the deployed page carries the development note');
 });
 
 
